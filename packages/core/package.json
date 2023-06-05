@@ -38,9 +38,9 @@
     "protobufjs-cli": "^1.1.1"
   },
   "dependencies": {
+    "@iota/iota.js": "^1.8.6",
     "const": "^1.0.0",
     "crypto-js": "^4.1.1",
-    "protobufjs": "^7.2.3",
-    "tanglepay": "^2.5.5"
+    "protobufjs": "^7.2.3"
   }
 }
