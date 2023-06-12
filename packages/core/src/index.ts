@@ -1,9 +1,9 @@
 
 import CryptoJS from 'crypto-js'
-//@ts-ignore
-import { IotaSDK } from '@tangle-pay/common';
 
 import { IM } from './proto/compiled'
+import { IMMessage } from './types';
+export { IMMessage} from './types';
 
 class IotaCatSDK {
 
@@ -90,4 +90,8 @@ class IotaCatSDK {
 
 const instance = new IotaCatSDK
 
-export default instance
+export const IOTACATTAG = 'IOTACAT'
+
+export const IotaCatSDKObj = instance
+
+export * from './misc'
