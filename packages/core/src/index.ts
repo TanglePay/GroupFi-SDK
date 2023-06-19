@@ -7,6 +7,7 @@ export { IMMessage} from './types';
 
 class IotaCatSDK {
 
+    _groupIdCache:Record<string,string[]> = {}
 
     _groupToGroupId(group:string){
         const groupId = CryptoJS.SHA256(group).toString(CryptoJS.enc.Hex)
@@ -14,13 +15,14 @@ class IotaCatSDK {
     }
 
     _groupIdToGroupMembers(groupId:string):string[]{
-        return []
+        return this._groupIdCache[groupId] || []
     }
 
-    prepareSendMessage (senderAddr:string, group:string,message: string):IMMessage|undefined  {
+    //
+    prepareSendMessage(senderBech32Addr:string, group:string,message: string):IMMessage|undefined  {
         const groupId = this._groupToGroupId(group)
         const recipientAddresses = this._groupIdToGroupMembers(groupId)
-        if (!recipientAddresses.includes(senderAddr)) return undefined
+        if (!recipientAddresses.includes(senderBech32Addr)) return undefined
         return {
             schemaVersion: 1,
             group: groupId,
@@ -31,6 +33,13 @@ class IotaCatSDK {
         }
     }
 
+    setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
+        message.recipients = message.recipients.map(pair=>{
+            pair.key = publicKeyMap[pair.addr]
+            return pair
+        })
+    }
+
     _generateRandomStr(len:number){
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+'
         let result = []
@@ -39,23 +48,26 @@ class IotaCatSDK {
         }
         return result.join('')
     }
-    serializeMessage(message:IMMessage, encryptUsingPublicKey:(key:string,data:string)=>string){
+    async serializeMessage(message:IMMessage, encryptUsingPublicKey:(key:string,data:string)=>Promise<string>){
         const salt = this._generateRandomStr(32)
+        console.log('salt',salt)
         message.data = message.data.map(msg=>this._encrypt(msg,salt))
-        message.recipients = message.recipients.map(pair=>{
-            pair.key = encryptUsingPublicKey(pair.addr,salt)
+        message.recipients = await Promise.all(message.recipients.map(async (pair)=>{
+            pair.key = await encryptUsingPublicKey(pair.key,salt)
             return pair
-        })
+        }))
         const msgProto = IM.IMMessage.create(message)
         const msgBytes = IM.IMMessage.encode(msgProto).finish()
         return msgBytes
     }
-    deserializeMessage(messageBytes:Uint8Array, decryptUsingPrivateKey:(data:string)=>string):IMMessage{
+
+    async deserializeMessage(messageBytes:Uint8Array, address:string, decryptUsingPrivateKey:(data:string)=>Promise<string>):Promise<IMMessage>{
         const msg = IM.IMMessage.decode(messageBytes)
         for (const recipient of msg.recipients) {
             if (!recipient.key) continue
-            const salt = decryptUsingPrivateKey(recipient.key)
-            if (!salt) continue
+            if (recipient.addr !== address) continue
+            const salt = await decryptUsingPrivateKey(recipient.key)
+            if (!salt) break
             const firstMsgDecrpted = this._decrypt(msg.data[0],salt)
             if (!firstMsgDecrpted) continue
             msg.data = msg.data.map(data=>this._decrypt(data,salt))
@@ -64,15 +76,23 @@ class IotaCatSDK {
         return msg as IMMessage
     }
     _encrypt(content:string,salt:string){
-        const [kdf,iv] = this._getKdf(salt)
-        const utf8 = CryptoJS.enc.Utf8.parse(content)
-        const encrypted = CryptoJS.AES.encrypt(utf8, kdf.toString(), this._decorateAesCfg({iv}))
-        return encrypted.ciphertext.toString().toUpperCase() // hex
+        const contentWord = CryptoJS.enc.Utf8.parse(content)
+        const [key,iv] = this._getKdf(salt)
+        const encrypted = CryptoJS.AES.encrypt(
+            contentWord,
+            key,
+            this._decorateAesCfg({ iv })
+        ).ciphertext.toString(CryptoJS.enc.Base64)
+        return encrypted
     }
     _decrypt(content:string,salt:string){
         const [kdf,iv] = this._getKdf(salt)
-        const decrypted = CryptoJS.AES.decrypt(content, kdf.toString(), this._decorateAesCfg({iv}))
-        return CryptoJS.enc.Utf8.stringify(decrypted)
+        const encryptedWord = CryptoJS.enc.Base64.parse(content)
+        const encryptedParam = CryptoJS.lib.CipherParams.create({
+            ciphertext: encryptedWord
+        })
+        const decrypted = CryptoJS.AES.decrypt(encryptedParam, kdf, this._decorateAesCfg({iv})).toString(CryptoJS.enc.Utf8)
+        return decrypted
     }
     _decorateAesCfg(cfg:Record<string,any>):Record<string,any>{
         return Object.assign({},cfg,{

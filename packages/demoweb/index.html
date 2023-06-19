@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+    <button id="btn">send</button>
+    <button id="btn2">read</button>
+</body>
+<script src="./js/BigInteger.min.js"></script>
+<script src="./js/crypto.js"></script>
+<script src="./js/util.js"></script>
+<script src="./js/iota.js"></script>
+<script src="./js/tanglepaysdk.js"></script>
+<script src="./js/iotacatsdk.js"></script>
+<script src="./js/iotacatclient.js"></script>
+<script>
+    window.addEventListener('DOMContentLoaded',async ()=>{
+        console.log('iotacatsdk',iotacatsdk)
+        console.log('iotacatclient',iotacatclient)
+        console.log('tanglepaysdk',iota)
+        try {
+            await iotacatclient.setup(101)
+            await iotacatclient.setHexSeed('ba1c3dde82a6b6c32d7623982100ad738fd8c5208f051f2b951d7ff461a9788c9359eda271c3a2b9fddf3f3854502e384eef58660682482782ead2388d63cd35')
+        } catch (error) {
+            console.log('error',error)
+        }
+        let btn2 = document.getElementById('btn2')
+        btn2.addEventListener('click',async ()=>{
+            console.log('btn2 click')
+            const senderAddr = 'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const outputId = '0xb355b1763a2a68faeb60a54ff333f6f9ed1c875eba6df9edc65b06a6c3b7de850000'
+            try {
+                const message = await iotacatclient.getMessageFromOutputId(outputId,senderAddr)
+                console.log('message',message)
+            } catch (error) {
+                console.log('error',error)
+            }
+        })
+        
+        try {
+            const res = await iota.request({
+                        method: 'iota_connect',
+                        params: {
+                            // expires: 3000000
+                        }
+                    })
+        } catch (error) {
+            console.log('error',error)
+        }
+        
+        let btn = document.getElementById('btn')
+        // add click event for btn
+        btn.addEventListener('click',async ()=>{
+            const senderAddr = 'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const group = 'test'
+            const dappName = 'iotacatdemo'
+            console.log('sdk obj',iotacatsdk.IotaCatSDKObj)
+            iotacatsdk.IotaCatSDKObj._groupIdCache[iotacatsdk.IotaCatSDKObj._groupToGroupId(group)] = [senderAddr]
+            const message = iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, 'hello world')
+            const res = await iota.request({
+                method: 'iota_im',
+                params: {
+                   content: {
+                        dappName,
+                        senderAddr,
+                        group,
+                        message
+                    }
+                }
+            })
+        })
+
+        
+    })
+</script>    
+</html>

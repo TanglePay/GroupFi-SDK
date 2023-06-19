@@ -1,18 +1,18 @@
 {
   "name": "iotacat-sdk-core",
   "version": "0.0.1",
-  "main": "dist/index.es.js",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "browser": "dist/index.min.js",
-  "module": "dist/index.es.js",
-  "moduleNameIife": "iotacat",
+  "moduleNameIife": "iotacatsdk",
   "scripts": {
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "yarn run clean && yarn run build:type && yarn run build:source",
-    "lint": "eslint src --fix --ext .ts,.js"
+    "lint": "eslint src --fix --ext .ts,.js",
+    "test": "jest"
   },
   "repository": {
     "type": "git",

@@ -1,18 +1,18 @@
 {
   "name": "iotacat-sdk-client",
   "version": "0.0.1",
-  "main": "dist/index.es.js",
-  "types": "dist/types/index.d.ts",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
-  "browser": "dist/index.min.js",
-  "module": "dist/index.es.js",
   "moduleNameIife": "iotacatclient",
   "scripts": {
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "yarn run clean && yarn run build:type && yarn run build:source",
-    "lint": "eslint src --fix --ext .ts,.js"
+    "lint": "eslint src --fix --ext .ts,.js",
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -35,8 +35,12 @@
   "dependencies": {
     "@iota/crypto.js": "^2.0.0-rc.2",
     "@iota/iota.js": "^2.0.0-rc.4",
-    "@iota/pow-browser.js": "next",
+    "@iota/pow-browser.js": "^2.0.0-rc.3",
+    "@iota/pow-node.js": "^2.0.0-rc.3",
     "@iota/util.js": "^2.0.0-rc.2",
-    "iotacat-sdk-core": "^0.0.1"
-  }
+    "crypto-js": "^4.1.1",
+    "iotacat-sdk-core": "^0.0.1",
+    "js-crypto-hkdf": "^1.0.4"
+  },
+  "devDependencies": {}
 }
