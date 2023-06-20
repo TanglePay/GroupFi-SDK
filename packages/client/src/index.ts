@@ -48,9 +48,10 @@ interface StorageFacade {
 type Network = {
     id: number;
     isFaucetAvailable: boolean;
-    faucetUrl: string;
+    faucetUrl?: string;
     apiUrl: string;
     explorerApiUrl: string;
+    explorerApiNetwork: string;
 }
 const shimmerTestNet = {
     id: 101,
@@ -58,9 +59,19 @@ const shimmerTestNet = {
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
     apiUrl: "https://test.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
+    explorerApiNetwork: "testnet",
+}
+
+const shimmerMainNet = {
+    id: 102,
+    isFaucetAvailable: false,
+    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
+    explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
+    explorerApiNetwork: "shimmer",
 }
 const nodes = [
-    shimmerTestNet
+    shimmerTestNet,
+    shimmerMainNet
 ]
 type Constructor<T> = new () => T;
 class IotaCatClient {
@@ -127,7 +138,7 @@ class IotaCatClient {
     }
     async _getTransactionHistory(bech32Address:string):Promise<string|undefined>{
         if (!this._curNode) throw new Error('Node not initialized')
-        const url = `${this._curNode.explorerApiUrl}/transactionhistory/testnet/${bech32Address}?pageSize=1000&sort=newest`
+        const url = `${this._curNode.explorerApiUrl}/transactionhistory/${this._curNode.explorerApiNetwork}/${bech32Address}?pageSize=1000&sort=newest`
         console.log('TransactionHistoryUrl', url);
         const response = await fetch(url)
         const json = await response.json()
@@ -140,7 +151,7 @@ class IotaCatClient {
     }
     async _getPublicKeyViaTransactionId(transactionId:string):Promise<string|undefined>{
         if (!this._curNode) throw new Error('Node not initialized')
-        const url = `${this._curNode.explorerApiUrl}/transaction/testnet/${transactionId}`
+        const url = `${this._curNode.explorerApiUrl}/transaction/${this._curNode.explorerApiNetwork}/${transactionId}`
         console.log('TransactionUrl', url);
         const response = await fetch(url)
         const json = await response.json()
@@ -228,7 +239,8 @@ class IotaCatClient {
         });
         console.log('OutputsResponse', outputsResponse);
         //TODO
-        const outputIds = ['0xebcbe2446bb42ef341ee28eb753b70bcce8e6357e74b62cac368d45844976e140100']//outputsResponse.items
+        ///const outputIds = ['0xebcbe2446bb42ef341ee28eb753b70bcce8e6357e74b62cac368d45844976e140100']//
+        const outputIds = outputsResponse.items
         const tasks = outputIds.map(outputId=>this._client!.output(outputId))
         let outputsRaw = await Promise.all(tasks)
         let outputs = outputsRaw.map((output,idx)=>{return {outputId:outputIds[idx],output}})
@@ -329,7 +341,7 @@ class IotaCatClient {
             // 5.Create transaction essence
             const transactionEssence: ITransactionEssence = {
                 type: TRANSACTION_ESSENCE_TYPE,
-                networkId: "1856588631910923207", //this._protocolInfo!.networkName,
+                networkId: "14364762045254553490", //this._protocolInfo!.networkName,
                 inputs: [input], 
                 inputsCommitment,
                 outputs: [basicOutput, remainderBasicOutput],
@@ -375,6 +387,7 @@ class IotaCatClient {
         
             const blockId = await this._client!.blockSubmit(block);
             console.log("Submitted blockId is: ", blockId);
+            return blockId
         } catch (e) {
             console.log("Error submitting block: ", e);
         }

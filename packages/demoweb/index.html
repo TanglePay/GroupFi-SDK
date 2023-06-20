@@ -1,8 +1,136 @@
 <!DOCTYPE html>
 <html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+        <link
+            rel="stylesheet"
+            href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+            integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+            crossorigin="anonymous"
+        />
+        <script
+            src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+            integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
+            crossorigin="anonymous"
+        ></script>
+        <script
+            src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+            integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+            crossorigin="anonymous"
+        ></script>
+        <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+            integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+            crossorigin="anonymous"
+        ></script>
+        <style>
+            body {
+                padding: 20px;
+            }
+            #text {
+                word-break: break-all;
+            }
+            h2 {
+                padding-top: 30px;
+            }
+            .block{
+                background: #f5f5f5;
+                border-radius: 10px;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            .content {
+                display: flex;
+                align-items: flex-start;
+            }
+            .middle{
+                margin-left: 20px;
+                margin-top: 75px;
+            }
+            .right {
+                flex: 1;
+                padding: 0px 20px 20px 20px;
+                background: #f5f5f5;
+                border-radius: 10px;
+                margin-top: 75px;
+                margin-left: 20px;
+                box-sizing: border-box;
+            }
+            .radio-con{
+                margin-bottom: 5px;
+            }
+            .radio-con span{
+                margin-right: 10px;
+            }
+            .address-input input{
+                width: 300px;
+                margin-bottom: 10px;
+                display: block;
+            }
+            @media screen and (max-width: 768px) {
+                .content {
+                    flex-direction: column;
+                }
+                .middle{
+                    margin-top: 0;
+                    margin-left: 0;
+                }
+                .right {
+                    flex: 1;
+                    padding: 10px;
+                    background: #f5f5f5;
+                    border-radius: 10px;
+                    margin-top: 20px;
+                    margin-left: 0;
+                    box-sizing: border-box;
+                }
+            }
+        </style>
+    </head>
+
 <body>
-    <button id="btn">send</button>
-    <button id="btn2">read</button>
+    in wallet extension switch to corresponding shimmer l1 wallet before further operation
+        <br />
+    <div class="content">
+        
+        <div class="left">
+            <h2>message send</h2>
+            <div class="block">
+                <h4>iotacat_im_send</h4>
+                <div class="address-input">
+                    <input id="sender_addr" type="text" placeholder="sender_addr in bech32">
+                </div>
+                <div class="address-input">
+                    <input id="message_text" type="text" placeholder="message content">
+                </div>
+                <button onclick="sendIm()" class="btn btn-primary">send</button>
+            </div>
+            <div class="block">
+                <h4>iotacat_im_read</h4>
+                <div class="address-input">
+                    <input id="sender_addr_read" type="text" placeholder="sender_addr in bech32">
+                </div>
+                <div class="address-input">
+                    <input id="message_output_id" type="text" placeholder="message outputId">
+                </div>
+                <button onclick="readOneMessage()" class="btn btn-primary">read</button>
+            </div>
+            
+        </div>
+        <div class="middle">
+            <div class="block">
+                
+            </div>
+        </div>
+
+        <div class="right">
+            <div id="text"></div>
+        </div>
+    </div>
+
 </body>
 <script src="./js/BigInteger.min.js"></script>
 <script src="./js/crypto.js"></script>
@@ -10,30 +138,31 @@
 <script src="./js/iota.js"></script>
 <script src="./js/tanglepaysdk.js"></script>
 <script src="./js/iotacatsdk.js"></script>
-<script src="./js/iotacatclient.js"></script>
 <script>
+    const dom = document.getElementById('text')
     window.addEventListener('DOMContentLoaded',async ()=>{
         console.log('iotacatsdk',iotacatsdk)
-        console.log('iotacatclient',iotacatclient)
         console.log('tanglepaysdk',iota)
-        try {
-            await iotacatclient.setup(101)
-            await iotacatclient.setHexSeed('ba1c3dde82a6b6c32d7623982100ad738fd8c5208f051f2b951d7ff461a9788c9359eda271c3a2b9fddf3f3854502e384eef58660682482782ead2388d63cd35')
-        } catch (error) {
-            console.log('error',error)
-        }
-        let btn2 = document.getElementById('btn2')
-        btn2.addEventListener('click',async ()=>{
-            console.log('btn2 click')
-            const senderAddr = 'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
-            const outputId = '0xb355b1763a2a68faeb60a54ff333f6f9ed1c875eba6df9edc65b06a6c3b7de850000'
+
+        window.readOneMessage = async ()=>{
+            const senderAddr = document.getElementById('sender_addr_read').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const outputId = document.getElementById('message_output_id').value; //'hello world'
+            
             try {
-                const message = await iotacatclient.getMessageFromOutputId(outputId,senderAddr)
-                console.log('message',message)
+                const res = await iota.request({
+                    method: 'iota_im_readone',
+                    params: {
+                    content: {
+                        outputId,senderAddr
+                        }
+                    }
+                 })
+                console.log('message',res)
+                dom.innerText += `Sign result: ${JSON.stringify(res)}`
             } catch (error) {
                 console.log('error',error)
             }
-        })
+        }
         
         try {
             const res = await iota.request({
@@ -46,15 +175,14 @@
             console.log('error',error)
         }
         
-        let btn = document.getElementById('btn')
-        // add click event for btn
-        btn.addEventListener('click',async ()=>{
-            const senderAddr = 'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+        window.sendIm = async ()=>{
+            const senderAddr = document.getElementById('sender_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const messageText = document.getElementById('message_text').value; //'hello world'
             const group = 'test'
             const dappName = 'iotacatdemo'
             console.log('sdk obj',iotacatsdk.IotaCatSDKObj)
             iotacatsdk.IotaCatSDKObj._groupIdCache[iotacatsdk.IotaCatSDKObj._groupToGroupId(group)] = [senderAddr]
-            const message = iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, 'hello world')
+            const message = iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, messageText)
             const res = await iota.request({
                 method: 'iota_im',
                 params: {
@@ -66,7 +194,11 @@
                     }
                 }
             })
-        })
+            console.log('message',res)
+            const url = `https://explorer.shimmer.network/shimmer/block/${res}`
+            // open new tab
+            window.open(url)
+        }
 
         
     })
