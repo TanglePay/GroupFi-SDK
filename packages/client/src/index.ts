@@ -52,6 +52,7 @@ type Network = {
     apiUrl: string;
     explorerApiUrl: string;
     explorerApiNetwork: string;
+    networkId: string;
 }
 const shimmerTestNet = {
     id: 101,
@@ -60,6 +61,7 @@ const shimmerTestNet = {
     apiUrl: "https://test.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
+    networkId: "1856588631910923207",
 }
 
 const shimmerMainNet = {
@@ -68,6 +70,7 @@ const shimmerMainNet = {
     apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "shimmer",
+    networkId: "14364762045254553490",
 }
 const nodes = [
     shimmerTestNet,
@@ -337,11 +340,11 @@ class IotaCatClient {
             const inputsCommitment = TransactionHelper.getInputsCommitment([consumedOutput]);
             console.log("Inputs Commitment: ", inputsCommitment);
 
-
-            // 5.Create transaction essence
+            // 14364762045254553490 is the networkId of the mainnet
+            // 1856588631910923207 is the networkId of the testnet
             const transactionEssence: ITransactionEssence = {
                 type: TRANSACTION_ESSENCE_TYPE,
-                networkId: "14364762045254553490", //this._protocolInfo!.networkName,
+                networkId: this._curNode!.networkId, //this._protocolInfo!.networkName,
                 inputs: [input], 
                 inputsCommitment,
                 outputs: [basicOutput, remainderBasicOutput],

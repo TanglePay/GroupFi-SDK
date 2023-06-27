@@ -1,10 +1,10 @@
 
 import CryptoJS from 'crypto-js'
-
+import { concatBytes, hexToBytes } from 'iotacat-sdk-utils'
 import { IM } from './proto/compiled'
 import { IMMessage } from './types';
 export { IMMessage} from './types';
-
+const SHA256_LEN = 32
 class IotaCatSDK {
 
     _groupIdCache:Record<string,string[]> = {}
@@ -49,6 +49,8 @@ class IotaCatSDK {
         return result.join('')
     }
     async serializeMessage(message:IMMessage, encryptUsingPublicKey:(key:string,data:string)=>Promise<string>){
+        const groupSha256Hash = message.group
+        const groupBytes = hexToBytes(groupSha256Hash)
         const salt = this._generateRandomStr(32)
         console.log('salt',salt)
         message.data = message.data.map(msg=>this._encrypt(msg,salt))
@@ -58,11 +60,13 @@ class IotaCatSDK {
         }))
         const msgProto = IM.IMMessage.create(message)
         const msgBytes = IM.IMMessage.encode(msgProto).finish()
-        return msgBytes
+        return concatBytes(groupBytes, msgBytes)
     }
 
     async deserializeMessage(messageBytes:Uint8Array, address:string, decryptUsingPrivateKey:(data:string)=>Promise<string>):Promise<IMMessage>{
-        const msg = IM.IMMessage.decode(messageBytes)
+        const groupBytes = messageBytes.slice(0,SHA256_LEN)
+        const payload = messageBytes.slice(SHA256_LEN)
+        const msg = IM.IMMessage.decode(payload)
         for (const recipient of msg.recipients) {
             if (!recipient.key) continue
             if (recipient.addr !== address) continue

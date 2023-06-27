@@ -67,8 +67,12 @@ export function createRollupConfig(pkg) {
             
           ],
         plugins: [
-            typescript({"declaration": false,
-            "declarationMap": false}), // Transpiles your TypeScript
+            typescript({
+                "declaration": true,
+                "declarationMap": true,
+                "outDir": "dist",
+                "rootDir": "src",
+            }), // Transpiles your TypeScript
             nodePolyfills(), // Polyfills required Node.js builtins
             babel({ 
                 exclude: 'node_modules/**', 
