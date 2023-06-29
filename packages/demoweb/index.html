@@ -213,8 +213,7 @@
             
             const dappName = 'iotacatdemo'
             console.log('sdk obj',iotacatsdk.IotaCatSDKObj)
-            const groupMembers = new Set([senderAddr,'smr1qq7vdfl8gj8hyd8nzu5vkanme349xjzyq07y6xzvk690e8asyqzhk5p6x4v'])
-            iotacatsdk.IotaCatSDKObj._groupIdCache[iotacatsdk.IotaCatSDKObj._groupToGroupId(group)] = Array.from(groupMembers)
+            iotacatsdk.IotaCatSDKObj._groupIdCache[iotacatsdk.IotaCatSDKObj._groupToGroupId(group)] = ['smr1qplvzl648kdj3m5ttgvsaruae470frax3xn90hzs8j045jpnzw5a24w7el2','smr1qq7vdfl8gj8hyd8nzu5vkanme349xjzyq07y6xzvk690e8asyqzhk5p6x4v']
             const message = iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, messageText)
             const res = await iota.request({
                 method: 'iota_im',
