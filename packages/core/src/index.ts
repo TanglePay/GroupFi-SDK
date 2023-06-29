@@ -48,10 +48,11 @@ class IotaCatSDK {
         }
         return result.join('')
     }
+    
     async serializeMessage(message:IMMessage, encryptUsingPublicKey:(key:string,data:string)=>Promise<string>){
         const groupSha256Hash = message.group
         const groupBytes = hexToBytes(groupSha256Hash)
-        const salt = this._generateRandomStr(32)
+        const salt = this._generateRandomStr(16)
         console.log('salt',salt)
         message.data = message.data.map(msg=>this._encrypt(msg,salt))
         message.recipients = await Promise.all(message.recipients.map(async (pair)=>{

@@ -20,7 +20,9 @@ import {
     INodeInfo,
     INodeInfoProtocol,
     IPowProvider,
-    COIN_TYPE_SHIMMER
+    COIN_TYPE_SHIMMER,
+    IAddressUnlockCondition,
+    IEd25519Address
 } from "@iota/iota.js";
 import { Converter, WriteStream,  } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, asciiToUint8Array } from 'ecies-ed25519-js';
@@ -44,6 +46,19 @@ interface StorageFacade {
     prefix: string;
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
+}
+type MessageResponseItem = {
+    outputId: string;
+    timestamp: number;
+}
+type MessageResponse = {
+    messages:MessageResponseItem[]
+    token:string
+}
+type MessageBody = {
+    sender:string,
+    message:string,
+    timestamp:number
 }
 type Network = {
     id: number;
@@ -219,6 +234,10 @@ class IotaCatClient {
         this._ensureClientInited()
         const outputsResponse = await this._client!.output(outputId)
         const output = outputsResponse.output as IBasicOutput
+        const addressUnlockcondition = output.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
+        const senderAddress = addressUnlockcondition.address as IEd25519Address
+        const senderAddressBytes = Converter.hexToBytes(senderAddress.pubKeyHash)
+        const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes, this._nodeInfo!.protocol.bech32Hrp);
         const features = output.features
         if (!features) throw new Error('No features')
         const metadataFeature = features.find(feature=>feature.type === 2) as IMetadataFeature
@@ -228,7 +247,7 @@ class IotaCatClient {
             const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
             return decrypted.payload
         })
-        return message
+        return { sender , message }
     }
     async _getUnSpentOutputs() {
         this._ensureClientInited()
@@ -395,6 +414,31 @@ class IotaCatClient {
             console.log("Error submitting block: ", e);
         }
         
+    }
+    async fetchMessageList(group:string, address:string) {
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0gzVXR3UFNnaHBtMWVHMWt1N0I2WDFrQXZUb1F1aVdhdno2TU1zU2FlMmpZIiwianRpIjoiMTY4Nzg3NjUzMiIsImlhdCI6MTY4Nzg3NjUzMiwiaXNzIjoiMTJEM0tvb1dIM1V0d1BTZ2hwbTFlRzFrdTdCNlgxa0F2VG9RdWlXYXZ6Nk1Nc1NhZTJqWSIsIm5iZiI6MTY4Nzg3NjUzMiwic3ViIjoiSE9STkVUIn0.H9_pFE8kalJDV-G3R1SowkTJ5n3SG5rm0FpfSfR8IqI'
+        const groupId = IotaCatSDKObj._groupToGroupId(group)
+        try {
+            const url = `https://test.api.iotacat.com/api/iotacatim/v1/messages?groupId=0x${groupId}`
+            // @ts-ignore
+            const res = await fetch(url,{
+                method:'GET',
+                headers:{
+                'Content-Type':'application/json',
+                "Authorization":`Bearer ${jwtToken}`
+                }})
+            const data = await res.json() as MessageResponse
+            const messages = data.messages
+            const messagePayloads = await Promise.all(messages.map(msg => this.getMessageFromOutputId(msg.outputId,address)))
+            const messageBodyArr:MessageBody[] = messagePayloads.map((payload,index)=>({
+                timestamp:messages[index].timestamp,
+                message:payload.message.data[0]??'',
+                sender:payload.sender
+            }))
+            return messageBodyArr
+        } catch (error) {
+            console.log('error',error)
+        }
     }
 }
 

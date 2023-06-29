@@ -42,6 +42,18 @@
                 padding: 10px;
                 margin-bottom: 10px;
             }
+            .hList{
+                display: flex;
+                flex-direction: row;
+                justify-content: start;
+                align-items: center;
+            }
+            .vList{
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+            }
             .content {
                 display: flex;
                 align-items: flex-start;
@@ -53,7 +65,6 @@
             .right {
                 flex: 1;
                 padding: 0px 20px 20px 20px;
-                background: #f5f5f5;
                 border-radius: 10px;
                 margin-top: 75px;
                 margin-left: 20px;
@@ -113,12 +124,9 @@
             <div class="block">
                 <h4>iotacat_im_read</h4>
                 <div class="address-input">
-                    <input id="sender_addr_read" type="text" placeholder="sender_addr in bech32">
+                    <input id="reader_addr" type="text" placeholder="reader_addr in bech32">
                 </div>
-                <div class="address-input">
-                    <input id="message_output_id" type="text" placeholder="message outputId">
-                </div>
-                <button onclick="readOneMessage()" class="btn btn-primary">read</button>
+                <button onclick="refreshMessageList()" class="btn btn-primary">read</button>
             </div>
             
         </div>
@@ -141,26 +149,48 @@
 <script src="./js/tanglepaysdk.js"></script>
 <script src="./js/core.js"></script>
 <script>
+    const group = 'iotacatdemo'
     const dom = document.getElementById('text')
+    function formatTimestamp(unixTimestamp) {
+        // Convert the Unix timestamp to milliseconds
+        var date = new Date(unixTimestamp * 1000);
+
+        // Extract date components
+        var year = date.getFullYear();
+        var month = ("0" + (date.getMonth() + 1)).slice(-2); // Months are 0-indexed
+        var day = ("0" + date.getDate()).slice(-2);
+
+        // Extract time components
+        var hours = ("0" + date.getHours()).slice(-2);
+        var minutes = ("0" + date.getMinutes()).slice(-2);
+        var seconds = ("0" + date.getSeconds()).slice(-2);
+
+        // Format the date and time
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
     window.addEventListener('DOMContentLoaded',async ()=>{
         console.log('iotacatsdk',iotacatsdk)
         console.log('tanglepaysdk',iota)
 
-        window.readOneMessage = async ()=>{
-            const senderAddr = document.getElementById('sender_addr_read').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
-            const outputId = document.getElementById('message_output_id').value; //'hello world'
+        window.refreshMessageList = async ()=>{
+            const readerAddr = document.getElementById('reader_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
             
             try {
                 const res = await iota.request({
-                    method: 'iota_im_readone',
+                    method: 'iota_im_groupmessagelist',
                     params: {
                     content: {
-                        outputId,senderAddr
-                        }
+                        readerAddr,
+                        group,
                     }
-                 })
-                console.log('message',res)
-                dom.innerText += `messasge read: ${JSON.stringify(res)}`
+                    }
+                })
+                const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
+                const makelist = (messageList) => messageList.map(messageItem => {
+                    const {sender, message, timestamp} = messageItem
+                    return `<div class="block">${makekv('senderAddr',sender)}${makekv('messageText',message)}${makekv('timestamp',formatTimestamp(timestamp))}</div>`
+                }).join('')
+                dom.innerHTML = `<div class="vList">${makelist(res)}</div>`
             } catch (error) {
                 console.log('error',error)
             }
@@ -180,10 +210,11 @@
         window.sendIm = async ()=>{
             const senderAddr = document.getElementById('sender_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
             const messageText = document.getElementById('message_text').value; //'hello world'
-            const group = 'test'
+            
             const dappName = 'iotacatdemo'
             console.log('sdk obj',iotacatsdk.IotaCatSDKObj)
-            iotacatsdk.IotaCatSDKObj._groupIdCache[iotacatsdk.IotaCatSDKObj._groupToGroupId(group)] = [senderAddr]
+            const groupMembers = new Set([senderAddr,'smr1qq7vdfl8gj8hyd8nzu5vkanme349xjzyq07y6xzvk690e8asyqzhk5p6x4v'])
+            iotacatsdk.IotaCatSDKObj._groupIdCache[iotacatsdk.IotaCatSDKObj._groupToGroupId(group)] = Array.from(groupMembers)
             const message = iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, messageText)
             const res = await iota.request({
                 method: 'iota_im',
