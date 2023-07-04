@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, beforeAll, jest } from '@jest/globals';
-import { IotaCatSDKObj, IMMessage, ShimmerBech32Addr } from '../src';
+import { IotaCatSDKObj, IMMessage, ShimmerBech32Addr, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate } from '../src';
 import { generateRandomString } from '../../../jest.base';
 describe('core test', () => {
     let msgObject:IMMessage|undefined
@@ -9,6 +9,13 @@ describe('core test', () => {
     beforeEach(()=>{
         jest.spyOn(IotaCatSDKObj,'_groupIdToGroupMembers').mockImplementation((groupId:string)=>{
             return [basicAddr]
+        })
+        jest.spyOn(IotaCatSDKObj,'_groupNameToGroupMeta').mockImplementation((group:string)=>{
+            return {
+                schemaVersion: MessageCurrentSchemaVersion,
+                messageType:MessageTypePrivate,
+                authScheme:MessageAuthSchemeRecipeintOnChain,
+            }
         })
         msgObject = IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:basicAddr},'dummy',basicMsg)
     })

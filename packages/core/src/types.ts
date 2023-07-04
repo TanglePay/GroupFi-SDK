@@ -18,3 +18,8 @@ export const MessageTypePrivate = 1
 export const MessageTypePublic = 2
 export const MessageAuthSchemeRecipeintInMessage = 1
 export const MessageAuthSchemeRecipeintOnChain = 2
+export interface MessageGroupMeta {
+    schemaVersion: number; 
+    messageType:typeof MessageTypePrivate | typeof MessageTypePublic,
+    authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain,
+}

@@ -2,7 +2,7 @@
 import CryptoJS from 'crypto-js'
 import { concatBytes, hexToBytes } from 'iotacat-sdk-utils'
 import { IM } from './proto/compiled'
-import { IMMessage, Address, ShimmerBech32Addr, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage } from './types';
+import { IMMessage, Address, ShimmerBech32Addr,MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta } from './types';
 import { Message } from 'protobufjs';
 export * from './types';
 const SHA256_LEN = 32
@@ -11,24 +11,41 @@ class IotaCatSDK {
     _groupIdCache:Record<string,string[]> = {}
 
     _groupToGroupId(group:string){
-        const groupId = CryptoJS.SHA256(group).toString(CryptoJS.enc.Hex)
+        const meta = this._groupNameToGroupMeta(group)
+        if (!meta) return undefined
+        const groupId = this._groupMetaToGroupId(meta)
         return groupId
     }
-
+    _groupNameToGroupMeta(group:string):MessageGroupMeta|undefined{
+        const map:Record<string,MessageGroupMeta> = {
+            'iceberg-collection-1':{
+                schemaVersion: MessageCurrentSchemaVersion,
+                messageType:MessageTypePrivate,
+                authScheme:MessageAuthSchemeRecipeintOnChain,
+            }
+        }
+        return map[group]
+    }
+    _groupMetaToGroupId(meta:MessageGroupMeta):string{
+        const groupId = CryptoJS.SHA256(JSON.stringify(meta)).toString(CryptoJS.enc.Hex)
+        return groupId
+    }
     _groupIdToGroupMembers(groupId:string):string[]{
         return this._groupIdCache[groupId] || []
     }
 
-    //
     prepareSendMessage(senderAddr:Address, group:string,message: string):IMMessage|undefined  {
-        const groupId = this._groupToGroupId(group)
+        const meta = this._groupNameToGroupMeta(group)
+        if (!meta) return undefined
+        const {schemaVersion,messageType,authScheme} = meta
+        const groupId = this._groupMetaToGroupId(meta)
         const recipientAddresses = this._groupIdToGroupMembers(groupId)
         if (!recipientAddresses.includes(senderAddr.addr)) return undefined
         return {
-            schemaVersion: MessageCurrentSchemaVersion,
+            schemaVersion,
             group: groupId,
-            messageType:MessageTypePrivate,
-            authScheme:MessageAuthSchemeRecipeintInMessage,
+            messageType,
+            authScheme,
             recipients: recipientAddresses.map(addr=>({addr,key:''})),
             data: [message]
         }

@@ -10,6 +10,7 @@ setIotaCrypto({
 import { IotaCatSDKObj, ShimmerBech32Addr } from 'iotacat-sdk-core';
 import CryptoJS from 'crypto-js';
 import hkdf from 'js-crypto-hkdf';
+import { MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintOnChain } from 'iotacat-sdk-core/src';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -31,6 +32,13 @@ describe('core test with key pair', () => {
         const randomStr = generateRandomString(32)
         jest.spyOn(IotaCatSDKObj,'_groupIdToGroupMembers').mockImplementation((groupId:string)=>{
             return [publicAddr]
+        })
+        jest.spyOn(IotaCatSDKObj,'_groupNameToGroupMeta').mockImplementation((group:string)=>{
+            return {
+                schemaVersion: MessageCurrentSchemaVersion,
+                messageType:MessageTypePrivate,
+                authScheme:MessageAuthSchemeRecipeintOnChain,
+            }
         })
         const msgObject = IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:publicAddr},'dummy',randomStr)
         IotaCatSDKObj.setPublicKeyForPreparedMessage(msgObject!,{[publicAddr]:publicAddr})
