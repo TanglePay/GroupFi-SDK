@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, beforeAll, jest } from '@jest/globals';
-import { IotaCatSDKObj, IMMessage } from '../src';
+import { IotaCatSDKObj, IMMessage, ShimmerBech32Addr } from '../src';
 import { generateRandomString } from '../../../jest.base';
 describe('core test', () => {
     let msgObject:IMMessage|undefined
@@ -10,7 +10,7 @@ describe('core test', () => {
         jest.spyOn(IotaCatSDKObj,'_groupIdToGroupMembers').mockImplementation((groupId:string)=>{
             return [basicAddr]
         })
-        msgObject = IotaCatSDKObj.prepareSendMessage(basicAddr,'dummy',basicMsg)
+        msgObject = IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:basicAddr},'dummy',basicMsg)
     })
     test('test prepareSendMessage', () => {
         expect(msgObject).toBeDefined()
@@ -30,7 +30,7 @@ describe('core test', () => {
         jest.spyOn(IotaCatSDKObj,'_groupIdToGroupMembers').mockImplementation((groupId:string)=>{
             return [basicAddr]
         })
-        msgObject = IotaCatSDKObj.prepareSendMessage(basicAddr,'dummy',randomStr)
+        msgObject = IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:basicAddr},'dummy',randomStr)
         // manually set publickey
         IotaCatSDKObj.setPublicKeyForPreparedMessage(msgObject!,{[basicAddr]:basicAddr})
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,async (key,data)=>data)

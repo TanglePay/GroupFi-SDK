@@ -2,8 +2,8 @@
 import CryptoJS from 'crypto-js'
 import { concatBytes, hexToBytes } from 'iotacat-sdk-utils'
 import { IM } from './proto/compiled'
-import { IMMessage } from './types';
-export { IMMessage} from './types';
+import { IMMessage, Address, ShimmerBech32Addr } from './types';
+export * from './types';
 const SHA256_LEN = 32
 class IotaCatSDK {
 
@@ -19,10 +19,10 @@ class IotaCatSDK {
     }
 
     //
-    prepareSendMessage(senderBech32Addr:string, group:string,message: string):IMMessage|undefined  {
+    prepareSendMessage(senderAddr:Address, group:string,message: string):IMMessage|undefined  {
         const groupId = this._groupToGroupId(group)
         const recipientAddresses = this._groupIdToGroupMembers(groupId)
-        if (!recipientAddresses.includes(senderBech32Addr)) return undefined
+        if (!recipientAddresses.includes(senderAddr.addr)) return undefined
         return {
             schemaVersion: 1,
             group: groupId,
@@ -53,7 +53,6 @@ class IotaCatSDK {
         const groupSha256Hash = message.group
         const groupBytes = hexToBytes(groupSha256Hash)
         const salt = this._generateRandomStr(16)
-        console.log('salt',salt)
         message.data = message.data.map(msg=>this._encrypt(msg,salt))
         message.recipients = await Promise.all(message.recipients.map(async (pair)=>{
             pair.key = await encryptUsingPublicKey(pair.key,salt)
@@ -73,12 +72,16 @@ class IotaCatSDK {
             if (recipient.addr !== address) continue
             const salt = await decryptUsingPrivateKey(recipient.key)
             if (!salt) break
-            const firstMsgDecrpted = this._decrypt(msg.data[0],salt)
-            if (!firstMsgDecrpted) continue
+            if (!this.validateFirstMsg(msg,salt)) break
             msg.data = msg.data.map(data=>this._decrypt(data,salt))
             break
         }
         return msg as IMMessage
+    }
+    validateFirstMsg(msg:IM.IMMessage, salt:string){
+        const firstMsgDecrypted = this._decrypt(msg.data[0],salt)
+        if (!firstMsgDecrypted) return false
+        return true
     }
     _encrypt(content:string,salt:string){
         const contentWord = CryptoJS.enc.Utf8.parse(content)
@@ -87,12 +90,12 @@ class IotaCatSDK {
             contentWord,
             key,
             this._decorateAesCfg({ iv })
-        ).ciphertext.toString(CryptoJS.enc.Base64)
+        ).ciphertext.toString(CryptoJS.enc.Hex)
         return encrypted
     }
     _decrypt(content:string,salt:string){
         const [kdf,iv] = this._getKdf(salt)
-        const encryptedWord = CryptoJS.enc.Base64.parse(content)
+        const encryptedWord = CryptoJS.enc.Hex.parse(content)
         const encryptedParam = CryptoJS.lib.CipherParams.create({
             ciphertext: encryptedWord
         })
