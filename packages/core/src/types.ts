@@ -12,3 +12,9 @@ export type Address = {
     type: typeof ShimmerBech32Addr | typeof ShimmerEvmAddr
     addr: string
 }
+
+export const MessageCurrentSchemaVersion = 1
+export const MessageTypePrivate = 1
+export const MessageTypePublic = 2
+export const MessageAuthSchemeRecipeintInMessage = 1
+export const MessageAuthSchemeRecipeintOnChain = 2

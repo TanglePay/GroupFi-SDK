@@ -2,7 +2,8 @@
 import CryptoJS from 'crypto-js'
 import { concatBytes, hexToBytes } from 'iotacat-sdk-utils'
 import { IM } from './proto/compiled'
-import { IMMessage, Address, ShimmerBech32Addr } from './types';
+import { IMMessage, Address, ShimmerBech32Addr, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage } from './types';
+import { Message } from 'protobufjs';
 export * from './types';
 const SHA256_LEN = 32
 class IotaCatSDK {
@@ -24,10 +25,10 @@ class IotaCatSDK {
         const recipientAddresses = this._groupIdToGroupMembers(groupId)
         if (!recipientAddresses.includes(senderAddr.addr)) return undefined
         return {
-            schemaVersion: 1,
+            schemaVersion: MessageCurrentSchemaVersion,
             group: groupId,
-            messageType:0,
-            authScheme:0,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintInMessage,
             recipients: recipientAddresses.map(addr=>({addr,key:''})),
             data: [message]
         }
