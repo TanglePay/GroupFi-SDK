@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package IM;
+
+message Recipient {
+    string addr = 1;
+    string key = 2;
+}
+
+message IMMessage {
+    int32 schema_version = 1; // You can use int32 for 0 or 1
+    string group = 2; // Use string for sha256 bytes
+    int32 message_type = 3; // You can use int32 for 0 or 1
+    int32 auth_scheme = 4; // You can use int32 for 0 or 1
+    repeated Recipient recipients = 5; // repeated field for an array of objects
+    repeated string data = 6; // repeated field for an array of strings
+}

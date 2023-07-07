@@ -1,0 +1,40 @@
+{
+  "name": "iotacat-sdk-utils",
+  "version": "0.0.1",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "moduleNameIife": "iotacatutils",
+  "scripts": {
+    "clean": "rimraf dist",
+    "build:type": "tsc",
+    "build:source": "rollup --config rollup.config.mjs",
+    "build": "yarn run clean && yarn run build:type && yarn run build:source",
+    "lint": "eslint src --fix --ext .ts,.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TanglePay/TanglePay-SDK.git"
+  },
+  "keywords": [
+    "eip-1193",
+    "ethereum-provider",
+    "TanglePay",
+    "Dapp",
+    "Iota",
+    "wallet"
+  ],
+  "author": "TanglePay",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/TanglePay/TanglePay-SDK/issues"
+  },
+  "homepage": "https://github.com/TanglePay/TanglePay-SDK#readme",
+  "devDependencies": {
+    
+  },
+  "dependencies": {
+    
+  }
+}
