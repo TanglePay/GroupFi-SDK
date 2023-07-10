@@ -1,9 +1,14 @@
+export interface IMRecipient {
+    addr: string;
+    key: string;
+}
 export interface IMMessage {
     schemaVersion: number; // 0 or 1, 1 byte
     group: string; // sha256  bytes
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
-    recipients: {addr:string,key:string}[];
+    recipients: IMRecipient[];
+    recipientOutputid?: string; // 32 bytes
     data: string[];
 }
 export const ShimmerBech32Addr = 1
@@ -19,7 +24,10 @@ export const MessageTypePublic = 2
 export const MessageAuthSchemeRecipeintInMessage = 1
 export const MessageAuthSchemeRecipeintOnChain = 2
 export interface MessageGroupMeta {
+    groupName: string;
     schemaVersion: number; 
     messageType:typeof MessageTypePrivate | typeof MessageTypePublic,
     authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain,
 }
+export type MessageGroupMetaKey = keyof MessageGroupMeta
+export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain

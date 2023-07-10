@@ -124,6 +124,9 @@ export namespace IM {
         /** IMMessage recipients */
         recipients?: (IM.IRecipient[]|null);
 
+        /** IMMessage recipientOutputid */
+        recipientOutputid?: (string|null);
+
         /** IMMessage data */
         data?: (string[]|null);
     }
@@ -151,6 +154,9 @@ export namespace IM {
 
         /** IMMessage recipients. */
         public recipients: IM.IRecipient[];
+
+        /** IMMessage recipientOutputid. */
+        public recipientOutputid: string;
 
         /** IMMessage data. */
         public data: string[];

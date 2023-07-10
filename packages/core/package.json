@@ -10,6 +10,7 @@
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
+    "protobuf-gen": "pbjs -t static-module -w commonjs -o src/proto/compiled.js proto/*.proto && pbts -o src/proto/compiled.d.ts src/proto/compiled.js",
     "build": "yarn run clean && yarn run build:type && yarn run build:source",
     "lint": "eslint src --fix --ext .ts,.js",
     "test": "jest"

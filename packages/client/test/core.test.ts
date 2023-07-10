@@ -11,6 +11,7 @@ import { IotaCatSDKObj, ShimmerBech32Addr } from 'iotacat-sdk-core';
 import CryptoJS from 'crypto-js';
 import hkdf from 'js-crypto-hkdf';
 import { MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintOnChain } from 'iotacat-sdk-core/src';
+import { MessageAuthSchemeRecipeintInMessage } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -35,22 +36,23 @@ describe('core test with key pair', () => {
         })
         jest.spyOn(IotaCatSDKObj,'_groupNameToGroupMeta').mockImplementation((group:string)=>{
             return {
+                groupName:group,
                 schemaVersion: MessageCurrentSchemaVersion,
                 messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
+                authScheme:MessageAuthSchemeRecipeintInMessage,
             }
         })
-        const msgObject = IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:publicAddr},'dummy',randomStr)
+        const msgObject = await IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:publicAddr},'dummy',randomStr)
         IotaCatSDKObj.setPublicKeyForPreparedMessage(msgObject!,{[publicAddr]:publicAddr})
-        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!, async (key,data)=>{
+        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!, {encryptUsingPublicKey:async (key,data)=>{
             const publicKey = util.hexToBytes(key)
             const encrypted = await encrypt(publicKey, data, tag)
             return encrypted.payload
-        })
-        const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,async (data)=>{
+        }})
+        const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,{decryptUsingPrivateKey:async (data)=>{
             const decrypted = await decrypt(secret_, data, tag)
             return decrypted.payload
-        })
+        }})
         expect(msgObject2).toBeDefined()
         expect(msgObject2!.data[0]).toBe(randomStr)
     })

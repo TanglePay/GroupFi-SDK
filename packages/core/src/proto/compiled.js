@@ -256,6 +256,7 @@ $root.IM = (function() {
          * @property {number|null} [messageType] IMMessage messageType
          * @property {number|null} [authScheme] IMMessage authScheme
          * @property {Array.<IM.IRecipient>|null} [recipients] IMMessage recipients
+         * @property {string|null} [recipientOutputid] IMMessage recipientOutputid
          * @property {Array.<string>|null} [data] IMMessage data
          */
 
@@ -317,6 +318,14 @@ $root.IM = (function() {
         IMMessage.prototype.recipients = $util.emptyArray;
 
         /**
+         * IMMessage recipientOutputid.
+         * @member {string} recipientOutputid
+         * @memberof IM.IMMessage
+         * @instance
+         */
+        IMMessage.prototype.recipientOutputid = "";
+
+        /**
          * IMMessage data.
          * @member {Array.<string>} data
          * @memberof IM.IMMessage
@@ -359,9 +368,11 @@ $root.IM = (function() {
             if (message.recipients != null && message.recipients.length)
                 for (var i = 0; i < message.recipients.length; ++i)
                     $root.IM.Recipient.encode(message.recipients[i], writer.uint32(/* id 5, wireType 2 =*/42).fork()).ldelim();
+            if (message.recipientOutputid != null && Object.hasOwnProperty.call(message, "recipientOutputid"))
+                writer.uint32(/* id 6, wireType 2 =*/50).string(message.recipientOutputid);
             if (message.data != null && message.data.length)
                 for (var i = 0; i < message.data.length; ++i)
-                    writer.uint32(/* id 6, wireType 2 =*/50).string(message.data[i]);
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.data[i]);
             return writer;
         };
 
@@ -419,6 +430,10 @@ $root.IM = (function() {
                         break;
                     }
                 case 6: {
+                        message.recipientOutputid = reader.string();
+                        break;
+                    }
+                case 7: {
                         if (!(message.data && message.data.length))
                             message.data = [];
                         message.data.push(reader.string());
@@ -480,6 +495,9 @@ $root.IM = (function() {
                         return "recipients." + error;
                 }
             }
+            if (message.recipientOutputid != null && message.hasOwnProperty("recipientOutputid"))
+                if (!$util.isString(message.recipientOutputid))
+                    return "recipientOutputid: string expected";
             if (message.data != null && message.hasOwnProperty("data")) {
                 if (!Array.isArray(message.data))
                     return "data: array expected";
@@ -520,6 +538,8 @@ $root.IM = (function() {
                     message.recipients[i] = $root.IM.Recipient.fromObject(object.recipients[i]);
                 }
             }
+            if (object.recipientOutputid != null)
+                message.recipientOutputid = String(object.recipientOutputid);
             if (object.data) {
                 if (!Array.isArray(object.data))
                     throw TypeError(".IM.IMMessage.data: array expected");
@@ -552,6 +572,7 @@ $root.IM = (function() {
                 object.group = "";
                 object.messageType = 0;
                 object.authScheme = 0;
+                object.recipientOutputid = "";
             }
             if (message.schemaVersion != null && message.hasOwnProperty("schemaVersion"))
                 object.schemaVersion = message.schemaVersion;
@@ -566,6 +587,8 @@ $root.IM = (function() {
                 for (var j = 0; j < message.recipients.length; ++j)
                     object.recipients[j] = $root.IM.Recipient.toObject(message.recipients[j], options);
             }
+            if (message.recipientOutputid != null && message.hasOwnProperty("recipientOutputid"))
+                object.recipientOutputid = message.recipientOutputid;
             if (message.data && message.data.length) {
                 object.data = [];
                 for (var j = 0; j < message.data.length; ++j)

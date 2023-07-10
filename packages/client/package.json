@@ -40,7 +40,8 @@
     "@iota/util.js": "^2.0.0-rc.2",
     "crypto-js": "^4.1.1",
     "iotacat-sdk-core": "^0.0.1",
-    "js-crypto-hkdf": "^1.0.4"
+    "js-crypto-hkdf": "^1.0.4",
+    "p-limit": "^4.0.0"
   },
   "devDependencies": {}
 }

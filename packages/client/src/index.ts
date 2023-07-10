@@ -27,7 +27,10 @@ import {
 import { Converter, WriteStream,  } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, asciiToUint8Array } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
-import { IMMessage, IotaCatSDKObj, IOTACATTAG, makeLRUCache,LRUCache, cacheGet, cachePut } from "iotacat-sdk-core";
+import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut } from "iotacat-sdk-core";
+import pLimit from 'p-limit';
+//TODO tune concurrency
+const httpCallLimit = pLimit(5);
 setIotaCrypto({
     Bip39,
     Ed25519,
@@ -101,7 +104,7 @@ class IotaCatClient {
     _walletKeyPair?: IKeyPair;
     _accountHexAddress?:string;
     _accountBech32Address?:string;
-    _lruCache?:LRUCache<string>;
+    _pubKeyCache?:LRUCache<string>;
     _storage?:StorageFacade;
     async setup(id:number, provider?:Constructor<IPowProvider>,...rest:any[]){
         const node = nodes.find(node=>node.id === id)
@@ -112,7 +115,7 @@ class IotaCatClient {
         this._indexer = new IndexerPluginClient(this._client)
         this._nodeInfo = await this._client.info();
         this._protocolInfo = await this._client.protocolInfo();
-        this._lruCache = makeLRUCache<string>(200)
+        this._pubKeyCache = makeLRUCache<string>(200)
         console.log('NodeInfo', this._nodeInfo);
         console.log('ProtocolInfo', this._protocolInfo);
     }
@@ -185,24 +188,106 @@ class IotaCatClient {
     async getPublicKey(addressRaw:string, type='bech32'):Promise<string|undefined>{
         this._ensureClientInited()
         const address = this._storage?.prefix + addressRaw
-        const memoryValue = cacheGet(address, this._lruCache!)
+        const memoryValue = cacheGet(address, this._pubKeyCache!)
         console.log('MemoryValue', memoryValue);
         if (memoryValue) return memoryValue
 
         const storageValue = await this._storage!.get(address)
         console.log('StorageValue', storageValue);
         if (storageValue) {
-            cachePut(address, storageValue, this._lruCache!)
+            cachePut(address, storageValue, this._pubKeyCache!)
             return storageValue
         }
         const ledgerValue = type == 'bech32'? await this._getPublicKeyFromLedger(addressRaw) : await this._getPublicKeyFromLedgerEd25519(addressRaw)
         console.log('LedgerValue', ledgerValue);
         if (ledgerValue) {
             await this._storage!.set(address, ledgerValue)
-            cachePut(address, ledgerValue, this._lruCache!)
+            cachePut(address, ledgerValue, this._pubKeyCache!)
             return ledgerValue
         }
     }
+
+    async _getAddressListForGroupFromInxApi(groupId:string):Promise<string[]>{
+        //TODO
+        return []
+    }
+    async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<string|undefined>{
+        //TODO
+        return undefined
+    }
+    async _getSharedOutputForGroup(groupId:string):Promise<IBasicOutput|undefined>{
+        this._ensureClientInited()
+        const outputId = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+        if (outputId) {
+            const outputsResponse = await this._client!.output(outputId)
+            return outputsResponse.output as IBasicOutput
+        } else {
+            return await this._makeSharedOutputForGroup(groupId)
+        }
+    }
+    async _getSaltForGroup(groupId:string, address:string):Promise<string>{
+        const sharedOutput = await this._getSharedOutputForGroup(groupId)
+        if (!sharedOutput) throw new Error('Shared output not found')
+        const metaFeature = sharedOutput.features?.find((feature)=>feature.type == 2) as IMetadataFeature
+        if (!metaFeature) throw new Error('Metadata feature not found')
+        const bytes = Converter.hexToBytes(metaFeature.data)
+        const recipients = IotaCatSDKObj.deserializeRecipientList(bytes)
+        let salt = ''
+        for (const recipient of recipients) {
+            if (!recipient.key) continue
+            if (recipient.addr !== address) continue
+            const decrypted = await decrypt(this._walletKeyPair!.privateKey, recipient.key, tag)
+            salt = decrypted.payload
+            break
+        }
+        if (!salt) throw new Error('Salt not found')
+        return salt
+    }
+        
+    async _makeSharedOutputForGroup(groupId:string):Promise<IBasicOutput|undefined>{
+        const bech32AddrArr = await this._getAddressListForGroupFromInxApi(groupId)
+        const recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
+        console.log('shared recipient WithPublicKeys', recipients);
+        const salt = IotaCatSDKObj._generateRandomStr(32)
+        const preparedRecipients = await Promise.all(recipients.map(async (pair)=>{
+            const publicKey = Converter.hexToBytes(pair.key)
+            const encrypted = await encrypt(publicKey, salt, tag)
+            pair.key = encrypted.payload
+            return pair
+        }))
+        const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId)
+        const tagFeature: ITagFeature = {
+            type: 3,
+            tag: `0x${Converter.utf8ToHex(IOTACATSHAREDTAG)}`
+        };
+        const metadataFeature: IMetadataFeature = {
+            type: 2,
+            data: Converter.bytesToHex(pl, true)
+        };
+
+        // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
+        const basicOutput: IBasicOutput = {
+            type: BASIC_OUTPUT_TYPE,
+            amount: '',
+            nativeTokens: [],
+            unlockConditions: [
+                {
+                    type: ADDRESS_UNLOCK_CONDITION_TYPE,
+                    address: {
+                        type: ED25519_ADDRESS_TYPE,
+                        pubKeyHash: this._accountHexAddress!
+                    }
+                }
+            ],
+            features: [
+                metadataFeature,
+                tagFeature
+            ]
+        };
+        const blockId = await this._sendBasicOutput(basicOutput);
+        console.log('shared output blockId', blockId);
+        return basicOutput;
+    } 
     _getPair(baseSeed:Ed25519Seed){
         const addressGeneratorAccountState = {
             accountIndex: 0,
@@ -243,10 +328,12 @@ class IotaCatClient {
         const metadataFeature = features.find(feature=>feature.type === 2) as IMetadataFeature
         if (!metadataFeature) throw new Error('No metadata feature')
         const data = Converter.hexToBytes(metadataFeature.data)
-        const message = await IotaCatSDKObj.deserializeMessage(data, address, async (data:string)=>{
+        const message = await IotaCatSDKObj.deserializeMessage(data, address, {decryptUsingPrivateKey:async (data:string)=>{
             const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
             return decrypted.payload
-        })
+        },groupSaltResolver:async (groupId:string)=>{
+            return await this._getSaltForGroup(groupId,address)
+        }})
         return { sender , message }
     }
     async _getUnSpentOutputs() {
@@ -270,8 +357,23 @@ class IotaCatClient {
         console.log('Unspent Outputs', outputs);
         return outputs.map(output=>{return {outputId:output.outputId,output:output.output.output}})
     }
-    _getAmount(){
-        return bigInt('100000')
+    _getAmount(output:IBasicOutput){
+        const deposit = TransactionHelper.getStorageDeposit(output, this._protocolInfo!.rentStructure)
+        return bigInt(deposit)
+    }
+    async _bech32AddrArrToRecipients(bech32AddrArr:string[]){
+        const tasks = bech32AddrArr.map(addr=>httpCallLimit((addr_) => this.getPublicKey(addr_), addr))
+            
+
+        const publicKeys = await Promise.all(tasks)
+        console.log('PublicKeys', publicKeys);
+        const recipients = bech32AddrArr.map((addr,idx)=>{
+            return {
+                addr,
+                key:publicKeys[idx]!
+            }
+        })
+        return recipients
     }
     async sendMessage(senderAddr:string, group:string,message: IMMessage){
         this._ensureClientInited()
@@ -280,36 +382,15 @@ class IotaCatClient {
             const protocolInfo = await this._client!.protocolInfo();
             console.log('ProtocolInfo', protocolInfo);
             const bech32AddrArr = message.recipients.map(recipient=>recipient.addr)
-            const tasks = bech32AddrArr.map(addr=>this.getPublicKey(addr))
-            // TODO p-limit
-            const publicKeys = await Promise.all(tasks)
-            console.log('PublicKeys', publicKeys);
-            message.recipients = message.recipients.map((recipient,idx)=>{
-                return {
-                    addr:recipient.addr,
-                    key:publicKeys[idx]!
-                }
-            })
+            message.recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
             console.log('MessageWithPublicKeys', message);
-            const pl = await IotaCatSDKObj.serializeMessage(message,async (key,data)=>{
+            const pl = await IotaCatSDKObj.serializeMessage(message,{encryptUsingPublicKey:async (key,data)=>{
                 const publicKey = Converter.hexToBytes(key)
                 const encrypted = await encrypt(publicKey, data, tag)
                 return encrypted.payload
-            })
+            },groupSaltResolver:async (groupId:string)=>await this._getSaltForGroup(groupId,senderAddr)})
             console.log('MessagePayload', pl);
-            const amountToSend = this._getAmount()
-            console.log('AmountToSend', amountToSend);
-            const outputs = await this._getUnSpentOutputs()
-            console.log('Outputs', outputs);
-            // get first output with amount > amountToSend
-            const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(amountToSend))
-            if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
-            const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
-            console.log('ConsumedOutput', consumedOutput);
-            // 2. Prepare Inputs for the transaction
-            const input: IUTXOInput = TransactionHelper.inputFromOutputId(consumedOutputId); 
-            console.log("Input: ", input, '\n');
-
+            
             const tagFeature: ITagFeature = {
                 type: 3,
                 tag: `0x${Converter.utf8ToHex(IOTACATTAG)}`
@@ -322,7 +403,7 @@ class IotaCatClient {
             // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
             const basicOutput: IBasicOutput = {
                 type: BASIC_OUTPUT_TYPE,
-                amount: amountToSend.toString(),
+                amount: '',
                 nativeTokens: [],
                 unlockConditions: [
                     {
@@ -339,6 +420,31 @@ class IotaCatClient {
                 ]
             };
             console.log("Basic Output: ", basicOutput);
+
+            
+            const blockId = await this._sendBasicOutput(basicOutput);
+            return blockId
+        } catch (e) {
+            console.log("Error submitting block: ", e);
+        }
+        
+    }
+    async _sendBasicOutput(basicOutput:IBasicOutput){
+        const amountToSend = this._getAmount(basicOutput)
+            console.log('AmountToSend', amountToSend);
+            basicOutput.amount = amountToSend.toString()
+            const outputs = await this._getUnSpentOutputs()
+            console.log('unspent Outputs', outputs);
+            // get first output with amount > amountToSend
+            const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(amountToSend))
+            if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
+            const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
+            console.log('ConsumedOutput', consumedOutput);
+            // 2. Prepare Inputs for the transaction
+            const input: IUTXOInput = TransactionHelper.inputFromOutputId(consumedOutputId); 
+            console.log("Input: ", input, '\n');
+
+
             const remainderBasicOutput: IBasicOutput = {
                 type: BASIC_OUTPUT_TYPE,
                 amount: bigInt(consumedOutput.amount).minus(amountToSend).toString(),
@@ -409,12 +515,8 @@ class IotaCatClient {
         
             const blockId = await this._client!.blockSubmit(block);
             console.log("Submitted blockId is: ", blockId);
-            return blockId
-        } catch (e) {
-            console.log("Error submitting block: ", e);
+            return blockId;
         }
-        
-    }
     async fetchMessageList(group:string, address:string) {
         const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0gzVXR3UFNnaHBtMWVHMWt1N0I2WDFrQXZUb1F1aVdhdno2TU1zU2FlMmpZIiwianRpIjoiMTY4Nzg3NjUzMiIsImlhdCI6MTY4Nzg3NjUzMiwiaXNzIjoiMTJEM0tvb1dIM1V0d1BTZ2hwbTFlRzFrdTdCNlgxa0F2VG9RdWlXYXZ6Nk1Nc1NhZTJqWSIsIm5iZiI6MTY4Nzg3NjUzMiwic3ViIjoiSE9STkVUIn0.H9_pFE8kalJDV-G3R1SowkTJ5n3SG5rm0FpfSfR8IqI'
         const groupId = IotaCatSDKObj._groupToGroupId(group)
