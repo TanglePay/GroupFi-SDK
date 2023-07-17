@@ -1,4 +1,5 @@
 import { WriteStream, ReadStream } from "@iota/util.js";
+export * from './runbatch'
 export const concatBytes = (...args: Uint8Array[]) => {
     let totalLength = 0;
     args.forEach((bytes) => {

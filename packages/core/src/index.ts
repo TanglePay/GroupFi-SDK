@@ -88,37 +88,24 @@ class IotaCatSDK {
         return this._groupIdCache[groupId] || []
     }
 
-    async prepareSendMessage(senderAddr:Address, group:string,message: string, sharedOutputIdResolver?:(groupId:string)=>Promise<string>):Promise<IMMessage|undefined>  {
+    async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
         const meta = this._groupNameToGroupMeta(group)
         if (!meta) return undefined
+        console.log('meta',meta)
         const {schemaVersion,messageType,authScheme} = meta
         const groupId = this._groupMetaToGroupId(meta)
-        let sharedOutputId:string|undefined
-        if (authScheme === MessageAuthSchemeRecipeintOnChain) {
-            if (!sharedOutputIdResolver) return undefined
-             sharedOutputId = await sharedOutputIdResolver(groupId)
-        }
-        const recipientAddresses = this._groupIdToGroupMembers(groupId)
-        if (!recipientAddresses.includes(senderAddr.addr)) return undefined
+        console.log('groupId',groupId)
+        
         return {
             schemaVersion,
             group: groupId,
             messageType,
             authScheme,
-            recipientOutputid: sharedOutputId,
-            recipients: recipientAddresses.map(addr=>({addr,key:''})),
+            recipients:[],
             data: [message]
         }
     }
 
-    /*
-    async _getSharedOutputIdFromGroupId(groupId:string):Promise<string|undefined>{
-        // TODO call inx api
-        // if api returns a valid output id, return it
-        // else create one and return it
-        throw new Error('not implemented')
-    }
-*/
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         message.recipients = message.recipients.map(pair=>{
             pair.key = publicKeyMap[pair.addr]
@@ -160,8 +147,8 @@ class IotaCatSDK {
     }
               
     
-    async deserializeMessage(messageBytes:Uint8Array, address:string, extra:{decryptUsingPrivateKey?:(data:string)=>Promise<string>, groupSaltResolver?:(groupId:string)=>Promise<string>} ):Promise<IMMessage>{
-        const {decryptUsingPrivateKey,groupSaltResolver} = extra
+    async deserializeMessage(messageBytes:Uint8Array, address:string, extra:{decryptUsingPrivateKey?:(data:string)=>Promise<string>, sharedOutputSaltResolver?:(outputId:string)=>Promise<string>} ):Promise<IMMessage>{
+        const {decryptUsingPrivateKey,sharedOutputSaltResolver} = extra
         const groupBytes = messageBytes.slice(0,SHA256_LEN)
         const payload = messageBytes.slice(SHA256_LEN)
         const msg = IM.IMMessage.decode(payload)
@@ -179,8 +166,8 @@ class IotaCatSDK {
                 }
             }
         } else if (msg.authScheme === MessageAuthSchemeRecipeintOnChain) {
-            if (!groupSaltResolver) throw new Error('groupSaltResolver is required for MessageAuthSchemeRecipeintOnChain')
-            salt = await groupSaltResolver(msg.group)
+            if (!sharedOutputSaltResolver) throw new Error('sharedOutputSaltResolver is required for MessageAuthSchemeRecipeintOnChain')
+            salt = await sharedOutputSaltResolver(msg.recipientOutputid!)
         }
         if (!salt) {
             throw new Error('invalid message')

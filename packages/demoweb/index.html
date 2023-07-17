@@ -112,21 +112,25 @@
         <div class="left">
             <h2>message send</h2>
             <div class="block">
-                <h4>iotacat_im_send</h4>
+                <h4>current wallet address</h4>
                 <div class="address-input">
-                    <input id="sender_addr" type="text" placeholder="sender_addr in bech32">
+                    <input id="cur_addr" type="text" disabled placeholder="cur_addr in bech32">
                 </div>
+                <h4>current group name</h4>
+                <div class="address-input">
+                    <input id="group_name" type="text" disabled placeholder="">
+                </div>
+            </div>
+            <div class="block">
+                <h4>iotacat_im_send</h4>                
                 <div class="address-input">
                     <input id="message_text" type="text" placeholder="message content">
                 </div>
                 <button onclick="sendIm()" class="btn btn-primary">send</button>
             </div>
             <div class="block">
-                <h4>iotacat_im_read</h4>
-                <div class="address-input">
-                    <input id="reader_addr" type="text" placeholder="reader_addr in bech32">
-                </div>
-                <button onclick="refreshMessageList()" class="btn btn-primary">read</button>
+                <h4>iotacat_refresh_message</h4>
+                <button onclick="refreshMessageList()" class="btn btn-primary">refresh</button>
             </div>
             
         </div>
@@ -146,10 +150,11 @@
 <script src="./js/crypto.js"></script>
 <script src="./js/util.js"></script>
 <script src="./js/iota.js"></script>
+<script src="./js/tanglepaycommon.js"></script>
 <script src="./js/tanglepaysdk.js"></script>
 <script src="./js/core.js"></script>
 <script>
-    const group = 'iotacatdemo'
+    const defaultGroup = 'iceberg-collection-8'
     const dom = document.getElementById('text')
     function formatTimestamp(unixTimestamp) {
         // Convert the Unix timestamp to milliseconds
@@ -168,13 +173,13 @@
         // Format the date and time
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
-    window.addEventListener('DOMContentLoaded',async ()=>{
+    window.addEventListener('iota-ready',async ()=>{
         console.log('iotacatsdk',iotacatsdk)
         console.log('tanglepaysdk',iota)
 
         window.refreshMessageList = async ()=>{
-            const readerAddr = document.getElementById('reader_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
-            
+            const readerAddr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const group = document.getElementById('group_name').value;
             try {
                 const res = await iota.request({
                     method: 'iota_im_groupmessagelist',
@@ -195,7 +200,7 @@
                 console.log('error',error)
             }
         }
-        
+        iota.redirectAppStoreIfNotInstalled = false;
         try {
             const res = await iota.request({
                         method: 'iota_connect',
@@ -203,18 +208,21 @@
                             // expires: 3000000
                         }
                     })
+            console.log('res',res)
+            document.getElementById('cur_addr').value = res.address
+            document.getElementById('group_name').value = defaultGroup
         } catch (error) {
             console.log('error',error)
         }
         
         window.sendIm = async ()=>{
-            const senderAddr = document.getElementById('sender_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const senderAddr = document.getElementById('cur_addr').value;
             const messageText = document.getElementById('message_text').value; //'hello world'
-            
+            const group = document.getElementById('group_name').value;
             const dappName = 'iotacatdemo'
             console.log('sdk obj',iotacatsdk.IotaCatSDKObj)
-            iotacatsdk.IotaCatSDKObj._groupIdCache[iotacatsdk.IotaCatSDKObj._groupToGroupId(group)] = ['smr1qplvzl648kdj3m5ttgvsaruae470frax3xn90hzs8j045jpnzw5a24w7el2','smr1qq7vdfl8gj8hyd8nzu5vkanme349xjzyq07y6xzvk690e8asyqzhk5p6x4v']
-            const message = iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, messageText)
+            const message = await iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, messageText)
+            console.log('message',message)
             const res = await iota.request({
                 method: 'iota_im',
                 params: {

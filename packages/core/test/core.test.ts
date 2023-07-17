@@ -27,12 +27,10 @@ describe('core test', () => {
                 authScheme:MessageAuthSchemeRecipeintOnChain,
             }
         })
-        msgObject = await IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:basicAddr},'dummy',msg, async (groupId:string)=>sharedSalt)
+        msgObject = await IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:basicAddr},'dummy',msg)
     }
     beforeEach(()=>{
-        jest.spyOn(IotaCatSDKObj,'_groupIdToGroupMembers').mockImplementation((groupId:string)=>{
-            return [basicAddr]
-        })
+
         
     })
     test('test prepareSendMessage for RecipientInMessageMsg', async () => {
@@ -63,7 +61,7 @@ describe('core test', () => {
     test('test deserializeMessage for RecipientOnChainMsg', async () => {
         await prepareRecipientOnChainMsg(basicMsg)
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{groupSaltResolver:async (groupId:string)=>sharedSalt})
-        const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,basicAddr,{groupSaltResolver:async (groupId:string)=>sharedSalt})
+        const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,basicAddr,{sharedOutputSaltResolver:async (outputId:string)=>sharedSalt})
         expect(msgObject2).toBeDefined()
         expect(msgObject2!.data[0]).toBe(basicMsg)
     })
@@ -83,7 +81,7 @@ describe('core test', () => {
         // manually set publickey
         IotaCatSDKObj.setPublicKeyForPreparedMessage(msgObject!,{[basicAddr]:basicAddr})
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{groupSaltResolver:async (groupId:string)=>sharedSalt})
-        const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,basicAddr,{groupSaltResolver:async (groupId:string)=>sharedSalt})
+        const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,basicAddr,{sharedOutputSaltResolver:async (outputId:string)=>sharedSalt})
         expect(msgObject2).toBeDefined()
         expect(msgObject2!.data[0]).toBe(randomStr)
     })

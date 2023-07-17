@@ -27,10 +27,10 @@ import {
 import { Converter, WriteStream,  } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, asciiToUint8Array } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
-import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut } from "iotacat-sdk-core";
-import pLimit from 'p-limit';
+import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage } from "iotacat-sdk-core";
+import {runBatch} from 'iotacat-sdk-utils';
 //TODO tune concurrency
-const httpCallLimit = pLimit(5);
+const httpCallLimit = 5;
 setIotaCrypto({
     Bip39,
     Ed25519,
@@ -62,6 +62,10 @@ type MessageBody = {
     sender:string,
     message:string,
     timestamp:number
+}
+type NftItemReponse = {
+    ownerAddress: string;
+    nftId: string;
 }
 type Network = {
     id: number;
@@ -106,6 +110,8 @@ class IotaCatClient {
     _accountBech32Address?:string;
     _pubKeyCache?:LRUCache<string>;
     _storage?:StorageFacade;
+    //TODO simple cache
+    _saltCache:Record<string,string> = {};
     async setup(id:number, provider?:Constructor<IPowProvider>,...rest:any[]){
         const node = nodes.find(node=>node.id === id)
         if (!node) throw new Error('Node not found')
@@ -166,6 +172,7 @@ class IotaCatClient {
         console.log('TransactionHistory', json);
         if (json.items && json.items.length > 0) {
             const item = json.items.find((item:any)=>item.isSpent == true)
+            if (!item) return
             const outputId = item.outputId
             return outputId
         }
@@ -189,49 +196,100 @@ class IotaCatClient {
         this._ensureClientInited()
         const address = this._storage?.prefix + addressRaw
         const memoryValue = cacheGet(address, this._pubKeyCache!)
-        console.log('MemoryValue', memoryValue);
+        console.log('MemoryValue', memoryValue, addressRaw);
         if (memoryValue) return memoryValue
 
         const storageValue = await this._storage!.get(address)
-        console.log('StorageValue', storageValue);
+        console.log('StorageValue', storageValue, addressRaw);
         if (storageValue) {
             cachePut(address, storageValue, this._pubKeyCache!)
             return storageValue
         }
-        const ledgerValue = type == 'bech32'? await this._getPublicKeyFromLedger(addressRaw) : await this._getPublicKeyFromLedgerEd25519(addressRaw)
-        console.log('LedgerValue', ledgerValue);
-        if (ledgerValue) {
-            await this._storage!.set(address, ledgerValue)
-            cachePut(address, ledgerValue, this._pubKeyCache!)
-            return ledgerValue
+        let ledgerValue = type == 'bech32'? await this._getPublicKeyFromLedger(addressRaw) : await this._getPublicKeyFromLedgerEd25519(addressRaw)
+        console.log('LedgerValue', ledgerValue, addressRaw);
+        if (!ledgerValue) {
+            ledgerValue = 'noop'
         }
+        await this._storage!.set(address, ledgerValue)
+        cachePut(address, ledgerValue, this._pubKeyCache!)
+        return ledgerValue
     }
 
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<string[]>{
-        //TODO
+        //TODO try inx plugin 
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV1NKSlY1N0RtelhaOXpMYmVjY1RTYVBuOHdRWHcxWmdNZkVrRG1OeEFzUjhNIiwianRpIjoiMTY4OTQ4NTI1NiIsImlhdCI6MTY4OTQ4NTI1NiwiaXNzIjoiMTJEM0tvb1dTSkpWNTdEbXpYWjl6TGJlY2NUU2FQbjh3UVh3MVpnTWZFa0RtTnhBc1I4TSIsIm5iZiI6MTY4OTQ4NTI1Niwic3ViIjoiSE9STkVUIn0.c_oplmWCesy0fMx4jiIsJwl3x23Gemp36M-JNmwO_HI'
+        try {
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/nfts?groupId=0x${groupId}`
+            console.log('_getAddressListForGroupFromInxApi url', url);
+            const res = await fetch(url,
+            {
+                method:'GET',
+                headers:{
+                'Content-Type':'application/json',
+                'Authorization':`Bearer ${jwtToken}`
+                }
+            })
+            if (!res.ok) {
+                console.log('_getAddressListForGroupFromInxApi res not ok', res.status);
+            }
+            console.log('_getAddressListForGroupFromInxApi res', res);
+            const data = await res.json() as NftItemReponse[]
+            return data.map(item=>item.ownerAddress)
+        } catch (error) {
+            console.log('_getAddressListForGroupFromInxApi error',error)
+        }
         return []
     }
-    async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<string|undefined>{
-        //TODO
+    async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV1NKSlY1N0RtelhaOXpMYmVjY1RTYVBuOHdRWHcxWmdNZkVrRG1OeEFzUjhNIiwianRpIjoiMTY4OTQ4NTI1NiIsImlhdCI6MTY4OTQ4NTI1NiwiaXNzIjoiMTJEM0tvb1dTSkpWNTdEbXpYWjl6TGJlY2NUU2FQbjh3UVh3MVpnTWZFa0RtTnhBc1I4TSIsIm5iZiI6MTY4OTQ4NTI1Niwic3ViIjoiSE9STkVUIn0.c_oplmWCesy0fMx4jiIsJwl3x23Gemp36M-JNmwO_HI'
+        try {
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/shared?groupId=0x${groupId}`
+            try {
+            // @ts-ignore
+            const res = await fetch(url,{
+                method:'GET',
+                headers:{
+                'Content-Type':'application/json',
+                "Authorization":`Bearer ${jwtToken}`
+                }})
+                const data = await res.json() as {outputId:string}
+                return data
+            } catch (error) {
+                console.log('error',error)
+            }
+            
+        } catch (error) {
+            console.log('error',error)
+        }
         return undefined
     }
-    async _getSharedOutputForGroup(groupId:string):Promise<IBasicOutput|undefined>{
+    async _getSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
         this._ensureClientInited()
-        const outputId = await this._getSharedOutputIdForGroupFromInxApi(groupId)
-        if (outputId) {
+        const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+        if (res) {
+            const {outputId} = res
             const outputsResponse = await this._client!.output(outputId)
-            return outputsResponse.output as IBasicOutput
+            return {outputId,output:outputsResponse.output as IBasicOutput}
         } else {
             return await this._makeSharedOutputForGroup(groupId)
         }
     }
-    async _getSaltForGroup(groupId:string, address:string):Promise<string>{
-        const sharedOutput = await this._getSharedOutputForGroup(groupId)
-        if (!sharedOutput) throw new Error('Shared output not found')
+    
+    async _getSaltForGroup(groupId:string, address:string):Promise<{salt:string, outputId:string}>{
+        console.log(`_getSaltForGroup groupId:${groupId}, address:${address}`);
+        const sharedOutputResp = await this._getSharedOutputForGroup(groupId)
+        if (!sharedOutputResp) throw new Error('Shared output not found')
+        const {output:sharedOutput,outputId} = sharedOutputResp
+        console.log('sharedOutput', sharedOutput);
+        const salt = await this._getSaltFromSharedOutput(sharedOutput, address)
+        return {salt, outputId}
+    }
+    async _getSaltFromSharedOutput(sharedOutput:IBasicOutput, address:string):Promise<string>{
         const metaFeature = sharedOutput.features?.find((feature)=>feature.type == 2) as IMetadataFeature
         if (!metaFeature) throw new Error('Metadata feature not found')
         const bytes = Converter.hexToBytes(metaFeature.data)
         const recipients = IotaCatSDKObj.deserializeRecipientList(bytes)
+        console.log('recipients', recipients);
         let salt = ''
         for (const recipient of recipients) {
             if (!recipient.key) continue
@@ -243,11 +301,20 @@ class IotaCatClient {
         if (!salt) throw new Error('Salt not found')
         return salt
     }
-        
-    async _makeSharedOutputForGroup(groupId:string):Promise<IBasicOutput|undefined>{
+    async _getSaltFromSharedOutputId(outputId:string, address:string):Promise<{salt:string}>{
+        const outputsResponse = await this._client!.output(outputId)
+        const output = outputsResponse.output as IBasicOutput
+        const salt = await this._getSaltFromSharedOutput(output, address)
+        return {salt}
+    }
+    async _makeSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
         const bech32AddrArr = await this._getAddressListForGroupFromInxApi(groupId)
+        // TODO for now add senderAddr if not exist
+        if (!bech32AddrArr.includes(this._accountBech32Address!)) {
+            bech32AddrArr.push(this._accountBech32Address!)
+        }
         const recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
-        console.log('shared recipient WithPublicKeys', recipients);
+        
         const salt = IotaCatSDKObj._generateRandomStr(32)
         const preparedRecipients = await Promise.all(recipients.map(async (pair)=>{
             const publicKey = Converter.hexToBytes(pair.key)
@@ -284,9 +351,9 @@ class IotaCatClient {
                 tagFeature
             ]
         };
-        const blockId = await this._sendBasicOutput(basicOutput);
-        console.log('shared output blockId', blockId);
-        return basicOutput;
+        const {blockId,outputId} = await this._sendBasicOutput(basicOutput);
+
+        return {outputId,output:basicOutput};
     } 
     _getPair(baseSeed:Ed25519Seed){
         const addressGeneratorAccountState = {
@@ -331,8 +398,9 @@ class IotaCatClient {
         const message = await IotaCatSDKObj.deserializeMessage(data, address, {decryptUsingPrivateKey:async (data:string)=>{
             const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
             return decrypted.payload
-        },groupSaltResolver:async (groupId:string)=>{
-            return await this._getSaltForGroup(groupId,address)
+        },sharedOutputSaltResolver:async (sharedOutputId:string)=>{
+            const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
+            return salt
         }})
         return { sender , message }
     }
@@ -362,33 +430,67 @@ class IotaCatClient {
         return bigInt(deposit)
     }
     async _bech32AddrArrToRecipients(bech32AddrArr:string[]){
-        const tasks = bech32AddrArr.map(addr=>httpCallLimit((addr_) => this.getPublicKey(addr_), addr))
+        console.log(`_bech32AddrArrToRecipients before remove duplications size:${bech32AddrArr.length}`);
+        const set = new Set(bech32AddrArr)
+        bech32AddrArr = Array.from(set)
+        console.log(`_bech32AddrArrToRecipients after remove duplications size:${bech32AddrArr.length}`);
+        const tasks = bech32AddrArr.map(addr=> async() => {
             
-
-        const publicKeys = await Promise.all(tasks)
-        console.log('PublicKeys', publicKeys);
-        const recipients = bech32AddrArr.map((addr,idx)=>{
-            return {
-                addr,
-                key:publicKeys[idx]!
+            try {
+                const pubKey = await this.getPublicKey(addr)
+                console.log('pubKey', pubKey, addr);
+                return {key:pubKey,addr:addr}
+            } catch (error) {
+                console.log('error',error)
+                return {key:'noop',addr:addr}
             }
         })
+            
+
+        let recipients = await runBatch(tasks, httpCallLimit)
+        console.log('recipients with PublicKeys', JSON.stringify(recipients));
+        const total = recipients.length
+        recipients = recipients.filter(recipient=>recipient && recipient.key!=null && recipient.key!='noop')
+        const withKey = recipients.length
+        console.log('recipients with PublicKeys filtered', recipients)
+        console.log(`_bech32AddrArrToRecipients  recipients total:${total}, withKey:${withKey}`);
         return recipients
     }
-    async sendMessage(senderAddr:string, group:string,message: IMMessage){
+    async sendMessage(senderAddr:string, groupId:string,message: IMMessage){
         this._ensureClientInited()
         this._ensureWalletInited()
         try {
             const protocolInfo = await this._client!.protocolInfo();
             console.log('ProtocolInfo', protocolInfo);
-            const bech32AddrArr = message.recipients.map(recipient=>recipient.addr)
-            message.recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
+
+
+            const groupSaltMap:Record<string,string> = {}
+            if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
+                const recipientAddresses = await this._getAddressListForGroupFromInxApi(groupId)
+                //TODO for demo add senderAddr if not exist
+
+                if (!recipientAddresses.includes(senderAddr)) {
+                    recipientAddresses.push(senderAddr)
+                    //return undefined
+                }
+
+
+                message.recipients = recipientAddresses.map(addr=>({addr,key:''}))
+            
+                const bech32AddrArr = message.recipients.map(recipient=>recipient.addr)
+                message.recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
+            } else {
+                // get shared output
+                const {salt, outputId} = await this._getSaltForGroup(groupId,senderAddr)
+                message.recipientOutputid = outputId
+                groupSaltMap[groupId] = salt
+            }
             console.log('MessageWithPublicKeys', message);
             const pl = await IotaCatSDKObj.serializeMessage(message,{encryptUsingPublicKey:async (key,data)=>{
                 const publicKey = Converter.hexToBytes(key)
                 const encrypted = await encrypt(publicKey, data, tag)
                 return encrypted.payload
-            },groupSaltResolver:async (groupId:string)=>await this._getSaltForGroup(groupId,senderAddr)})
+            },groupSaltResolver:async (groupId:string)=>groupSaltMap[groupId]})
             console.log('MessagePayload', pl);
             
             const tagFeature: ITagFeature = {
@@ -422,7 +524,7 @@ class IotaCatClient {
             console.log("Basic Output: ", basicOutput);
 
             
-            const blockId = await this._sendBasicOutput(basicOutput);
+            const {blockId,outputId} = await this._sendBasicOutput(basicOutput);
             return blockId
         } catch (e) {
             console.log("Error submitting block: ", e);
@@ -436,7 +538,9 @@ class IotaCatClient {
             const outputs = await this._getUnSpentOutputs()
             console.log('unspent Outputs', outputs);
             // get first output with amount > amountToSend
-            const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(amountToSend))
+            //TODO consider remainder
+            const threshold = amountToSend.multiply(2)
+            const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
             if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
             const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
             console.log('ConsumedOutput', consumedOutput);
@@ -500,7 +604,7 @@ class IotaCatClient {
                 unlocks:[unlockCondition]
             };
             console.log("Transaction payload: ", transactionPayload);
-
+            const outputId = Converter.bytesToHex(TransactionHelper.getTransactionPayloadHash(transactionPayload), true) + "0000";
             // 8. Create Block
             const block: IBlock = {
                 protocolVersion: DEFAULT_PROTOCOL_VERSION,
@@ -515,13 +619,13 @@ class IotaCatClient {
         
             const blockId = await this._client!.blockSubmit(block);
             console.log("Submitted blockId is: ", blockId);
-            return blockId;
+            return {blockId,outputId};
         }
     async fetchMessageList(group:string, address:string) {
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0gzVXR3UFNnaHBtMWVHMWt1N0I2WDFrQXZUb1F1aVdhdno2TU1zU2FlMmpZIiwianRpIjoiMTY4Nzg3NjUzMiIsImlhdCI6MTY4Nzg3NjUzMiwiaXNzIjoiMTJEM0tvb1dIM1V0d1BTZ2hwbTFlRzFrdTdCNlgxa0F2VG9RdWlXYXZ6Nk1Nc1NhZTJqWSIsIm5iZiI6MTY4Nzg3NjUzMiwic3ViIjoiSE9STkVUIn0.H9_pFE8kalJDV-G3R1SowkTJ5n3SG5rm0FpfSfR8IqI'
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV1NKSlY1N0RtelhaOXpMYmVjY1RTYVBuOHdRWHcxWmdNZkVrRG1OeEFzUjhNIiwianRpIjoiMTY4OTQ4NTI1NiIsImlhdCI6MTY4OTQ4NTI1NiwiaXNzIjoiMTJEM0tvb1dTSkpWNTdEbXpYWjl6TGJlY2NUU2FQbjh3UVh3MVpnTWZFa0RtTnhBc1I4TSIsIm5iZiI6MTY4OTQ4NTI1Niwic3ViIjoiSE9STkVUIn0.c_oplmWCesy0fMx4jiIsJwl3x23Gemp36M-JNmwO_HI'
         const groupId = IotaCatSDKObj._groupToGroupId(group)
         try {
-            const url = `https://test.api.iotacat.com/api/iotacatim/v1/messages?groupId=0x${groupId}`
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages?groupId=0x${groupId}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',

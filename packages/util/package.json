@@ -11,7 +11,8 @@
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "yarn run clean && yarn run build:type && yarn run build:source",
-    "lint": "eslint src --fix --ext .ts,.js"
+    "lint": "eslint src --fix --ext .ts,.js",
+    "test": "jest"
   },
   "repository": {
     "type": "git",
