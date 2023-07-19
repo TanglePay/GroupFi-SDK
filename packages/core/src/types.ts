@@ -1,6 +1,6 @@
 export interface IMRecipient {
     addr: string;
-    key: string;
+    mkey: string;
 }
 export interface IMMessage {
     schemaVersion: number; // 0 or 1, 1 byte

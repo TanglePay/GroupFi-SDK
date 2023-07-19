@@ -38,6 +38,7 @@ setIotaCrypto({
 })
 import CryptoJS from 'crypto-js';
 import hkdf from 'js-crypto-hkdf';
+import { IMRecipient } from "iotacat-sdk-core";
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -199,18 +200,20 @@ class IotaCatClient {
         console.log('MemoryValue', memoryValue, addressRaw);
         if (memoryValue) return memoryValue
 
+        /*
         const storageValue = await this._storage!.get(address)
-        console.log('StorageValue', storageValue, addressRaw);
+        console.log('StorageValue', storageValue, addressRaw, typeof storageValue);
         if (storageValue) {
             cachePut(address, storageValue, this._pubKeyCache!)
             return storageValue
         }
+        */
         let ledgerValue = type == 'bech32'? await this._getPublicKeyFromLedger(addressRaw) : await this._getPublicKeyFromLedgerEd25519(addressRaw)
         console.log('LedgerValue', ledgerValue, addressRaw);
         if (!ledgerValue) {
             ledgerValue = 'noop'
         }
-        await this._storage!.set(address, ledgerValue)
+        //await this._storage!.set(address, ledgerValue)
         cachePut(address, ledgerValue, this._pubKeyCache!)
         return ledgerValue
     }
@@ -280,7 +283,7 @@ class IotaCatClient {
         const sharedOutputResp = await this._getSharedOutputForGroup(groupId)
         if (!sharedOutputResp) throw new Error('Shared output not found')
         const {output:sharedOutput,outputId} = sharedOutputResp
-        console.log('sharedOutput', sharedOutput);
+        console.log('sharedOutput', sharedOutput, address);
         const salt = await this._getSaltFromSharedOutput(sharedOutput, address)
         return {salt, outputId}
     }
@@ -289,12 +292,12 @@ class IotaCatClient {
         if (!metaFeature) throw new Error('Metadata feature not found')
         const bytes = Converter.hexToBytes(metaFeature.data)
         const recipients = IotaCatSDKObj.deserializeRecipientList(bytes)
-        console.log('recipients', recipients);
+        console.log('recipients', recipients, address);
         let salt = ''
         for (const recipient of recipients) {
-            if (!recipient.key) continue
+            if (!recipient.mkey) continue
             if (recipient.addr !== address) continue
-            const decrypted = await decrypt(this._walletKeyPair!.privateKey, recipient.key, tag)
+            const decrypted = await decrypt(this._walletKeyPair!.privateKey, recipient.mkey, tag)
             salt = decrypted.payload
             break
         }
@@ -314,12 +317,14 @@ class IotaCatClient {
             bech32AddrArr.push(this._accountBech32Address!)
         }
         const recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
-        
+        console.log('_makeSharedOutputForGroup recipients', recipients);
         const salt = IotaCatSDKObj._generateRandomStr(32)
+        //TODO remove
+        console.log('shared salt', salt);
         const preparedRecipients = await Promise.all(recipients.map(async (pair)=>{
-            const publicKey = Converter.hexToBytes(pair.key)
+            const publicKey = Converter.hexToBytes(pair.mkey)
             const encrypted = await encrypt(publicKey, salt, tag)
-            pair.key = encrypted.payload
+            pair.mkey = encrypted.payload
             return pair
         }))
         const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId)
@@ -384,25 +389,29 @@ class IotaCatClient {
     }
     async getMessageFromOutputId(outputId:string,address:string){
         this._ensureClientInited()
-        const outputsResponse = await this._client!.output(outputId)
-        const output = outputsResponse.output as IBasicOutput
-        const addressUnlockcondition = output.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
-        const senderAddress = addressUnlockcondition.address as IEd25519Address
-        const senderAddressBytes = Converter.hexToBytes(senderAddress.pubKeyHash)
-        const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes, this._nodeInfo!.protocol.bech32Hrp);
-        const features = output.features
-        if (!features) throw new Error('No features')
-        const metadataFeature = features.find(feature=>feature.type === 2) as IMetadataFeature
-        if (!metadataFeature) throw new Error('No metadata feature')
-        const data = Converter.hexToBytes(metadataFeature.data)
-        const message = await IotaCatSDKObj.deserializeMessage(data, address, {decryptUsingPrivateKey:async (data:string)=>{
-            const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
-            return decrypted.payload
-        },sharedOutputSaltResolver:async (sharedOutputId:string)=>{
-            const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
-            return salt
-        }})
-        return { sender , message }
+        try {
+            const outputsResponse = await this._client!.output(outputId)
+            const output = outputsResponse.output as IBasicOutput
+            const addressUnlockcondition = output.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
+            const senderAddress = addressUnlockcondition.address as IEd25519Address
+            const senderAddressBytes = Converter.hexToBytes(senderAddress.pubKeyHash)
+            const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes, this._nodeInfo!.protocol.bech32Hrp);
+            const features = output.features
+            if (!features) throw new Error('No features')
+            const metadataFeature = features.find(feature=>feature.type === 2) as IMetadataFeature
+            if (!metadataFeature) throw new Error('No metadata feature')
+            const data = Converter.hexToBytes(metadataFeature.data)
+            const message = await IotaCatSDKObj.deserializeMessage(data, address, {decryptUsingPrivateKey:async (data:string)=>{
+                const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
+                return decrypted.payload
+            },sharedOutputSaltResolver:async (sharedOutputId:string)=>{
+                const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
+                return salt
+            }})
+            return { sender , message }
+        } catch(e) {
+            console.log(`getMessageFromOutputId:${outputId}`);
+        }
     }
     async _getUnSpentOutputs() {
         this._ensureClientInited()
@@ -434,27 +443,48 @@ class IotaCatClient {
         const set = new Set(bech32AddrArr)
         bech32AddrArr = Array.from(set)
         console.log(`_bech32AddrArrToRecipients after remove duplications size:${bech32AddrArr.length}`);
+        
         const tasks = bech32AddrArr.map(addr=> async() => {
             
             try {
                 const pubKey = await this.getPublicKey(addr)
                 console.log('pubKey', pubKey, addr);
-                return {key:pubKey,addr:addr}
+                return {mkey:pubKey,addr:addr} as IMRecipient
             } catch (error) {
                 console.log('error',error)
-                return {key:'noop',addr:addr}
+                return {mkey:'noop',addr:addr} as IMRecipient
             }
         })
             
-
+        
         let recipients = await runBatch(tasks, httpCallLimit)
-        console.log('recipients with PublicKeys', JSON.stringify(recipients));
+        /*
+        let recipients:{mkey:string,addr:string}[] = []
+        let recipients2:{mkey:string,addr:string}[] = []
+        for (const addr of bech32AddrArr) {
+            let recipient:{mkey:string,addr:string}
+            try {
+                let pubKey = await this.getPublicKey(addr)
+                pubKey = pubKey??'noop'
+                console.log('pubKey', pubKey, addr, typeof pubKey);
+                recipient = {mkey:pubKey,addr:addr}
+            } catch (error) {
+                console.log('error',error)
+                recipient = {mkey:'noop',addr:addr}
+            }
+            console.log('recipient', recipient);
+            recipients.push(recipient)
+            recipients2.push({...recipient})
+        }
+        */
+        console.log('recipients with PublicKeys', recipients);
+
         const total = recipients.length
-        recipients = recipients.filter(recipient=>recipient && recipient.key!=null && recipient.key!='noop')
+        recipients = recipients.filter(recipient=>recipient && recipient.mkey!=null && recipient.mkey!='noop')
         const withKey = recipients.length
         console.log('recipients with PublicKeys filtered', recipients)
         console.log(`_bech32AddrArrToRecipients  recipients total:${total}, withKey:${withKey}`);
-        return recipients
+        return recipients.filter(r=>r && r.mkey!=null && r.mkey!='noop')
     }
     async sendMessage(senderAddr:string, groupId:string,message: IMMessage){
         this._ensureClientInited()
@@ -475,7 +505,7 @@ class IotaCatClient {
                 }
 
 
-                message.recipients = recipientAddresses.map(addr=>({addr,key:''}))
+                message.recipients = recipientAddresses.map(addr=>({addr,mkey:''}))
             
                 const bech32AddrArr = message.recipients.map(recipient=>recipient.addr)
                 message.recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
@@ -636,12 +666,15 @@ class IotaCatClient {
             const data = await res.json() as MessageResponse
             const messages = data.messages
             const messagePayloads = await Promise.all(messages.map(msg => this.getMessageFromOutputId(msg.outputId,address)))
-            const messageBodyArr:MessageBody[] = messagePayloads.map((payload,index)=>({
+            const messageBodyArr:(MessageBody|undefined)[] = messagePayloads.map((payload,index)=>{
+                if (!payload) return undefined;
+                return {
                 timestamp:messages[index].timestamp,
                 message:payload.message.data[0]??'',
                 sender:payload.sender
-            }))
-            return messageBodyArr
+                }
+            })
+            return messageBodyArr.filter(msg=>msg!=undefined)
         } catch (error) {
             console.log('error',error)
         }

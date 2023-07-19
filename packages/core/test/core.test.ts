@@ -17,6 +17,7 @@ describe('core test', () => {
             }
         })
         msgObject = await IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:basicAddr},'dummy',msg)
+        msgObject!.recipients.push({addr:basicAddr,mkey:basicAddr})
     }
     const prepareRecipientOnChainMsg = async (msg:string)=>{
         jest.spyOn(IotaCatSDKObj,'_groupNameToGroupMeta').mockImplementation((group:string)=>{

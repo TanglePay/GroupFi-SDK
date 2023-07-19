@@ -108,7 +108,7 @@ class IotaCatSDK {
 
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         message.recipients = message.recipients.map(pair=>{
-            pair.key = publicKeyMap[pair.addr]
+            pair.mkey = publicKeyMap[pair.addr]
             return pair
         })
     }
@@ -137,7 +137,7 @@ class IotaCatSDK {
         if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
             if (!encryptUsingPublicKey) throw new Error('encryptUsingPublicKey is required for MessageAuthSchemeRecipeintInMessage')
             message.recipients = await Promise.all(message.recipients.map(async (pair)=>{
-                pair.key = await encryptUsingPublicKey(pair.key,salt)
+                pair.mkey = await encryptUsingPublicKey(pair.mkey,salt)
                 return pair
             }))
         }
@@ -155,10 +155,11 @@ class IotaCatSDK {
         let salt = ''
         if (msg.authScheme === MessageAuthSchemeRecipeintInMessage) {
             if (!decryptUsingPrivateKey) throw new Error('decryptUsingPrivateKey is required for MessageAuthSchemeRecipeintInMessage')
+            console.log('msg.recipients',msg.recipients, address)
             for (const recipient of msg.recipients) {
-                if (!recipient.key) continue
+                if (!recipient.mkey) continue
                 if (recipient.addr !== address) continue
-                salt = await decryptUsingPrivateKey(recipient.key)
+                salt = await decryptUsingPrivateKey(recipient.mkey)
                 if (!salt) break
                 if (!this.validateFirstMsg(msg,salt)) {
                     salt = ''

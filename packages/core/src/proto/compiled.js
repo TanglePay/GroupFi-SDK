@@ -25,7 +25,7 @@ $root.IM = (function() {
          * @memberof IM
          * @interface IRecipient
          * @property {string|null} [addr] Recipient addr
-         * @property {string|null} [key] Recipient key
+         * @property {string|null} [mkey] Recipient mkey
          */
 
         /**
@@ -52,12 +52,12 @@ $root.IM = (function() {
         Recipient.prototype.addr = "";
 
         /**
-         * Recipient key.
-         * @member {string} key
+         * Recipient mkey.
+         * @member {string} mkey
          * @memberof IM.Recipient
          * @instance
          */
-        Recipient.prototype.key = "";
+        Recipient.prototype.mkey = "";
 
         /**
          * Creates a new Recipient instance using the specified properties.
@@ -85,8 +85,8 @@ $root.IM = (function() {
                 writer = $Writer.create();
             if (message.addr != null && Object.hasOwnProperty.call(message, "addr"))
                 writer.uint32(/* id 1, wireType 2 =*/10).string(message.addr);
-            if (message.key != null && Object.hasOwnProperty.call(message, "key"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.key);
+            if (message.mkey != null && Object.hasOwnProperty.call(message, "mkey"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.mkey);
             return writer;
         };
 
@@ -126,7 +126,7 @@ $root.IM = (function() {
                         break;
                     }
                 case 2: {
-                        message.key = reader.string();
+                        message.mkey = reader.string();
                         break;
                     }
                 default:
@@ -167,9 +167,9 @@ $root.IM = (function() {
             if (message.addr != null && message.hasOwnProperty("addr"))
                 if (!$util.isString(message.addr))
                     return "addr: string expected";
-            if (message.key != null && message.hasOwnProperty("key"))
-                if (!$util.isString(message.key))
-                    return "key: string expected";
+            if (message.mkey != null && message.hasOwnProperty("mkey"))
+                if (!$util.isString(message.mkey))
+                    return "mkey: string expected";
             return null;
         };
 
@@ -187,8 +187,8 @@ $root.IM = (function() {
             var message = new $root.IM.Recipient();
             if (object.addr != null)
                 message.addr = String(object.addr);
-            if (object.key != null)
-                message.key = String(object.key);
+            if (object.mkey != null)
+                message.mkey = String(object.mkey);
             return message;
         };
 
@@ -207,12 +207,12 @@ $root.IM = (function() {
             var object = {};
             if (options.defaults) {
                 object.addr = "";
-                object.key = "";
+                object.mkey = "";
             }
             if (message.addr != null && message.hasOwnProperty("addr"))
                 object.addr = message.addr;
-            if (message.key != null && message.hasOwnProperty("key"))
-                object.key = message.key;
+            if (message.mkey != null && message.hasOwnProperty("mkey"))
+                object.mkey = message.mkey;
             return object;
         };
 

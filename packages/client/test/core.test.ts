@@ -43,6 +43,7 @@ describe('core test with key pair', () => {
             }
         })
         const msgObject = await IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:publicAddr},'dummy',randomStr)
+        msgObject!.recipients.push({addr:publicAddr,mkey:publicAddr})
         IotaCatSDKObj.setPublicKeyForPreparedMessage(msgObject!,{[publicAddr]:publicAddr})
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!, {encryptUsingPublicKey:async (key,data)=>{
             const publicKey = util.hexToBytes(key)

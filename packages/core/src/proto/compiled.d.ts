@@ -9,8 +9,8 @@ export namespace IM {
         /** Recipient addr */
         addr?: (string|null);
 
-        /** Recipient key */
-        key?: (string|null);
+        /** Recipient mkey */
+        mkey?: (string|null);
     }
 
     /** Represents a Recipient. */
@@ -25,8 +25,8 @@ export namespace IM {
         /** Recipient addr. */
         public addr: string;
 
-        /** Recipient key. */
-        public key: string;
+        /** Recipient mkey. */
+        public mkey: string;
 
         /**
          * Creates a new Recipient instance using the specified properties.
