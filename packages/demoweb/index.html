@@ -141,7 +141,12 @@
         </div>
 
         <div class="right">
-            <div id="text"></div>
+            <div class="vList">
+                <div id="text" class="vList"></div>
+                <div>
+                    <button onclick="loadMessageList()" class="btn">load more</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -173,6 +178,8 @@
         // Format the date and time
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
+    var fromToken
+    var untilToken
     window.addEventListener('iota-ready',async ()=>{
         console.log('iotacatsdk',iotacatsdk)
         console.log('tanglepaysdk',iota)
@@ -182,11 +189,13 @@
             const group = document.getElementById('group_name').value;
             try {
                 const res = await iota.request({
-                    method: 'iota_im_groupmessagelist',
+                    method: 'iota_im_groupmessagelist_until',
                     params: {
                     content: {
                         readerAddr,
                         group,
+                        continuationToken: untilToken,
+                        limit: 3
                     }
                     }
                 })
@@ -195,7 +204,46 @@
                     const {sender, message, timestamp} = messageItem
                     return `<div class="block">${makekv('senderAddr',sender)}${makekv('messageText',message)}${makekv('timestamp',formatTimestamp(timestamp))}</div>`
                 }).join('')
-                dom.innerHTML = `<div class="vList">${makelist(res)}</div>`
+                const prependContent = makelist(res.messageList)
+                if (res.headToken) {
+                    untilToken = res.headToken
+                    if (!fromToken) {
+                        fromToken = res.headToken
+                    }
+                }
+                dom.insertAdjacentHTML('afterbegin',prependContent)
+            } catch (error) {
+                console.log('error',error)
+            }
+        }
+        window.loadMessageList = async ()=>{
+            const readerAddr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const group = document.getElementById('group_name').value;
+            try {
+                const res = await iota.request({
+                    method: 'iota_im_groupmessagelist_from',
+                    params: {
+                    content: {
+                        readerAddr,
+                        group,
+                        continuationToken: fromToken,
+                        limit: 3
+                    }
+                    }
+                })
+                const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
+                const makelist = (messageList) => messageList.map(messageItem => {
+                    const {sender, message, timestamp} = messageItem
+                    return `<div class="block">${makekv('senderAddr',sender)}${makekv('messageText',message)}${makekv('timestamp',formatTimestamp(timestamp))}</div>`
+                }).join('')
+                const appendContent = makelist(res.messageList)
+                if (res.tailToken) {
+                    fromToken = res.tailToken
+                    if (!untilToken) {
+                        untilToken = res.headToken
+                    }
+                }
+                dom.insertAdjacentHTML('beforeend',appendContent)
             } catch (error) {
                 console.log('error',error)
             }

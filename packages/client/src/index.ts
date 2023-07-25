@@ -28,7 +28,7 @@ import { Converter, WriteStream,  } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, asciiToUint8Array } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
 import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage } from "iotacat-sdk-core";
-import {runBatch} from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams} from 'iotacat-sdk-utils';
 //TODO tune concurrency
 const httpCallLimit = 5;
 setIotaCrypto({
@@ -57,7 +57,8 @@ type MessageResponseItem = {
 }
 type MessageResponse = {
     messages:MessageResponseItem[]
-    token:string
+    headToken:string
+    tailToken:string
 }
 type MessageBody = {
     sender:string,
@@ -111,6 +112,7 @@ class IotaCatClient {
     _accountBech32Address?:string;
     _pubKeyCache?:LRUCache<string>;
     _storage?:StorageFacade;
+    _hexSeed?:string;
     //TODO simple cache
     _saltCache:Record<string,string> = {};
     async setup(id:number, provider?:Constructor<IPowProvider>,...rest:any[]){
@@ -131,6 +133,8 @@ class IotaCatClient {
     }
     async setHexSeed(hexSeed:string){
         this._ensureClientInited()
+        if (this._hexSeed == hexSeed) return
+        this._hexSeed = hexSeed
         console.log('HexSeed', hexSeed);
         const baseSeed = this._hexSeedToEd25519Seed(hexSeed);
         console.log('BaseSeed', baseSeed);
@@ -220,7 +224,7 @@ class IotaCatClient {
 
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<string[]>{
         //TODO try inx plugin 
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV1NKSlY1N0RtelhaOXpMYmVjY1RTYVBuOHdRWHcxWmdNZkVrRG1OeEFzUjhNIiwianRpIjoiMTY4OTQ4NTI1NiIsImlhdCI6MTY4OTQ4NTI1NiwiaXNzIjoiMTJEM0tvb1dTSkpWNTdEbXpYWjl6TGJlY2NUU2FQbjh3UVh3MVpnTWZFa0RtTnhBc1I4TSIsIm5iZiI6MTY4OTQ4NTI1Niwic3ViIjoiSE9STkVUIn0.c_oplmWCesy0fMx4jiIsJwl3x23Gemp36M-JNmwO_HI'
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0tKQ3lqMktaZ05FVEo1NGJYUUZyUlFQZFFrWDRHaDlkdmJvOWtZU1JWQjZLIiwianRpIjoiMTY4OTgyMTAyOCIsImlhdCI6MTY4OTgyMTAyOCwiaXNzIjoiMTJEM0tvb1dLSkN5ajJLWmdORVRKNTRiWFFGclJRUGRRa1g0R2g5ZHZibzlrWVNSVkI2SyIsIm5iZiI6MTY4OTgyMTAyOCwic3ViIjoiSE9STkVUIn0.KJT__y5_3CWuDaBXHJQFs3J38W5fgLpgQB0bmOqVXkw'
         try {
             const url = `https://test2.api.iotacat.com/api/iotacatim/v1/nfts?groupId=0x${groupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
@@ -244,7 +248,7 @@ class IotaCatClient {
         return []
     }
     async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV1NKSlY1N0RtelhaOXpMYmVjY1RTYVBuOHdRWHcxWmdNZkVrRG1OeEFzUjhNIiwianRpIjoiMTY4OTQ4NTI1NiIsImlhdCI6MTY4OTQ4NTI1NiwiaXNzIjoiMTJEM0tvb1dTSkpWNTdEbXpYWjl6TGJlY2NUU2FQbjh3UVh3MVpnTWZFa0RtTnhBc1I4TSIsIm5iZiI6MTY4OTQ4NTI1Niwic3ViIjoiSE9STkVUIn0.c_oplmWCesy0fMx4jiIsJwl3x23Gemp36M-JNmwO_HI'
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0tKQ3lqMktaZ05FVEo1NGJYUUZyUlFQZFFrWDRHaDlkdmJvOWtZU1JWQjZLIiwianRpIjoiMTY4OTgyMTAyOCIsImlhdCI6MTY4OTgyMTAyOCwiaXNzIjoiMTJEM0tvb1dLSkN5ajJLWmdORVRKNTRiWFFGclJRUGRRa1g0R2g5ZHZibzlrWVNSVkI2SyIsIm5iZiI6MTY4OTgyMTAyOCwic3ViIjoiSE9STkVUIn0.KJT__y5_3CWuDaBXHJQFs3J38W5fgLpgQB0bmOqVXkw'
         try {
             const url = `https://test2.api.iotacat.com/api/iotacatim/v1/shared?groupId=0x${groupId}`
             try {
@@ -312,10 +316,12 @@ class IotaCatClient {
     }
     async _makeSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
         const bech32AddrArr = await this._getAddressListForGroupFromInxApi(groupId)
-        // TODO for now add senderAddr if not exist
+        // TODO remove commented test code
+        /*
         if (!bech32AddrArr.includes(this._accountBech32Address!)) {
             bech32AddrArr.push(this._accountBech32Address!)
         }
+        */
         const recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
         console.log('_makeSharedOutputForGroup recipients', recipients);
         const salt = IotaCatSDKObj._generateRandomStr(32)
@@ -651,11 +657,13 @@ class IotaCatClient {
             console.log("Submitted blockId is: ", blockId);
             return {blockId,outputId};
         }
-    async fetchMessageList(group:string, address:string) {
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV1NKSlY1N0RtelhaOXpMYmVjY1RTYVBuOHdRWHcxWmdNZkVrRG1OeEFzUjhNIiwianRpIjoiMTY4OTQ4NTI1NiIsImlhdCI6MTY4OTQ4NTI1NiwiaXNzIjoiMTJEM0tvb1dTSkpWNTdEbXpYWjl6TGJlY2NUU2FQbjh3UVh3MVpnTWZFa0RtTnhBc1I4TSIsIm5iZiI6MTY4OTQ4NTI1Niwic3ViIjoiSE9STkVUIn0.c_oplmWCesy0fMx4jiIsJwl3x23Gemp36M-JNmwO_HI'
+    async fetchMessageListFrom(group:string, address:string, coninuationToken?:string, limit:number=10) {
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0tKQ3lqMktaZ05FVEo1NGJYUUZyUlFQZFFrWDRHaDlkdmJvOWtZU1JWQjZLIiwianRpIjoiMTY4OTgyMTAyOCIsImlhdCI6MTY4OTgyMTAyOCwiaXNzIjoiMTJEM0tvb1dLSkN5ajJLWmdORVRKNTRiWFFGclJRUGRRa1g0R2g5ZHZibzlrWVNSVkI2SyIsIm5iZiI6MTY4OTgyMTAyOCwic3ViIjoiSE9STkVUIn0.KJT__y5_3CWuDaBXHJQFs3J38W5fgLpgQB0bmOqVXkw'
         const groupId = IotaCatSDKObj._groupToGroupId(group)
         try {
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages?groupId=0x${groupId}`
+            const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
+            const paramStr = formatUrlParams(params)
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -664,20 +672,47 @@ class IotaCatClient {
                 "Authorization":`Bearer ${jwtToken}`
                 }})
             const data = await res.json() as MessageResponse
-            const messages = data.messages
-            const messagePayloads = await Promise.all(messages.map(msg => this.getMessageFromOutputId(msg.outputId,address)))
-            const messageBodyArr:(MessageBody|undefined)[] = messagePayloads.map((payload,index)=>{
-                if (!payload) return undefined;
-                return {
-                timestamp:messages[index].timestamp,
-                message:payload.message.data[0]??'',
-                sender:payload.sender
-                }
-            })
-            return messageBodyArr.filter(msg=>msg!=undefined)
+            const {messageList,headToken,tailToken} = await this._messageResponseToMesssageListAndTokens(data,address)
+            return {messageList,headToken,tailToken}
         } catch (error) {
             console.log('error',error)
         }
+    }
+    // fetchMessageListUntil
+    async fetchMessageListUntil(group:string, address:string, coninuationToken:string, limit:number=10) {
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0tKQ3lqMktaZ05FVEo1NGJYUUZyUlFQZFFrWDRHaDlkdmJvOWtZU1JWQjZLIiwianRpIjoiMTY4OTgyMTAyOCIsImlhdCI6MTY4OTgyMTAyOCwiaXNzIjoiMTJEM0tvb1dLSkN5ajJLWmdORVRKNTRiWFFGclJRUGRRa1g0R2g5ZHZibzlrWVNSVkI2SyIsIm5iZiI6MTY4OTgyMTAyOCwic3ViIjoiSE9STkVUIn0.KJT__y5_3CWuDaBXHJQFs3J38W5fgLpgQB0bmOqVXkw'
+        const groupId = IotaCatSDKObj._groupToGroupId(group)
+        try {
+            const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
+            const paramStr = formatUrlParams(params)
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages/until${paramStr}`
+            // @ts-ignore
+            const res = await fetch(url,{
+                method:'GET',
+                headers:{
+                'Content-Type':'application/json',
+                "Authorization":`Bearer ${jwtToken}`
+                }})
+            const data = await res.json() as MessageResponse
+            const {messageList,headToken,tailToken} = await this._messageResponseToMesssageListAndTokens(data,address)
+            return {messageList,headToken,tailToken}
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    async _messageResponseToMesssageListAndTokens(response:MessageResponse, address:string,):Promise<{messageList:MessageBody[],headToken?:string,  tailToken?:string}>{
+        const messages = response.messages
+        const messagePayloads = await Promise.all(messages.map(msg => this.getMessageFromOutputId(msg.outputId,address)))
+        const messageBodyArr:(MessageBody|undefined)[] = messagePayloads.map((payload,index)=>{
+            if (!payload) return undefined;
+            return {
+            timestamp:messages[index].timestamp,
+            message:payload.message.data[0]??'',
+            sender:payload.sender
+            }
+        })
+        const filterdMessageBodyArr = messageBodyArr.filter(msg=>msg!=undefined) as MessageBody[]
+        return {messageList:filterdMessageBodyArr,headToken:response.headToken, tailToken:response.tailToken}
     }
 }
 

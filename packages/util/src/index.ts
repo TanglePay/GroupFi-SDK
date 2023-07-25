@@ -42,3 +42,32 @@ export const deserializeListOfBytes = (bytes: Uint8Array):Uint8Array[] => {
     }
     return list;
 }
+
+export const formatUrlParams = (params: { [key: string]: string | number | boolean | undefined }) => {
+    const keys = Object.keys(params);
+    if (keys.length === 0) {
+        return '';
+    }
+    const result = [];
+    for (const key of keys) {
+        const value = params[key];
+        if (value !== undefined) {
+            result.push(`${key}=${encodeURIComponent(value)}`);
+        }
+    }
+    encodeURIComponent
+    return `?${result.join('&')}`;
+}
+
+export const parseUrlParams = (url: string) => {
+    const result: { [key: string]: string } = {};
+    const idx = url.indexOf('?');
+    if (idx >= 0) {
+        const params = url.slice(idx + 1).split('&');
+        for (const param of params) {
+            const [key, value] = param.split('=');
+            result[key] = decodeURIComponent(value);
+        }
+    }
+    return result;
+}
