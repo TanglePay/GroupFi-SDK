@@ -128,10 +128,6 @@
                 </div>
                 <button onclick="sendIm()" class="btn btn-primary">send</button>
             </div>
-            <div class="block">
-                <h4>iotacat_refresh_message</h4>
-                <button onclick="refreshMessageList()" class="btn btn-primary">refresh</button>
-            </div>
             
         </div>
         <div class="middle">
@@ -259,6 +255,14 @@
             console.log('res',res)
             document.getElementById('cur_addr').value = res.address
             document.getElementById('group_name').value = defaultGroup
+            iota.on('inbox',(pushed)=>{
+                const group = document.getElementById('group_name').value;
+                const currentGroupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(group)
+                const {type,groupId,outputId} = pushed
+                if (type === 1 && currentGroupId === groupId) {
+                    refreshMessageList()
+                }
+            })
         } catch (error) {
             console.log('error',error)
         }

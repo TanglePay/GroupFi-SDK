@@ -29,6 +29,8 @@ import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, se
 import bigInt from "big-integer";
 import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams} from 'iotacat-sdk-utils';
+import type { MqttClient, connect } from "mqtt"; // import connect from mqtt
+
 //TODO tune concurrency
 const httpCallLimit = 5;
 setIotaCrypto({
@@ -39,6 +41,7 @@ setIotaCrypto({
 import CryptoJS from 'crypto-js';
 import hkdf from 'js-crypto-hkdf';
 import { IMRecipient } from "iotacat-sdk-core";
+import { EventEmitter } from 'events';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -77,6 +80,7 @@ type Network = {
     explorerApiUrl: string;
     explorerApiNetwork: string;
     networkId: string;
+    inxMqttEndpoint: string;
 }
 const shimmerTestNet = {
     id: 101,
@@ -86,6 +90,7 @@ const shimmerTestNet = {
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
+    inxMqttEndpoint: "wss://test.api.iotacat.com/mqtt",
 }
 
 const shimmerMainNet = {
@@ -95,6 +100,7 @@ const shimmerMainNet = {
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "shimmer",
     networkId: "14364762045254553490",
+    inxMqttEndpoint: "wss://test.api.iotacat.com/api/iotacatmqtt/v1",
 }
 const nodes = [
     shimmerTestNet,
@@ -113,8 +119,11 @@ class IotaCatClient {
     _pubKeyCache?:LRUCache<string>;
     _storage?:StorageFacade;
     _hexSeed?:string;
+    _events:EventEmitter = new EventEmitter();
     //TODO simple cache
     _saltCache:Record<string,string> = {};
+    _mqttClient?:MqttClient;
+    _previousMqttTopic?:string;
     async setup(id:number, provider?:Constructor<IPowProvider>,...rest:any[]){
         const node = nodes.find(node=>node.id === id)
         if (!node) throw new Error('Node not found')
@@ -130,6 +139,15 @@ class IotaCatClient {
     }
     setupStorage(storage:StorageFacade){
         this._storage = storage
+    }
+    getCurNodeMqttEndpoint(){
+        return this._curNode?.inxMqttEndpoint
+    }
+    setupMqttClient(mqttClient:MqttClient){
+        this._mqttClient = mqttClient
+        this._mqttClient.on('connect', () => {
+            console.log('mqtt connected');
+        });
     }
     async setHexSeed(hexSeed:string){
         this._ensureClientInited()
@@ -148,8 +166,35 @@ class IotaCatClient {
         console.log('AccountHexAddress', this._accountHexAddress);
         this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
         console.log('AccountBech32Address', this._accountBech32Address);
+        // unsubscribe previous topic
+        if (this._previousMqttTopic) {
+            this._mqttClient!.unsubscribe(this._previousMqttTopic)
+        }
+        // subscribe new topic
+        this._previousMqttTopic = `inbox/${this._accountBech32Address}`
+        this._mqttClient!.subscribe(this._previousMqttTopic, {qos: 1}, (err:any, granted:any) => {
+                if (err) {
+                    console.log('subscribe error', err);
+                } else {
+                    console.log('subscribe granted', granted);
+                }
+            }
+        );
+        this._mqttClient!.on('message', this._handleMqttMessage.bind(this))
     }
 
+    _handleMqttMessage(topic:string, message:Buffer){
+        const pushed = IotaCatSDKObj.parsePushedValue(message)
+        console.log('mqtt message', topic, pushed);
+        this._events.emit('inbox', pushed)
+    }
+    on(key:string,cb:(...args:any[])=>void){
+        this._events.on(key,cb)
+    }
+    off(key:string,cb:(...args:any[])=>void){
+        this._events.off(key,cb)
+    }
+    
     async _getPublicKeyFromLedgerEd25519(ed25519Address:string):Promise<string|undefined>{
         
         const addressBytes = Converter.hexToBytes(ed25519Address)
@@ -224,9 +269,9 @@ class IotaCatClient {
 
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<string[]>{
         //TODO try inx plugin 
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0tKQ3lqMktaZ05FVEo1NGJYUUZyUlFQZFFrWDRHaDlkdmJvOWtZU1JWQjZLIiwianRpIjoiMTY4OTgyMTAyOCIsImlhdCI6MTY4OTgyMTAyOCwiaXNzIjoiMTJEM0tvb1dLSkN5ajJLWmdORVRKNTRiWFFGclJRUGRRa1g0R2g5ZHZibzlrWVNSVkI2SyIsIm5iZiI6MTY4OTgyMTAyOCwic3ViIjoiSE9STkVUIn0.KJT__y5_3CWuDaBXHJQFs3J38W5fgLpgQB0bmOqVXkw'
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         try {
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/nfts?groupId=0x${groupId}`
+            const url = `https://test.api.iotacat.com/api/iotacatim/v1/nfts?groupId=0x${groupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
             {
@@ -248,9 +293,9 @@ class IotaCatClient {
         return []
     }
     async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0tKQ3lqMktaZ05FVEo1NGJYUUZyUlFQZFFrWDRHaDlkdmJvOWtZU1JWQjZLIiwianRpIjoiMTY4OTgyMTAyOCIsImlhdCI6MTY4OTgyMTAyOCwiaXNzIjoiMTJEM0tvb1dLSkN5ajJLWmdORVRKNTRiWFFGclJRUGRRa1g0R2g5ZHZibzlrWVNSVkI2SyIsIm5iZiI6MTY4OTgyMTAyOCwic3ViIjoiSE9STkVUIn0.KJT__y5_3CWuDaBXHJQFs3J38W5fgLpgQB0bmOqVXkw'
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         try {
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/shared?groupId=0x${groupId}`
+            const url = `https://test.api.iotacat.com/api/iotacatim/v1/shared?groupId=0x${groupId}`
             try {
             // @ts-ignore
             const res = await fetch(url,{
@@ -441,8 +486,9 @@ class IotaCatClient {
         return outputs.map(output=>{return {outputId:output.outputId,output:output.output.output}})
     }
     _getAmount(output:IBasicOutput){
+        console.log('_getAmount', output, this._protocolInfo!.rentStructure)
         const deposit = TransactionHelper.getStorageDeposit(output, this._protocolInfo!.rentStructure)
-        return bigInt(deposit)
+        return bigInt(deposit).multiply(bigInt('2'))
     }
     async _bech32AddrArrToRecipients(bech32AddrArr:string[]){
         console.log(`_bech32AddrArrToRecipients before remove duplications size:${bech32AddrArr.length}`);
@@ -658,12 +704,12 @@ class IotaCatClient {
             return {blockId,outputId};
         }
     async fetchMessageListFrom(group:string, address:string, coninuationToken?:string, limit:number=10) {
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0tKQ3lqMktaZ05FVEo1NGJYUUZyUlFQZFFrWDRHaDlkdmJvOWtZU1JWQjZLIiwianRpIjoiMTY4OTgyMTAyOCIsImlhdCI6MTY4OTgyMTAyOCwiaXNzIjoiMTJEM0tvb1dLSkN5ajJLWmdORVRKNTRiWFFGclJRUGRRa1g0R2g5ZHZibzlrWVNSVkI2SyIsIm5iZiI6MTY4OTgyMTAyOCwic3ViIjoiSE9STkVUIn0.KJT__y5_3CWuDaBXHJQFs3J38W5fgLpgQB0bmOqVXkw'
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         const groupId = IotaCatSDKObj._groupToGroupId(group)
         try {
             const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages${paramStr}`
+            const url = `https://test.api.iotacat.com/api/iotacatim/v1/messages${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -680,12 +726,12 @@ class IotaCatClient {
     }
     // fetchMessageListUntil
     async fetchMessageListUntil(group:string, address:string, coninuationToken:string, limit:number=10) {
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0tKQ3lqMktaZ05FVEo1NGJYUUZyUlFQZFFrWDRHaDlkdmJvOWtZU1JWQjZLIiwianRpIjoiMTY4OTgyMTAyOCIsImlhdCI6MTY4OTgyMTAyOCwiaXNzIjoiMTJEM0tvb1dLSkN5ajJLWmdORVRKNTRiWFFGclJRUGRRa1g0R2g5ZHZibzlrWVNSVkI2SyIsIm5iZiI6MTY4OTgyMTAyOCwic3ViIjoiSE9STkVUIn0.KJT__y5_3CWuDaBXHJQFs3J38W5fgLpgQB0bmOqVXkw'
+        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         const groupId = IotaCatSDKObj._groupToGroupId(group)
         try {
             const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages/until${paramStr}`
+            const url = `https://test.api.iotacat.com/api/iotacatim/v1/messages/until${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',

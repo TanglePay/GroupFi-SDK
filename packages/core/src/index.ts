@@ -223,6 +223,16 @@ class IotaCatSDK {
         const kdf2 = CryptoJS.PBKDF2(kdf1.toString(), kdf1.toString(), { keySize: 16, iterations: 1000 })
         return [kdf1, kdf2]
     }
+
+    // value = one byte type + groupId(32 bytes) + outputId (34 bytes)
+    parsePushedValue(value:Buffer):{type:number,groupId:string,outputId:string}{
+        // type to number
+        const type = value[0]
+        const groupId = value.slice(1,33).toString('hex')
+        const outputId = value.slice(33,67).toString('hex')
+        console.log('parsePushedValue',value,type,groupId,outputId)
+        return {type,groupId,outputId}
+    }
 }
 
 const instance = new IotaCatSDK

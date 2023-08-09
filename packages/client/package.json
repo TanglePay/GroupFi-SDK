@@ -43,5 +43,7 @@
     "js-crypto-hkdf": "^1.0.4",
     "p-limit": "^4.0.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "mqtt": "^5.0.1"
+  }
 }
