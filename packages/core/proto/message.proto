@@ -3,8 +3,8 @@ syntax = "proto3";
 package IM;
 
 message Recipient {
-    string addr = 1;
-    string mkey = 2;
+    bytes addr = 1; 
+    bytes mkey = 2;
 }
 
 message IMMessage {

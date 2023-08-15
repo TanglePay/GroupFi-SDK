@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test, jest } from '@jest/globals';
-import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, asciiToUint8Array } from 'ecies-ed25519-js';
+import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto } from 'ecies-ed25519-js';
+import { Converter } from '@iota/util.js';
 import { generateRandomString } from '../../../jest.base';
 import { Bip39, Ed25519, Sha512, Bip32Path } from '@iota/crypto.js';
 setIotaCrypto({
@@ -7,21 +8,23 @@ setIotaCrypto({
     Ed25519,
     Sha512
 })
-import { IotaCatSDKObj, ShimmerBech32Addr } from 'iotacat-sdk-core';
-import CryptoJS from 'crypto-js';
-import hkdf from 'js-crypto-hkdf';
+import { IotaCatSDKObj, ShimmerBech32Addr, MessageAuthSchemeRecipeintInMessage } from 'iotacat-sdk-core';
+
+
 import { MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintOnChain } from 'iotacat-sdk-core/src';
-import { MessageAuthSchemeRecipeintInMessage } from 'iotacat-sdk-core';
+
+import hkdf from 'js-crypto-hkdf';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
 })
+import CryptoJS from 'crypto-js';
 setCryptoJS(CryptoJS)
 describe('core test with key pair', () => {
     let secret_:Uint8Array
     let publicKey_:Uint8Array
     let publicAddr: string
-    const tag = asciiToUint8Array('TAG')
+    const tag = Converter.utf8ToBytes('TAG')
     beforeEach(()=>{
         const {secret,publicKey} = getEphemeralSecretAndPublicKey()
         secret_ = secret

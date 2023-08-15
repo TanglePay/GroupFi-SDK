@@ -34,6 +34,7 @@
   "homepage": "https://github.com/TanglePay/TanglePay-SDK#readme",
   "devDependencies": {},
   "dependencies": {
+    "@iota/crypto.js": "^2.0.0-rc.2",
     "@iota/util.js": "^2.0.0-rc.2"
   }
 }

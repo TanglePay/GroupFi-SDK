@@ -7,10 +7,10 @@ export namespace IM {
     interface IRecipient {
 
         /** Recipient addr */
-        addr?: (string|null);
+        addr?: (Uint8Array|null);
 
         /** Recipient mkey */
-        mkey?: (string|null);
+        mkey?: (Uint8Array|null);
     }
 
     /** Represents a Recipient. */
@@ -23,10 +23,10 @@ export namespace IM {
         constructor(properties?: IM.IRecipient);
 
         /** Recipient addr. */
-        public addr: string;
+        public addr: Uint8Array;
 
         /** Recipient mkey. */
-        public mkey: string;
+        public mkey: Uint8Array;
 
         /**
          * Creates a new Recipient instance using the specified properties.

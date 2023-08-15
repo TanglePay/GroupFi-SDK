@@ -24,8 +24,8 @@ $root.IM = (function() {
          * Properties of a Recipient.
          * @memberof IM
          * @interface IRecipient
-         * @property {string|null} [addr] Recipient addr
-         * @property {string|null} [mkey] Recipient mkey
+         * @property {Uint8Array|null} [addr] Recipient addr
+         * @property {Uint8Array|null} [mkey] Recipient mkey
          */
 
         /**
@@ -45,19 +45,19 @@ $root.IM = (function() {
 
         /**
          * Recipient addr.
-         * @member {string} addr
+         * @member {Uint8Array} addr
          * @memberof IM.Recipient
          * @instance
          */
-        Recipient.prototype.addr = "";
+        Recipient.prototype.addr = $util.newBuffer([]);
 
         /**
          * Recipient mkey.
-         * @member {string} mkey
+         * @member {Uint8Array} mkey
          * @memberof IM.Recipient
          * @instance
          */
-        Recipient.prototype.mkey = "";
+        Recipient.prototype.mkey = $util.newBuffer([]);
 
         /**
          * Creates a new Recipient instance using the specified properties.
@@ -84,9 +84,9 @@ $root.IM = (function() {
             if (!writer)
                 writer = $Writer.create();
             if (message.addr != null && Object.hasOwnProperty.call(message, "addr"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.addr);
+                writer.uint32(/* id 1, wireType 2 =*/10).bytes(message.addr);
             if (message.mkey != null && Object.hasOwnProperty.call(message, "mkey"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.mkey);
+                writer.uint32(/* id 2, wireType 2 =*/18).bytes(message.mkey);
             return writer;
         };
 
@@ -122,11 +122,11 @@ $root.IM = (function() {
                 var tag = reader.uint32();
                 switch (tag >>> 3) {
                 case 1: {
-                        message.addr = reader.string();
+                        message.addr = reader.bytes();
                         break;
                     }
                 case 2: {
-                        message.mkey = reader.string();
+                        message.mkey = reader.bytes();
                         break;
                     }
                 default:
@@ -165,11 +165,11 @@ $root.IM = (function() {
             if (typeof message !== "object" || message === null)
                 return "object expected";
             if (message.addr != null && message.hasOwnProperty("addr"))
-                if (!$util.isString(message.addr))
-                    return "addr: string expected";
+                if (!(message.addr && typeof message.addr.length === "number" || $util.isString(message.addr)))
+                    return "addr: buffer expected";
             if (message.mkey != null && message.hasOwnProperty("mkey"))
-                if (!$util.isString(message.mkey))
-                    return "mkey: string expected";
+                if (!(message.mkey && typeof message.mkey.length === "number" || $util.isString(message.mkey)))
+                    return "mkey: buffer expected";
             return null;
         };
 
@@ -186,9 +186,15 @@ $root.IM = (function() {
                 return object;
             var message = new $root.IM.Recipient();
             if (object.addr != null)
-                message.addr = String(object.addr);
+                if (typeof object.addr === "string")
+                    $util.base64.decode(object.addr, message.addr = $util.newBuffer($util.base64.length(object.addr)), 0);
+                else if (object.addr.length >= 0)
+                    message.addr = object.addr;
             if (object.mkey != null)
-                message.mkey = String(object.mkey);
+                if (typeof object.mkey === "string")
+                    $util.base64.decode(object.mkey, message.mkey = $util.newBuffer($util.base64.length(object.mkey)), 0);
+                else if (object.mkey.length >= 0)
+                    message.mkey = object.mkey;
             return message;
         };
 
@@ -206,13 +212,25 @@ $root.IM = (function() {
                 options = {};
             var object = {};
             if (options.defaults) {
-                object.addr = "";
-                object.mkey = "";
+                if (options.bytes === String)
+                    object.addr = "";
+                else {
+                    object.addr = [];
+                    if (options.bytes !== Array)
+                        object.addr = $util.newBuffer(object.addr);
+                }
+                if (options.bytes === String)
+                    object.mkey = "";
+                else {
+                    object.mkey = [];
+                    if (options.bytes !== Array)
+                        object.mkey = $util.newBuffer(object.mkey);
+                }
             }
             if (message.addr != null && message.hasOwnProperty("addr"))
-                object.addr = message.addr;
+                object.addr = options.bytes === String ? $util.base64.encode(message.addr, 0, message.addr.length) : options.bytes === Array ? Array.prototype.slice.call(message.addr) : message.addr;
             if (message.mkey != null && message.hasOwnProperty("mkey"))
-                object.mkey = message.mkey;
+                object.mkey = options.bytes === String ? $util.base64.encode(message.mkey, 0, message.mkey.length) : options.bytes === Array ? Array.prototype.slice.call(message.mkey) : message.mkey;
             return object;
         };
 

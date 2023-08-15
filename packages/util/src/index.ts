@@ -1,4 +1,5 @@
-import { WriteStream, ReadStream } from "@iota/util.js";
+import { WriteStream, ReadStream, Converter } from "@iota/util.js";
+import { Blake2b } from "@iota/crypto.js"
 export * from './runbatch'
 export const concatBytes = (...args: Uint8Array[]) => {
     let totalLength = 0;
@@ -14,14 +15,23 @@ export const concatBytes = (...args: Uint8Array[]) => {
     return result;
 }
 
-export const hexToBytes = (hex: string) => {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < hex.length; i += 2) {
-        bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-    }
-    return bytes;
+export const addressHash = (address:string, key:string):Uint8Array => {
+    const addressBytes = Converter.utf8ToBytes(address);
+    const keyBytes = Converter.utf8ToBytes(key);
+    return Blake2b.sum160(addressBytes, keyBytes);
 }
-
+export const hexToBytes = (hex: string) => {
+    return Converter.hexToBytes(hex)
+}
+export const bytesToHex = (bytes: Uint8Array, isPrefix = false) => {
+    return Converter.bytesToHex(bytes, isPrefix)
+}
+export const strToBytes = (str: string) => {
+    return Converter.utf8ToBytes(str)
+}
+export const bytesToStr = (bytes: Uint8Array) => {
+    return Converter.bytesToUtf8(bytes)
+}
 export const serializeListOfBytes = (list: Uint8Array[]):Uint8Array => {
     const stream = new WriteStream();
     for (const bytes of list) {

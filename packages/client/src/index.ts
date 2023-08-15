@@ -25,11 +25,10 @@ import {
     IEd25519Address
 } from "@iota/iota.js";
 import { Converter, WriteStream,  } from "@iota/util.js";
-import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, asciiToUint8Array } from 'ecies-ed25519-js';
+import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
 import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams} from 'iotacat-sdk-utils';
-import type { MqttClient, connect } from "mqtt"; // import connect from mqtt
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -47,7 +46,7 @@ setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     return res.key;
 })
 setCryptoJS(CryptoJS)
-const tag = asciiToUint8Array('IOTACAT')
+const tag = Converter.utf8ToBytes(IOTACATTAG)
 
 interface StorageFacade {
     prefix: string;
@@ -122,8 +121,7 @@ class IotaCatClient {
     _events:EventEmitter = new EventEmitter();
     //TODO simple cache
     _saltCache:Record<string,string> = {};
-    _mqttClient?:MqttClient;
-    _previousMqttTopic?:string;
+
     async setup(id:number, provider?:Constructor<IPowProvider>,...rest:any[]){
         const node = nodes.find(node=>node.id === id)
         if (!node) throw new Error('Node not found')
@@ -140,15 +138,7 @@ class IotaCatClient {
     setupStorage(storage:StorageFacade){
         this._storage = storage
     }
-    getCurNodeMqttEndpoint(){
-        return this._curNode?.inxMqttEndpoint
-    }
-    setupMqttClient(mqttClient:MqttClient){
-        this._mqttClient = mqttClient
-        this._mqttClient.on('connect', () => {
-            console.log('mqtt connected');
-        });
-    }
+
     async setHexSeed(hexSeed:string){
         this._ensureClientInited()
         if (this._hexSeed == hexSeed) return
@@ -166,34 +156,10 @@ class IotaCatClient {
         console.log('AccountHexAddress', this._accountHexAddress);
         this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
         console.log('AccountBech32Address', this._accountBech32Address);
-        // unsubscribe previous topic
-        if (this._previousMqttTopic) {
-            this._mqttClient!.unsubscribe(this._previousMqttTopic)
-        }
-        // subscribe new topic
-        this._previousMqttTopic = `inbox/${this._accountBech32Address}`
-        this._mqttClient!.subscribe(this._previousMqttTopic, {qos: 1}, (err:any, granted:any) => {
-                if (err) {
-                    console.log('subscribe error', err);
-                } else {
-                    console.log('subscribe granted', granted);
-                }
-            }
-        );
-        this._mqttClient!.on('message', this._handleMqttMessage.bind(this))
+        
     }
 
-    _handleMqttMessage(topic:string, message:Buffer){
-        const pushed = IotaCatSDKObj.parsePushedValue(message)
-        console.log('mqtt message', topic, pushed);
-        this._events.emit('inbox', pushed)
-    }
-    on(key:string,cb:(...args:any[])=>void){
-        this._events.on(key,cb)
-    }
-    off(key:string,cb:(...args:any[])=>void){
-        this._events.off(key,cb)
-    }
+
     
     async _getPublicKeyFromLedgerEd25519(ed25519Address:string):Promise<string|undefined>{
         
@@ -341,14 +307,24 @@ class IotaCatClient {
         if (!metaFeature) throw new Error('Metadata feature not found')
         const bytes = Converter.hexToBytes(metaFeature.data)
         const recipients = IotaCatSDKObj.deserializeRecipientList(bytes)
-        console.log('recipients', recipients, address);
+        const recipientsWithPayload = recipients.map((recipient)=>({...recipient,payload:Converter.hexToBytes(recipient.mkey)}))
+
+        const addressHashValue = await IotaCatSDKObj.getAddressHashStr(address)
+        console.log('recipients', recipients, address, addressHashValue);
         let salt = ''
-        for (const recipient of recipients) {
+        let idx = -1
+        // find idx based on addr match
+        for (let i=0;i<recipientsWithPayload.length;i++) {
+            const recipient = recipientsWithPayload[i]
             if (!recipient.mkey) continue
-            if (recipient.addr !== address) continue
-            const decrypted = await decrypt(this._walletKeyPair!.privateKey, recipient.mkey, tag)
-            salt = decrypted.payload
+            if (recipient.addr !== addressHashValue) continue
+            idx = i;
             break
+        }
+        const decrypted = await decryptOneOfList({receiverSecret:this._walletKeyPair!.privateKey,
+            payloadList:recipientsWithPayload,tag,idx})
+        if(decrypted) {
+            salt = decrypted.payload
         }
         if (!salt) throw new Error('Salt not found')
         return salt
@@ -372,12 +348,11 @@ class IotaCatClient {
         const salt = IotaCatSDKObj._generateRandomStr(32)
         //TODO remove
         console.log('shared salt', salt);
-        const preparedRecipients = await Promise.all(recipients.map(async (pair)=>{
-            const publicKey = Converter.hexToBytes(pair.mkey)
-            const encrypted = await encrypt(publicKey, salt, tag)
-            pair.mkey = encrypted.payload
-            return pair
-        }))
+        const payloadList:EncryptingPayload[] = recipients.map((pair)=>({addr:pair.addr,publicKey:Converter.hexToBytes(pair.mkey), content:salt}))
+
+        const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
+        const preparedRecipients:IMRecipient[] = encryptedPayloadList.map((payload)=>({addr:payload.addr,mkey:Converter.bytesToHex(payload.payload)}))
+        
         const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId)
         const tagFeature: ITagFeature = {
             type: 3,
@@ -452,7 +427,7 @@ class IotaCatClient {
             const metadataFeature = features.find(feature=>feature.type === 2) as IMetadataFeature
             if (!metadataFeature) throw new Error('No metadata feature')
             const data = Converter.hexToBytes(metadataFeature.data)
-            const message = await IotaCatSDKObj.deserializeMessage(data, address, {decryptUsingPrivateKey:async (data:string)=>{
+            const message = await IotaCatSDKObj.deserializeMessage(data, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
                 const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
                 return decrypted.payload
             },sharedOutputSaltResolver:async (sharedOutputId:string)=>{

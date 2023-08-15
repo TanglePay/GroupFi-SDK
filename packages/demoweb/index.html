@@ -36,6 +36,9 @@
             h2 {
                 padding-top: 30px;
             }
+            .w100{
+                width: 100%;
+            }
             .block{
                 background: #f5f5f5;
                 border-radius: 10px;
@@ -81,6 +84,24 @@
                 margin-bottom: 10px;
                 display: block;
             }
+            .toast {
+                position: fixed;
+                bottom: 10%;
+                left: 50%;
+                transform: translateX(-50%);
+                background-color: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                display: none;
+                font-size: 16px;
+            }
+
+            body.toast-active .toast {
+                display: block;
+            }
+
             @media screen and (max-width: 768px) {
                 .content {
                     flex-direction: column;
@@ -118,7 +139,17 @@
                 </div>
                 <h4>current group name</h4>
                 <div class="address-input">
-                    <input id="group_name" type="text" placeholder="iceberg-collection-{1->8}">
+                    <select class="w100" onchange="handleGroupChange(this.value)">
+                        <option value=""></option>
+                        <option value="iceberg-collection-1">iceberg-collection-1</option>
+                        <option value="iceberg-collection-2">iceberg-collection-2</option>
+                        <option value="iceberg-collection-3">iceberg-collection-3</option>
+                        <option value="iceberg-collection-4">iceberg-collection-4</option>
+                        <option value="iceberg-collection-5">iceberg-collection-5</option>
+                        <option value="iceberg-collection-6">iceberg-collection-6</option>
+                        <option value="iceberg-collection-7">iceberg-collection-7</option>
+                        <option value="iceberg-collection-8">iceberg-collection-8</option>
+                    </select>
                 </div>
             </div>
             <div class="block">
@@ -153,9 +184,10 @@
 <script src="./js/iota.js"></script>
 <script src="./js/tanglepaycommon.js"></script>
 <script src="./js/tanglepaysdk.js"></script>
-<script src="./js/core-2023-09-19.js"></script>
+<script src="./js/core-2023-08-15.js"></script>
+<script src="./js/mqtt.min.js"></script>
 <script>
-    const defaultGroup = 'iceberg-collection-5'
+    let selectedGroup
     const dom = document.getElementById('text')
     function formatTimestamp(unixTimestamp) {
         // Convert the Unix timestamp to milliseconds
@@ -174,15 +206,44 @@
         // Format the date and time
         return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
+    function showToast(message, duration = 3000) {
+        // Check if the toast element already exists
+        let toast = document.querySelector('.toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.className = 'toast';
+            document.body.appendChild(toast);
+        }
+
+        toast.textContent = message;
+
+        // Show the toast
+        document.body.classList.add('toast-active');
+
+        // Hide the toast after the duration
+        setTimeout(() => {
+            document.body.classList.remove('toast-active');
+        }, duration);
+    }
+
     var fromToken
     var untilToken
     window.addEventListener('iota-ready',async ()=>{
         console.log('iotacatsdk',iotacatsdk)
         console.log('tanglepaysdk',iota)
-
+        window.handleGroupChange = (value) => {
+            if (!value) {
+                return
+            }
+            fromToken = undefined
+            untilToken = undefined
+            dom.innerHTML = ''
+            selectedGroup = value
+            window.refreshMessageList()
+        }
         window.refreshMessageList = async ()=>{
             const readerAddr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
-            const group = document.getElementById('group_name').value;
+            const group = selectedGroup
             try {
                 const res = await iota.request({
                     method: 'iota_im_groupmessagelist_until',
@@ -214,7 +275,7 @@
         }
         window.loadMessageList = async ()=>{
             const readerAddr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
-            const group = document.getElementById('group_name').value;
+            const group = selectedGroup;
             try {
                 const res = await iota.request({
                     method: 'iota_im_groupmessagelist_from',
@@ -244,6 +305,38 @@
                 console.log('error',error)
             }
         }
+        
+        window.readOneMessage = async (outputId)=>{
+            const readerAddr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const group = selectedGroup;
+            try {
+                const res = await iota.request({
+                    method: 'iota_im_readone',
+                    params: {
+                    content: {
+                        readerAddr,
+                        outputId
+                    }
+                    }
+                })
+                const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
+                const makelist = (messageList) => messageList.map(messageItem => {
+                    const {sender, message, timestamp} = messageItem
+                    return `<div class="block">${makekv('senderAddr',sender)}${makekv('messageText',message)}${makekv('timestamp',formatTimestamp(timestamp))}</div>`
+                }).join('')
+                const prependContent = makelist([res])
+                if (res.tailToken) {
+                    fromToken = res.tailToken
+                    if (!untilToken) {
+                        untilToken = res.headToken
+                    }
+                }
+                dom.insertAdjacentHTML('beforeend',appendContent)
+            } catch (error) {
+                console.log('error',error)
+            }
+        }
+        
         iota.redirectAppStoreIfNotInstalled = false;
         try {
             const res = await iota.request({
@@ -254,9 +347,11 @@
                     })
             console.log('res',res)
             document.getElementById('cur_addr').value = res.address
-            document.getElementById('group_name').value = defaultGroup
-            iota.on('inbox',(pushed)=>{
-                const group = document.getElementById('group_name').value;
+            iotacatsdk.IotaCatSDKObj.setupMqttConnection(window.mqtt.connect)
+            iotacatsdk.IotaCatSDKObj.switchMqttAddress(res.address)
+            iotacatsdk.IotaCatSDKObj.on('inbox',(pushed)=>{
+                showToast('new message received via mqtt')
+                const group = selectedGroup;
                 const currentGroupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(group)
                 const {type,groupId,outputId} = pushed
                 if (type === 1 && currentGroupId === groupId) {
@@ -270,7 +365,7 @@
         window.sendIm = async ()=>{
             const senderAddr = document.getElementById('cur_addr').value;
             const messageText = document.getElementById('message_text').value; //'hello world'
-            const group = document.getElementById('group_name').value;
+            const group = selectedGroup;
             const dappName = 'iotacatdemo'
             console.log('sdk obj',iotacatsdk.IotaCatSDKObj)
             const message = await iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, messageText)

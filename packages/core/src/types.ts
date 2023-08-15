@@ -2,12 +2,25 @@ export interface IMRecipient {
     addr: string;
     mkey: string;
 }
+export interface IMRecipientIntermediate {
+    addr: Uint8Array;
+    mkey: Uint8Array;
+}
 export interface IMMessage {
     schemaVersion: number; // 0 or 1, 1 byte
     group: string; // sha256  bytes
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
     recipients: IMRecipient[];
+    recipientOutputid?: string; // 32 bytes
+    data: string[];
+}
+export interface IMMessageIntermediate {
+    schemaVersion: number; // 0 or 1, 1 byte
+    group: string; // sha256  bytes
+    messageType: number; // 0 or 1, 1 byte
+    authScheme: number; // 0 or 1, 1 byte
+    recipients: IMRecipientIntermediate[];
     recipientOutputid?: string; // 32 bytes
     data: string[];
 }

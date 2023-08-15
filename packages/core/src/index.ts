@@ -1,10 +1,12 @@
 
 import CryptoJS from 'crypto-js'
-import { concatBytes, hexToBytes, serializeListOfBytes, deserializeListOfBytes } from 'iotacat-sdk-utils'
+import { concatBytes, hexToBytes, bytesToHex, serializeListOfBytes, deserializeListOfBytes, addressHash } from 'iotacat-sdk-utils'
 import { IM } from './proto/compiled'
-import { IMMessage, Address, ShimmerBech32Addr,MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, MessageAuthScheme, IMRecipient } from './types';
+import { IMMessage, Address, ShimmerBech32Addr,MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, MessageAuthScheme, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate } from './types';
 import { Message } from 'protobufjs';
 export * from './types';
+import type { MqttClient,connect } from "mqtt";
+import EventEmitter from 'events';
 const SHA256_LEN = 32
 class IotaCatSDK {
 
@@ -87,6 +89,58 @@ class IotaCatSDK {
     _groupIdToGroupMembers(groupId:string):string[]{
         return this._groupIdCache[groupId] || []
     }
+    _mqttClient?:MqttClient
+    setupMqttConnection(connect:(url:string)=>MqttClient){
+        const client = connect('wss://test.api.iotacat.com/api/iotacatmqtt/v1')
+        // log connect close disconnect
+        client.on('connect', function () {
+            console.log('mqtt connected')
+        })
+        client.on('close', function () {
+            console.log('mqtt closed')
+        })
+        client.on('disconnect', function () {
+            console.log('mqtt disconnected')
+        })
+        client.on('error', function (error) {
+            console.log('mqtt error',error)
+        })
+        client.on('message', this._handleMqttMessage.bind(this))
+        this._mqttClient = client
+    }
+    _events:EventEmitter = new EventEmitter();
+    _handleMqttMessage(topic:string, message:Buffer){
+        const pushed = this.parsePushedValue(message)
+        console.log('mqtt message', topic, pushed);
+        this._events.emit('inbox', pushed)
+    }
+    on(key:string,cb:(...args:any[])=>void){
+        this._events.on(key,cb)
+    }
+    off(key:string,cb:(...args:any[])=>void){
+        this._events.off(key,cb)
+    }
+    _previousMqttTopic?:string
+    _ensureMqttClient(){
+        if (!this._mqttClient) throw new Error('mqtt client not setup')
+    }
+    switchMqttAddress(address:string){
+        this._ensureMqttClient()
+        if (this._previousMqttTopic) {
+            this._mqttClient!.unsubscribe(this._previousMqttTopic)
+        }
+        // subscribe new topic
+        this._previousMqttTopic = `inbox/${address}`
+        this._mqttClient!.subscribe(this._previousMqttTopic, {qos: 1}, (err:any, granted:any) => {
+                if (err) {
+                    console.log('subscribe error', err);
+                } else {
+                    console.log('subscribe granted', granted);
+                }
+            }
+        );
+    }
+
 
     async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
         const meta = this._groupNameToGroupMeta(group)
@@ -122,7 +176,7 @@ class IotaCatSDK {
         return result.join('')
     }
     
-    async serializeMessage(message:IMMessage, extra:{encryptUsingPublicKey?:(key:string,data:string)=>Promise<string>, groupSaltResolver?:(groupId:string)=>Promise<string>}):Promise<Uint8Array>{
+    async serializeMessage(message:IMMessage, extra:{encryptUsingPublicKey?:(key:string,data:string)=>Promise<Uint8Array>, groupSaltResolver?:(groupId:string)=>Promise<string>}):Promise<Uint8Array>{
         const {encryptUsingPublicKey,groupSaltResolver} = extra
         const groupSha256Hash = message.group
         const groupBytes = hexToBytes(groupSha256Hash)
@@ -137,29 +191,36 @@ class IotaCatSDK {
         if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
             if (!encryptUsingPublicKey) throw new Error('encryptUsingPublicKey is required for MessageAuthSchemeRecipeintInMessage')
             message.recipients = await Promise.all(message.recipients.map(async (pair)=>{
-                pair.mkey = await encryptUsingPublicKey(pair.mkey,salt)
+                pair.mkey = bytesToHex(await encryptUsingPublicKey(pair.mkey,salt))
                 return pair
             }))
         }
-        const msgProto = IM.IMMessage.create(message)
+        const message_ = this._compileMessage(message)
+        console.log('message_',message_, message)
+        const msgProto = IM.IMMessage.create(message_)
         const msgBytes = IM.IMMessage.encode(msgProto).finish()
         return concatBytes(groupBytes, msgBytes)
     }
               
     
-    async deserializeMessage(messageBytes:Uint8Array, address:string, extra:{decryptUsingPrivateKey?:(data:string)=>Promise<string>, sharedOutputSaltResolver?:(outputId:string)=>Promise<string>} ):Promise<IMMessage>{
+    async deserializeMessage(messageBytes:Uint8Array, address:string, extra:{decryptUsingPrivateKey?:(data:Uint8Array)=>Promise<string>, sharedOutputSaltResolver?:(outputId:string)=>Promise<string>} ):Promise<IMMessage>{
         const {decryptUsingPrivateKey,sharedOutputSaltResolver} = extra
         const groupBytes = messageBytes.slice(0,SHA256_LEN)
         const payload = messageBytes.slice(SHA256_LEN)
-        const msg = IM.IMMessage.decode(payload)
+        const msg_ = IM.IMMessage.decode(payload)
+        // @ts-ignore
+        const msg = this._decompileMessage(msg_)
+        console.log('msg_',msg_,msg)
         let salt = ''
         if (msg.authScheme === MessageAuthSchemeRecipeintInMessage) {
             if (!decryptUsingPrivateKey) throw new Error('decryptUsingPrivateKey is required for MessageAuthSchemeRecipeintInMessage')
-            console.log('msg.recipients',msg.recipients, address)
+            const addressHashValue = this.getAddressHashStr(address)
+            console.log('msg.recipients',msg.recipients, address, addressHashValue)
+            
             for (const recipient of msg.recipients) {
                 if (!recipient.mkey) continue
-                if (recipient.addr !== address) continue
-                salt = await decryptUsingPrivateKey(recipient.mkey)
+                if (recipient.addr !== addressHashValue) continue
+                salt = await decryptUsingPrivateKey(hexToBytes(recipient.mkey))
                 if (!salt) break
                 if (!this.validateFirstMsg(msg,salt)) {
                     salt = ''
@@ -171,6 +232,7 @@ class IotaCatSDK {
             salt = await sharedOutputSaltResolver(msg.recipientOutputid!)
         }
         if (!salt) {
+            console.log('invalid message',msg,msg_)
             throw new Error('invalid message')
         }
         msg.data = msg.data.map(data=>this._decrypt(data,salt))
@@ -178,21 +240,54 @@ class IotaCatSDK {
     }
     serializeRecipientList(recipients:IMRecipient[], groupId:string):Uint8Array{
         const groupBytes = hexToBytes(groupId)
-        const bytesList = recipients.map(recipient=>IM.Recipient.encode(recipient).finish())
+        const recipientIntermediateList = recipients.map(recipient=>this._compileRecipient(recipient))
+        const bytesList = recipientIntermediateList.map(recipient=>IM.Recipient.encode(recipient).finish())
         const pl =  serializeListOfBytes(bytesList)
         return  concatBytes(groupBytes,pl)
     }
     deserializeRecipientList(recipientListBytes:Uint8Array):IMRecipient[]{
         const payload = recipientListBytes.slice(SHA256_LEN)
         const bytesList = deserializeListOfBytes(payload)
-        return bytesList.map(bytes=>IM.Recipient.decode(bytes))
+        return bytesList.map(bytes=>IM.Recipient.decode(bytes)).map(recipient=>this._decompileRecipient(recipient))
     }
-    validateFirstMsg(msg:IM.IMMessage, salt:string){
+    _compileRecipient(recipient:IMRecipient):IMRecipientIntermediate{
+        return {
+            addr: addressHash(recipient.addr,IOTACATTAG),
+            mkey: hexToBytes(recipient.mkey),
+        }
+    }
+    getAddressHashStr(addr:string):string{
+        return bytesToHex(addressHash(addr,IOTACATTAG))
+    }
+    _compileMessage(message:IMMessage):IMMessageIntermediate{
+        const recipients = message.recipients.map(recipient=>this._compileRecipient(recipient))
+        return {
+            ...message,
+            recipients,
+        }
+    }
+
+
+    _decompileRecipient(recipient:IMRecipientIntermediate):IMRecipient{
+        return {
+            addr: bytesToHex(recipient.addr,false),
+            mkey: bytesToHex(recipient.mkey,false),
+        }
+    }
+    _decompileMessage(message:IMMessageIntermediate):IMMessage{
+        const recipients = message.recipients.map(recipient=>this._decompileRecipient(recipient))
+        return {
+            ...message,
+            recipients,
+        }
+    }
+    validateFirstMsg(msg:IMMessage, salt:string){
         const firstMsgDecrypted = this._decrypt(msg.data[0],salt)
         if (!firstMsgDecrypted) return false
         return true
     }
     _encrypt(content:string,salt:string){
+        console.log('encrypt',content,salt)
         const contentWord = CryptoJS.enc.Utf8.parse(content)
         const [key,iv] = this._getKdf(salt)
         const encrypted = CryptoJS.AES.encrypt(
@@ -203,6 +298,7 @@ class IotaCatSDK {
         return encrypted
     }
     _decrypt(content:string,salt:string){
+        console.log('decrypt',content,salt)
         const [kdf,iv] = this._getKdf(salt)
         const encryptedWord = CryptoJS.enc.Hex.parse(content)
         const encryptedParam = CryptoJS.lib.CipherParams.create({
@@ -237,8 +333,8 @@ class IotaCatSDK {
 
 const instance = new IotaCatSDK
 
-export const IOTACATTAG = 'IOTACAT'
-export const IOTACATSHAREDTAG = 'IOTACATSHARED'
+export const IOTACATTAG = 'IOTACATV2'
+export const IOTACATSHAREDTAG = 'IOTACATSHAREDV2'
 export const IotaCatSDKObj = instance
 
 export * from './misc'
