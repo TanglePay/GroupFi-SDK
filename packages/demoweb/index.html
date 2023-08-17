@@ -184,9 +184,10 @@
 <script src="./js/iota.js"></script>
 <script src="./js/tanglepaycommon.js"></script>
 <script src="./js/tanglepaysdk.js"></script>
-<script src="./js/core-2023-08-15.js"></script>
+<script src="./js/core.js"></script>
 <script src="./js/mqtt.min.js"></script>
 <script>
+    let selectedGroupId
     let selectedGroup
     const dom = document.getElementById('text')
     function formatTimestamp(unixTimestamp) {
@@ -238,19 +239,21 @@
             fromToken = undefined
             untilToken = undefined
             dom.innerHTML = ''
+            selectedGroupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(value)
             selectedGroup = value
             window.refreshMessageList()
+            window.ensureGroupShared()
         }
         window.refreshMessageList = async ()=>{
-            const readerAddr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
-            const group = selectedGroup
+            const addr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const groupId = selectedGroupId
             try {
                 const res = await iota.request({
                     method: 'iota_im_groupmessagelist_until',
                     params: {
                     content: {
-                        readerAddr,
-                        group,
+                        addr,
+                        groupId,
                         continuationToken: untilToken,
                         limit: 20
                     }
@@ -273,16 +276,36 @@
                 console.log('error',error)
             }
         }
+        
+        window.ensureGroupShared = async () => {
+            const addr = document.getElementById('cur_addr').value;
+            const groupId = selectedGroupId
+            try {
+                const res = await iota.request({
+                    method: 'iota_im_ensure_group_shared',
+                    params: {
+                    content: {
+                        addr,
+                        groupId
+                    }
+                    }
+                })
+            } catch (error) {
+                console.log('ensureGroupHasShared error',error)
+            }
+
+        }
+        
         window.loadMessageList = async ()=>{
-            const readerAddr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
-            const group = selectedGroup;
+            const addr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const groupId = selectedGroupId;
             try {
                 const res = await iota.request({
                     method: 'iota_im_groupmessagelist_from',
                     params: {
                     content: {
-                        readerAddr,
-                        group,
+                        addr,
+                        groupId,
                         continuationToken: fromToken,
                         limit: 3
                     }
@@ -307,8 +330,8 @@
         }
         
         window.readOneMessage = async (outputId)=>{
-            const readerAddr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
-            const group = selectedGroup;
+            const addr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const groupId = selectedGroupId;
             try {
                 const res = await iota.request({
                     method: 'iota_im_readone',
@@ -351,10 +374,8 @@
             iotacatsdk.IotaCatSDKObj.switchMqttAddress(res.address)
             iotacatsdk.IotaCatSDKObj.on('inbox',(pushed)=>{
                 showToast('new message received via mqtt')
-                const group = selectedGroup;
-                const currentGroupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(group)
                 const {type,groupId,outputId} = pushed
-                if (type === 1 && currentGroupId === groupId) {
+                if (type === 1 && selectedGroupId === groupId) {
                     refreshMessageList()
                 }
             })
@@ -363,20 +384,20 @@
         }
         
         window.sendIm = async ()=>{
-            const senderAddr = document.getElementById('cur_addr').value;
+            const addr = document.getElementById('cur_addr').value;
             const messageText = document.getElementById('message_text').value; //'hello world'
-            const group = selectedGroup;
+            const groupId = selectedGroupId;
             const dappName = 'iotacatdemo'
             console.log('sdk obj',iotacatsdk.IotaCatSDKObj)
-            const message = await iotacatsdk.IotaCatSDKObj.prepareSendMessage(senderAddr, group, messageText)
+            const message = await iotacatsdk.IotaCatSDKObj.prepareSendMessage(addr, selectedGroup, messageText)
             console.log('message',message)
             const res = await iota.request({
                 method: 'iota_im',
                 params: {
                    content: {
                         dappName,
-                        senderAddr,
-                        group,
+                        addr,
+                        groupId,
                         message
                     }
                 }

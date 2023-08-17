@@ -91,7 +91,7 @@ class IotaCatSDK {
     }
     _mqttClient?:MqttClient
     setupMqttConnection(connect:(url:string)=>MqttClient){
-        const client = connect('wss://test.api.iotacat.com/api/iotacatmqtt/v1')
+        const client = connect('wss://test2.api.iotacat.com/api/iotacatmqtt/v1')
         // log connect close disconnect
         client.on('connect', function () {
             console.log('mqtt connected')
@@ -120,27 +120,22 @@ class IotaCatSDK {
     off(key:string,cb:(...args:any[])=>void){
         this._events.off(key,cb)
     }
-    _previousMqttTopic?:string
     _ensureMqttClient(){
         if (!this._mqttClient) throw new Error('mqtt client not setup')
     }
-    switchMqttAddress(address:string){
+    async switchMqttAddress(address:string){
         this._ensureMqttClient()
-        if (this._previousMqttTopic) {
-            this._mqttClient!.unsubscribe(this._previousMqttTopic)
+        const groupIds = await this._fetchAddressGroupIds(address)
+        // loop through groupIds then subscribe to inbox/groupId
+        for (const groupId of groupIds) {
+            this.subscribeToGroupId(groupId)
         }
-        // subscribe new topic
-        this._previousMqttTopic = `inbox/${address}`
-        this._mqttClient!.subscribe(this._previousMqttTopic, {qos: 1}, (err:any, granted:any) => {
-                if (err) {
-                    console.log('subscribe error', err);
-                } else {
-                    console.log('subscribe granted', granted);
-                }
-            }
-        );
     }
-
+    // subscribe to a groupId inbox/groupId
+    subscribeToGroupId(groupId:string){
+        this._ensureMqttClient()
+        this._mqttClient!.subscribe(`inbox/${groupId}`)
+    }
 
     async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
         const meta = this._groupNameToGroupMeta(group)
@@ -175,7 +170,13 @@ class IotaCatSDK {
         }
         return result.join('')
     }
-    
+    async _fetchAddressGroupIds(address:string):Promise<string[]>{
+        // https://test2.api.iotacat.com/api/iotacatim/v1/addressgroupids?address=...
+        const url = `https://test2.api.iotacat.com/api/iotacatim/v1/addressgroupids?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
     async serializeMessage(message:IMMessage, extra:{encryptUsingPublicKey?:(key:string,data:string)=>Promise<Uint8Array>, groupSaltResolver?:(groupId:string)=>Promise<string>}):Promise<Uint8Array>{
         const {encryptUsingPublicKey,groupSaltResolver} = extra
         const groupSha256Hash = message.group

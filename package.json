@@ -9,6 +9,7 @@
     "clean": "lerna run clean",
     "build": "lerna run build",
     "test": "lerna run test",
+    "syncdist": "node syncdist.js",
     "publish": "lerna publish"
   },
   "devDependencies": {

@@ -237,7 +237,7 @@ class IotaCatClient {
         //TODO try inx plugin 
         const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         try {
-            const url = `https://test.api.iotacat.com/api/iotacatim/v1/nfts?groupId=0x${groupId}`
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/nfts?groupId=0x${groupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
             {
@@ -261,7 +261,7 @@ class IotaCatClient {
     async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
         const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         try {
-            const url = `https://test.api.iotacat.com/api/iotacatim/v1/shared?groupId=0x${groupId}`
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/shared?groupId=0x${groupId}`
             try {
             // @ts-ignore
             const res = await fetch(url,{
@@ -292,7 +292,14 @@ class IotaCatClient {
             return await this._makeSharedOutputForGroup(groupId)
         }
     }
-    
+    //ensure group have shared output, if not create one
+    async ensureGroupHaveSharedOutput(groupId:string){
+        this._ensureClientInited()
+        const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+        if (!res) {
+            await this._makeSharedOutputForGroup(groupId)
+        }
+    }
     async _getSaltForGroup(groupId:string, address:string):Promise<{salt:string, outputId:string}>{
         console.log(`_getSaltForGroup groupId:${groupId}, address:${address}`);
         const sharedOutputResp = await this._getSharedOutputForGroup(groupId)
@@ -678,19 +685,16 @@ class IotaCatClient {
             console.log("Submitted blockId is: ", blockId);
             return {blockId,outputId};
         }
-    async fetchMessageListFrom(group:string, address:string, coninuationToken?:string, limit:number=10) {
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
-        const groupId = IotaCatSDKObj._groupToGroupId(group)
+    async fetchMessageListFrom(groupId:string, address:string, coninuationToken?:string, limit:number=10) {
         try {
             const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://test.api.iotacat.com/api/iotacatim/v1/messages${paramStr}`
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
                 headers:{
                 'Content-Type':'application/json',
-                "Authorization":`Bearer ${jwtToken}`
                 }})
             const data = await res.json() as MessageResponse
             const {messageList,headToken,tailToken} = await this._messageResponseToMesssageListAndTokens(data,address)
@@ -700,19 +704,16 @@ class IotaCatClient {
         }
     }
     // fetchMessageListUntil
-    async fetchMessageListUntil(group:string, address:string, coninuationToken:string, limit:number=10) {
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
-        const groupId = IotaCatSDKObj._groupToGroupId(group)
+    async fetchMessageListUntil(groupId:string, address:string, coninuationToken:string, limit:number=10) {
         try {
             const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://test.api.iotacat.com/api/iotacatim/v1/messages/until${paramStr}`
+            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages/until${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
                 headers:{
                 'Content-Type':'application/json',
-                "Authorization":`Bearer ${jwtToken}`
                 }})
             const data = await res.json() as MessageResponse
             const {messageList,headToken,tailToken} = await this._messageResponseToMesssageListAndTokens(data,address)
@@ -721,7 +722,7 @@ class IotaCatClient {
             console.log('error',error)
         }
     }
-    async _messageResponseToMesssageListAndTokens(response:MessageResponse, address:string,):Promise<{messageList:MessageBody[],headToken?:string,  tailToken?:string}>{
+    async _messageResponseToMesssageListAndTokens(response:MessageResponse, address:string):Promise<{messageList:MessageBody[],headToken?:string,  tailToken?:string}>{
         const messages = response.messages
         const messagePayloads = await Promise.all(messages.map(msg => this.getMessageFromOutputId(msg.outputId,address)))
         const messageBodyArr:(MessageBody|undefined)[] = messagePayloads.map((payload,index)=>{

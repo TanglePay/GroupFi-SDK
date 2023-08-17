@@ -14,19 +14,6 @@ describe('seed related test', () => {
 
     beforeAll(async ()=>{
         await IotaCatClient.setup(101,NodePowProvider)
-        const mockedMqttClient: MockedMqttClient = {
-            subscribe: (topic: string | string[], callback?: () => void) => {
-              // Do nothing
-            },
-            on: (event: string, callback: (...args: any[]) => void) => {
-              // Do nothing
-            },
-            // Implement any other methods or properties as needed
-          };
-          
-          // Optionally, cast to the actual MqttClient type if needed
-          const client = mockedMqttClient as unknown as MqttClient;
-          IotaCatClient.setupMqttClient(client)
     })
     test('test client initialized', async () => {
         expect(IotaCatClient._nodeInfo).toBeDefined()
