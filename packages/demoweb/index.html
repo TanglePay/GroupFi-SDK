@@ -276,7 +276,44 @@
                 console.log('error',error)
             }
         }
-        
+        window.handleP2PPushed = async ({meta,sender})=>{
+            const addr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
+            const groupId = selectedGroupId
+            const sender_= sender
+            const meta_ = meta
+            try {
+                const res = await iota.request({
+                    method: 'iota_im_p2p_pushed',
+                    params: {
+                    content: {
+                        addr,
+                        pushed: {
+                            meta:meta_,
+                            sender:sender_
+                        },
+                    }
+                    }
+                })
+                const {sender,message} = res
+                const messageStr = message.data[0]
+                const makedMessageList = [{sender,message:messageStr,timestamp:Math.floor(Date.now()/1000)}]
+                const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
+                const makelist = (messageList) => messageList.map(messageItem => {
+                    const {sender, message, timestamp} = messageItem
+                    return `<div class="block">${makekv('senderAddr',sender)}${makekv('messageText',message)}${makekv('timestamp',formatTimestamp(timestamp))}</div>`
+                }).join('')
+                const prependContent = makelist(makedMessageList)
+                if (res.headToken) {
+                    untilToken = res.headToken
+                    if (!fromToken) {
+                        fromToken = res.headToken
+                    }
+                }
+                dom.insertAdjacentHTML('afterbegin',prependContent)
+            } catch (error) {
+                console.log('error',error)
+            }
+        }
         window.ensureGroupShared = async () => {
             const addr = document.getElementById('cur_addr').value;
             const groupId = selectedGroupId
@@ -374,9 +411,13 @@
             iotacatsdk.IotaCatSDKObj.switchMqttAddress(res.address)
             iotacatsdk.IotaCatSDKObj.on('inbox',(pushed)=>{
                 showToast('new message received via mqtt')
-                const {type,groupId,outputId} = pushed
-                if (type === 1 && selectedGroupId === groupId) {
+                const {type,groupId} = pushed
+                if (selectedGroupId != groupId) return
+                if (type === 1 ) { 
                     refreshMessageList()
+                } else if (type === 2) {
+                    const {sender, meta} = pushed
+                    handleP2PPushed({sender,meta})
                 }
             })
         } catch (error) {

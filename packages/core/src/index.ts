@@ -2,11 +2,12 @@
 import CryptoJS from 'crypto-js'
 import { concatBytes, hexToBytes, bytesToHex, serializeListOfBytes, deserializeListOfBytes, addressHash } from 'iotacat-sdk-utils'
 import { IM } from './proto/compiled'
-import { IMMessage, Address, ShimmerBech32Addr,MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, MessageAuthScheme, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate } from './types';
+import { IMMessage, Address, ShimmerBech32Addr,MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, MessageAuthScheme, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue } from './types';
 import { Message } from 'protobufjs';
 export * from './types';
 import type { MqttClient,connect } from "mqtt";
 import EventEmitter from 'events';
+import exp from 'constants';
 const SHA256_LEN = 32
 class IotaCatSDK {
 
@@ -321,14 +322,24 @@ class IotaCatSDK {
         return [kdf1, kdf2]
     }
 
-    // value = one byte type + groupId(32 bytes) + outputId (34 bytes)
-    parsePushedValue(value:Buffer):{type:number,groupId:string,outputId:string}{
+    // value = one byte type 
+    parsePushedValue(value:Buffer):PushedValue|undefined{
         // type to number
+        console.log('parsePushedValue',value.toString('hex'))
         const type = value[0]
-        const groupId = value.slice(1,33).toString('hex')
-        const outputId = value.slice(33,67).toString('hex')
-        console.log('parsePushedValue',value,type,groupId,outputId)
-        return {type,groupId,outputId}
+        if (type === 1) {
+            const groupId = value.slice(1,33).toString('hex')
+            const outputId = value.slice(33,67).toString('hex')
+            console.log('parsePushedValue',value,type,groupId,outputId)
+            return {type,groupId,outputId}
+        } else if (type === 2) {
+            const sender = value.slice(2,34).toString('hex')
+            const meta = value.slice(34).toString('hex')
+            const groupId = value.slice(34,66).toString('hex')
+            console.log('parsePushedValue',value,type,groupId)
+            return {type, groupId, sender, meta}
+        }
+        
     }
 }
 

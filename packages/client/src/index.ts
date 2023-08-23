@@ -428,23 +428,32 @@ class IotaCatClient {
             const addressUnlockcondition = output.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
             const senderAddress = addressUnlockcondition.address as IEd25519Address
             const senderAddressBytes = Converter.hexToBytes(senderAddress.pubKeyHash)
-            const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes, this._nodeInfo!.protocol.bech32Hrp);
+            
             const features = output.features
             if (!features) throw new Error('No features')
             const metadataFeature = features.find(feature=>feature.type === 2) as IMetadataFeature
             if (!metadataFeature) throw new Error('No metadata feature')
             const data = Converter.hexToBytes(metadataFeature.data)
-            const message = await IotaCatSDKObj.deserializeMessage(data, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
-                const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
-                return decrypted.payload
-            },sharedOutputSaltResolver:async (sharedOutputId:string)=>{
-                const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
-                return salt
-            }})
+            const {sender, message} = await this.getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address})
             return { sender , message }
         } catch(e) {
             console.log(`getMessageFromOutputId:${outputId}`);
         }
+    }
+    // getMessageFromMetafeaturepayloadandsender
+    async getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address}:{data:Uint8Array|string,senderAddressBytes:Uint8Array|string,address:string}):Promise<{sender:string,message:IMMessage}>{
+        const data_ = typeof data === 'string' ? Converter.hexToBytes(data) : data
+        const senderAddressBytes_ = typeof senderAddressBytes === 'string' ? Converter.hexToBytes(senderAddressBytes) : senderAddressBytes
+        console.log('getMessageFromMetafeaturepayloadAndSender', data_, senderAddressBytes_, address);
+        const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
+        const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
+            const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
+            return decrypted.payload
+        },sharedOutputSaltResolver:async (sharedOutputId:string)=>{
+            const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
+            return salt
+        }})
+        return {sender,message}
     }
     async _getUnSpentOutputs() {
         this._ensureClientInited()
