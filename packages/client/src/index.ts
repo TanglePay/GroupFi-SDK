@@ -22,16 +22,19 @@ import {
     IPowProvider,
     COIN_TYPE_SHIMMER,
     IAddressUnlockCondition,
-    IEd25519Address
+    IEd25519Address,
+    IOutputResponse,
+    REFERENCE_UNLOCK_TYPE
 } from "@iota/iota.js";
 import { Converter, WriteStream,  } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
-import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage } from "iotacat-sdk-core";
+import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams} from 'iotacat-sdk-utils';
 
 //TODO tune concurrency
 const httpCallLimit = 5;
+const consolidateBatchSize = 29;
 setIotaCrypto({
     Bip39,
     Ed25519,
@@ -52,6 +55,14 @@ interface StorageFacade {
     prefix: string;
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
+}
+type OutputResponseWrapper = {
+    output: IOutputResponse;
+    outputId: string;
+}
+type BasicOutputWrapper = {
+    output: IBasicOutput;
+    outputId: string;
 }
 type MessageResponseItem = {
     outputId: string;
@@ -237,7 +248,7 @@ class IotaCatClient {
         //TODO try inx plugin 
         const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         try {
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/nfts?groupId=0x${groupId}`
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nfts?groupId=0x${groupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
             {
@@ -261,7 +272,7 @@ class IotaCatClient {
     async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
         const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         try {
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/shared?groupId=0x${groupId}`
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
             try {
             // @ts-ignore
             const res = await fetch(url,{
@@ -455,7 +466,93 @@ class IotaCatClient {
         }})
         return {sender,message}
     }
-    async _getUnSpentOutputs() {
+    async _getUnSpentOutputs({numbersWanted, amountLargerThan, idsForFiltering}:{numbersWanted:number,amountLargerThan?:bigInt.BigNumber, idsForFiltering?:Set<string>} = {numbersWanted : 100}) {
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const res:BasicOutputWrapper[] = []
+        let cursor:string|undefined
+        while (true) {
+            const {outputs,nextCursor} = await this._getOneBatchUnSpentOutputs({pageSize:100, amountLargerThan ,cursor,idsForFiltering})
+            cursor = nextCursor
+            res.push(...outputs)
+            if (res.length >= numbersWanted) break
+            if (!nextCursor) break
+        }
+        return res.slice(0,numbersWanted)
+    }
+    // given outputids to be consolidated, try find 100 unspent outputs, filter out the ones in outputIds, then find larget within the 100
+    async _getLargestUnSpentOutputAsideThoseForConsolidation(outputIds:string[]){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const idsForFiltering = new Set(outputIds)
+        const outputs = await this._getUnSpentOutputs({numbersWanted:100,idsForFiltering})
+        if (outputs.length === 0) return undefined
+        const largestOutput = this._findLargestOutput(outputs)
+        return largestOutput
+    }
+
+    // get outputids from message consolidation api
+    async _getOutputIdsFromMessageConsolidationApi(address:string){
+        const params = {address:`${address}`}
+        const paramStr = formatUrlParams(params)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/consolidation/message${paramStr}`
+        // @ts-ignore
+        const res = await fetch(url,{
+            method:'GET',
+            headers:{
+            'Content-Type':'application/json',
+            }})
+        const data = await res.json() as string[]
+        return data ?? []
+    }
+    // check then consolidate messages
+    async checkThenConsolidateMessages(){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const outputIds = await this._getOutputIdsFromMessageConsolidationApi(this._accountBech32Address!)
+        console.log('outputIds', outputIds);
+        if (outputIds.length === 0) return
+        const res = await this._consolidateOutputIdsFromApiResult(outputIds)
+        return res
+    }
+
+    // get outputids from message consolidation shared api
+    async _getOutputIdsFromMessageConsolidationSharedApi(address:string){
+        const params = {address:`${address}`}
+        const paramStr = formatUrlParams(params)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/consolidation/shared${paramStr}`
+        // @ts-ignore
+        const res = await fetch(url,{
+            method:'GET',
+            headers:{
+            'Content-Type':'application/json',
+            }})
+        const data = await res.json() as string[]
+        return data ?? []
+    }
+    // check then consolidate shared
+    async checkThenConsolidateShared(){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const outputIds = await this._getOutputIdsFromMessageConsolidationSharedApi(this._accountBech32Address!)
+        console.log('outputIds', outputIds);
+        if (outputIds.length === 0) return
+        const res = await this._consolidateOutputIdsFromApiResult(outputIds)
+        return res
+    }
+    // consolidate outputids from api result
+    async _consolidateOutputIdsFromApiResult(outputIds:string[]){
+        const consumedOutputsResponse = await this._outputIdsToOutputResponseWrappers(outputIds)
+        const consumedOutputs = consumedOutputsResponse.map(outputResponseWrapper=>this._outputResponseWrapperToBasicOutputWrapper(outputResponseWrapper))
+        const largest = await this._getLargestUnSpentOutputAsideThoseForConsolidation(outputIds)
+        if (largest) {
+            consumedOutputs.push(largest)
+        }
+        const res = await this._consolidateOutputs(consumedOutputs)
+        return res
+    }
+
+    async _getOneBatchUnSpentOutputs({cursor,pageSize = 100, amountLargerThan, idsForFiltering}:{cursor?:string, amountLargerThan?:bigInt.BigNumber, pageSize?:number,idsForFiltering?:Set<string>} = {}) {
         this._ensureClientInited()
         this._ensureWalletInited()
         const outputsResponse = await this._indexer!.basicOutputs({
@@ -464,17 +561,42 @@ class IotaCatClient {
             hasExpiration: false,
             hasTimelock: false,
             hasNativeTokens: false,
+            pageSize,
+            cursor
         });
+        const nextCursor = outputsResponse.cursor
         console.log('OutputsResponse', outputsResponse);
-        //TODO
-        ///const outputIds = ['0xebcbe2446bb42ef341ee28eb753b70bcce8e6357e74b62cac368d45844976e140100']//
-        const outputIds = outputsResponse.items
+        let outputIds = outputsResponse.items
+        if (idsForFiltering) {
+            outputIds = outputIds.filter(outputId=>!idsForFiltering.has(outputId))
+        }
+        let outputsRaw = await this._getUnSpentOutputsFromOutputIds(outputIds)
+        console.log('Unspent Outputs', outputsRaw);
+        let outputs = outputsRaw.map(output=>this._outputResponseWrapperToBasicOutputWrapper(output))
+        if (amountLargerThan) {
+            outputs = outputs.filter(output=>bigInt(output.output.amount).greater(amountLargerThan))
+        }
+        return {outputs,nextCursor}
+    }
+    //get outputs from outputIds filter out spent
+    async _getUnSpentOutputsFromOutputIds(outputIds:string[]){
+        this._ensureClientInited()
+        const outputs = await this._outputIdsToOutputResponseWrappers(outputIds)
+        return outputs.filter(output=>
+            output.output.metadata.isSpent === false && 
+            output.output.output.type === BASIC_OUTPUT_TYPE
+        )
+    }
+    async _outputIdsToOutputResponseWrappers(outputIds:string[]):Promise<OutputResponseWrapper[]>{
+        this._ensureClientInited()
         const tasks = outputIds.map(outputId=>this._client!.output(outputId))
         let outputsRaw = await Promise.all(tasks)
         let outputs = outputsRaw.map((output,idx)=>{return {outputId:outputIds[idx],output}})
-        outputs = outputs.filter(output=>output.output.metadata.isSpent === false)
-        console.log('Unspent Outputs', outputs);
-        return outputs.map(output=>{return {outputId:output.outputId,output:output.output.output}})
+        return outputs
+    }
+    _outputResponseWrapperToBasicOutputWrapper(outputResponseWrapper:OutputResponseWrapper):BasicOutputWrapper{
+        const output = outputResponseWrapper.output.output as IBasicOutput
+        return {outputId:outputResponseWrapper.outputId,output}
     }
     _getAmount(output:IBasicOutput){
         console.log('_getAmount', output, this._protocolInfo!.rentStructure)
@@ -604,101 +726,188 @@ class IotaCatClient {
         }
         
     }
+    async _findLargestUnspentOutput(outputIds:string[]){
+        let largestAmount = bigInt('0')
+        let largestOutput = undefined
+        const outputs = await this._getUnSpentOutputsFromOutputIds(outputIds)
+        for (const output of outputs) {
+            const amount = bigInt(output.output.output.amount)
+            if (amount.greater(largestAmount)) {
+                largestAmount = amount
+                largestOutput = output
+            }
+        }
+        return largestOutput
+    }
+
+    // given outputs, find largest one
+    _findLargestOutput(outputs:BasicOutputWrapper[]):BasicOutputWrapper|undefined{
+        let largestAmount = bigInt('0')
+        let largestOutput = undefined
+        for (const output of outputs) {
+            const amount = bigInt(output.output.amount)
+            if (amount.greater(largestAmount)) {
+                largestAmount = amount
+                largestOutput = output
+            }
+        }
+        return largestOutput
+    }
+    // _consolidateOutputs
+    async _consolidateOutputs(consumedOutputs:BasicOutputWrapper[]){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        // last output is the largest one, slice it out, then slice rest to consolidateBatchSize, then add back the largest one
+        const largestOutput = consumedOutputs[consumedOutputs.length-1]
+        consumedOutputs = consumedOutputs.slice(0,consumedOutputs.length-1)
+        consumedOutputs = consumedOutputs.slice(0,consolidateBatchSize)
+        consumedOutputs.push(largestOutput)
+        let totalAmount = bigInt('0')
+        for (const basicOutputWrapper of consumedOutputs) {
+            const {outputId,output} = basicOutputWrapper
+            const amount = bigInt(output.amount)
+            totalAmount = totalAmount.add(amount)
+        }
+        const consolidatedBasicOutput: IBasicOutput = {
+            type: BASIC_OUTPUT_TYPE,
+            amount: totalAmount.toString(),
+            nativeTokens: [],
+            unlockConditions: [
+                {
+                    type: ADDRESS_UNLOCK_CONDITION_TYPE,
+                    address: {
+                        type: ED25519_ADDRESS_TYPE,
+                        pubKeyHash: this._accountHexAddress!
+                    }
+                }
+            ],
+            features: []
+        };
+        return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs, [consolidatedBasicOutput])
+    }
     async _sendBasicOutput(basicOutput:IBasicOutput){
         const amountToSend = this._getAmount(basicOutput)
-            console.log('AmountToSend', amountToSend);
-            basicOutput.amount = amountToSend.toString()
-            const outputs = await this._getUnSpentOutputs()
-            console.log('unspent Outputs', outputs);
-            // get first output with amount > amountToSend
-            //TODO consider remainder
-            const threshold = amountToSend.multiply(2)
-            const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
-            if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
-            const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
-            console.log('ConsumedOutput', consumedOutput);
-            // 2. Prepare Inputs for the transaction
-            const input: IUTXOInput = TransactionHelper.inputFromOutputId(consumedOutputId); 
-            console.log("Input: ", input, '\n');
+        console.log('AmountToSend', amountToSend);
+        basicOutput.amount = amountToSend.toString()
+        // get first output with amount > amountToSend
 
-
-            const remainderBasicOutput: IBasicOutput = {
-                type: BASIC_OUTPUT_TYPE,
-                amount: bigInt(consumedOutput.amount).minus(amountToSend).toString(),
-                nativeTokens: [],
-                unlockConditions: [
-                    {
-                        type: ADDRESS_UNLOCK_CONDITION_TYPE,
-                        address: {
-                            type: ED25519_ADDRESS_TYPE,
-                            pubKeyHash: this._accountHexAddress!
-                        }
-                    }
-                ],
-                features: []
-            };
-            console.log("Remainder Basic Output: ", remainderBasicOutput);
-            // 4. Get inputs commitment
-            const inputsCommitment = TransactionHelper.getInputsCommitment([consumedOutput]);
-            console.log("Inputs Commitment: ", inputsCommitment);
-
-            // 14364762045254553490 is the networkId of the mainnet
-            // 1856588631910923207 is the networkId of the testnet
-            const transactionEssence: ITransactionEssence = {
-                type: TRANSACTION_ESSENCE_TYPE,
-                networkId: this._curNode!.networkId, //this._protocolInfo!.networkName,
-                inputs: [input], 
-                inputsCommitment,
-                outputs: [basicOutput, remainderBasicOutput],
-                payload: undefined
-            };
-
-            const wsTsxEssence = new WriteStream();
-            serializeTransactionEssence(wsTsxEssence, transactionEssence);
-            const essenceFinal = wsTsxEssence.finalBytes();
-            const essenceHash = Blake2b.sum256(essenceFinal);
-            console.log("Transaction Essence: ", transactionEssence);
-
-            // 6. Create the unlocks
-            const unlockCondition: UnlockTypes = {
-                type: SIGNATURE_UNLOCK_TYPE,
-                signature: {
-                    type: ED25519_SIGNATURE_TYPE,
-                    publicKey: Converter.bytesToHex(this._walletKeyPair!.publicKey, true),
-                    signature: Converter.bytesToHex(Ed25519.sign(this._walletKeyPair!.privateKey, essenceHash), true)
-                }
-            };
-            console.log("Unlock condition: ", unlockCondition);
-
-            // 7. Create transaction payload
-            const transactionPayload: ITransactionPayload = {
-                type: TRANSACTION_PAYLOAD_TYPE,
-                essence: transactionEssence,
-                unlocks:[unlockCondition]
-            };
-            console.log("Transaction payload: ", transactionPayload);
-            const outputId = Converter.bytesToHex(TransactionHelper.getTransactionPayloadHash(transactionPayload), true) + "0000";
-            // 8. Create Block
-            const block: IBlock = {
-                protocolVersion: DEFAULT_PROTOCOL_VERSION,
-                parents: [],
-                payload: transactionPayload,
-                nonce: "0"
-            };
-            console.log("Block: ", block);
-            
-            // 9. Submit block with pow
-            console.log("Calculating PoW, submitting block...");
+        const threshold = amountToSend.multiply(2)
+        const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1})
+        console.log('unspent Outputs', outputs);
         
+        const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
+        if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
+        const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
+        console.log('ConsumedOutput', consumedOutput);
+        const remainderBasicOutput: IBasicOutput = {
+            type: BASIC_OUTPUT_TYPE,
+            amount: bigInt(consumedOutput.amount).minus(amountToSend).toString(),
+            nativeTokens: [],
+            unlockConditions: [
+                {
+                    type: ADDRESS_UNLOCK_CONDITION_TYPE,
+                    address: {
+                        type: ED25519_ADDRESS_TYPE,
+                        pubKeyHash: this._accountHexAddress!
+                    }
+                }
+            ],
+            features: []
+        };
+        console.log("Remainder Basic Output: ", remainderBasicOutput);
+        return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs([{outputId:consumedOutputId,output:consumedOutput}], [basicOutput,remainderBasicOutput])
+    }
+    // sendTransactionWithConsumedOutputsAndCreatedOutputs
+    async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:BasicOutputWrapper[],createdOutputs:IBasicOutput[]){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const inputArray:IUTXOInput[] = []
+        const consumedOutputArray:IBasicOutput[] = []
+        for (const basicOutputWrapper of consumedOutputs) {
+            const {outputId,output} = basicOutputWrapper
+            const input: IUTXOInput = TransactionHelper.inputFromOutputId(outputId); 
+            inputArray.push(input)
+            consumedOutputArray.push(output)
+        }
+
+        // 4. Get inputs commitment
+        const inputsCommitment = TransactionHelper.getInputsCommitment(consumedOutputArray);
+        console.log("Inputs Commitment: ", inputsCommitment);
+
+        // 14364762045254553490 is the networkId of the mainnet
+        // 1856588631910923207 is the networkId of the testnet
+        const transactionEssence: ITransactionEssence = {
+            type: TRANSACTION_ESSENCE_TYPE,
+            networkId: this._curNode!.networkId, //this._protocolInfo!.networkName,
+            inputs: inputArray, 
+            inputsCommitment,
+            outputs: createdOutputs,
+            payload: undefined
+        };
+
+        const wsTsxEssence = new WriteStream();
+        serializeTransactionEssence(wsTsxEssence, transactionEssence);
+        const essenceFinal = wsTsxEssence.finalBytes();
+        const essenceHash = Blake2b.sum256(essenceFinal);
+        console.log("Transaction Essence: ", transactionEssence);
+
+        // 6. Create the unlocks
+        const addressUnlockCondition: UnlockTypes = {
+            type: SIGNATURE_UNLOCK_TYPE,
+            signature: {
+                type: ED25519_SIGNATURE_TYPE,
+                publicKey: Converter.bytesToHex(this._walletKeyPair!.publicKey, true),
+                signature: Converter.bytesToHex(Ed25519.sign(this._walletKeyPair!.privateKey, essenceHash), true)
+            }
+        };
+        const referenceUnlockCondition: UnlockTypes = {
+            type: REFERENCE_UNLOCK_TYPE,
+            reference: 0
+        }
+        console.log("Unlock condition: ", addressUnlockCondition);
+        const unlockConditionArray:UnlockTypes[] = [];
+
+        for (let i = 0; i < inputArray.length; i++) {
+            if (i === 0) {
+                unlockConditionArray.push(addressUnlockCondition);
+            } else {
+                unlockConditionArray.push(referenceUnlockCondition);
+            }
+        }
+        // 7. Create transaction payload
+        const transactionPayload: ITransactionPayload = {
+            type: TRANSACTION_PAYLOAD_TYPE,
+            essence: transactionEssence,
+            unlocks:unlockConditionArray
+        };
+        console.log("Transaction payload: ", transactionPayload);
+        const outputId = Converter.bytesToHex(TransactionHelper.getTransactionPayloadHash(transactionPayload), true) + "0000";
+        // 8. Create Block
+        const block: IBlock = {
+            protocolVersion: DEFAULT_PROTOCOL_VERSION,
+            parents: [],
+            payload: transactionPayload,
+            nonce: "0"
+        };
+        console.log("Block: ", block);
+        
+        // 9. Submit block with pow
+        console.log("Calculating PoW, submitting block...");
+    
+        try {
             const blockId = await this._client!.blockSubmit(block);
             console.log("Submitted blockId is: ", blockId);
             return {blockId,outputId};
+        } catch (e) {
+            console.log("Error submitting block: ", e);
+            throw e
         }
+    }
     async fetchMessageListFrom(groupId:string, address:string, coninuationToken?:string, limit:number=10) {
         try {
             const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages${paramStr}`
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -717,7 +926,7 @@ class IotaCatClient {
         try {
             const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://test2.api.iotacat.com/api/iotacatim/v1/messages/until${paramStr}`
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages/until${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',

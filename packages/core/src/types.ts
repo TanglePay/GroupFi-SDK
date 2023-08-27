@@ -30,7 +30,7 @@ export type Address = {
     type: typeof ShimmerBech32Addr | typeof ShimmerEvmAddr
     addr: string
 }
-
+export const INX_GROUPFI_DOMAIN = "test2.api.iotacat.com"
 export const MessageCurrentSchemaVersion = 1
 export const MessageTypePrivate = 1
 export const MessageTypePublic = 2

@@ -226,13 +226,20 @@
             document.body.classList.remove('toast-active');
         }, duration);
     }
-
+    const readFn = async () => {
+        await window.refreshMessageList()
+    }
+    const writeFn = async () => {
+        await window.ensureGroupShared()
+        await iotacatsdk.IotaCatSDKObj.sleep(1500)
+        await window.consolidateMessages()
+    }
     var fromToken
     var untilToken
     window.addEventListener('iota-ready',async ()=>{
         console.log('iotacatsdk',iotacatsdk)
         console.log('tanglepaysdk',iota)
-        window.handleGroupChange = (value) => {
+        window.handleGroupChange = async (value) => {
             if (!value) {
                 return
             }
@@ -241,8 +248,7 @@
             dom.innerHTML = ''
             selectedGroupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(value)
             selectedGroup = value
-            window.refreshMessageList()
-            window.ensureGroupShared()
+            await Promise.all([readFn(),writeFn()])
         }
         window.refreshMessageList = async ()=>{
             const addr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
@@ -332,7 +338,23 @@
             }
 
         }
-        
+        window.consolidateMessages = async () => {
+            const addr = document.getElementById('cur_addr').value;
+            const groupId = selectedGroupId
+            try {
+                const res = await iota.request({
+                    method: 'iota_im_check_and_consolidate_messages',
+                    params: {
+                    content: {
+                        addr,
+                        groupId
+                    }
+                    }
+                })
+            } catch (error) {
+                console.log('consolidateMessages error',error)
+            }
+        }
         window.loadMessageList = async ()=>{
             const addr = document.getElementById('cur_addr').value; //'rms1qqqcjrcu4z97tt7we4mant8esknqqexk28znczuyp6u3a26d6vwgs0k3x2h'
             const groupId = selectedGroupId;

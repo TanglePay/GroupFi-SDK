@@ -2,7 +2,7 @@
 import CryptoJS from 'crypto-js'
 import { concatBytes, hexToBytes, bytesToHex, serializeListOfBytes, deserializeListOfBytes, addressHash } from 'iotacat-sdk-utils'
 import { IM } from './proto/compiled'
-import { IMMessage, Address, ShimmerBech32Addr,MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, MessageAuthScheme, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue } from './types';
+import { IMMessage, Address, ShimmerBech32Addr,MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, MessageAuthScheme, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN } from './types';
 import { Message } from 'protobufjs';
 export * from './types';
 import type { MqttClient,connect } from "mqtt";
@@ -92,7 +92,7 @@ class IotaCatSDK {
     }
     _mqttClient?:MqttClient
     setupMqttConnection(connect:(url:string)=>MqttClient){
-        const client = connect('wss://test2.api.iotacat.com/api/iotacatmqtt/v1')
+        const client = connect(`wss://${INX_GROUPFI_DOMAIN}/api/groupfi/mqtt/v1`)
         // log connect close disconnect
         client.on('connect', function () {
             console.log('mqtt connected')
@@ -172,8 +172,7 @@ class IotaCatSDK {
         return result.join('')
     }
     async _fetchAddressGroupIds(address:string):Promise<string[]>{
-        // https://test2.api.iotacat.com/api/iotacatim/v1/addressgroupids?address=...
-        const url = `https://test2.api.iotacat.com/api/iotacatim/v1/addressgroupids?address=${address}`
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressgroupids?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -204,7 +203,9 @@ class IotaCatSDK {
         return concatBytes(groupBytes, msgBytes)
     }
               
-    
+    async sleep(ms:number) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
     async deserializeMessage(messageBytes:Uint8Array, address:string, extra:{decryptUsingPrivateKey?:(data:Uint8Array)=>Promise<string>, sharedOutputSaltResolver?:(outputId:string)=>Promise<string>} ):Promise<IMMessage>{
         const {decryptUsingPrivateKey,sharedOutputSaltResolver} = extra
         const groupBytes = messageBytes.slice(0,SHA256_LEN)
