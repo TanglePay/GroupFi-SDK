@@ -246,7 +246,6 @@ class IotaCatClient {
 
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<string[]>{
         //TODO try inx plugin 
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         try {
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nfts?groupId=0x${groupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
@@ -254,8 +253,7 @@ class IotaCatClient {
             {
                 method:'GET',
                 headers:{
-                'Content-Type':'application/json',
-                'Authorization':`Bearer ${jwtToken}`
+                'Content-Type':'application/json'
                 }
             })
             if (!res.ok) {
