@@ -101,7 +101,6 @@ describe('core test', () => {
     })
     test('test deserializeMessage for RecipientInMessageMsg', async () => {
         await prepareRecipientInMessageMsg(basicMsg)
-        console.log('test deserializeMessage for RecipientInMessageMsg msgObject',msgObject)
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{encryptUsingPublicKey})
         const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,{decryptUsingPrivateKey})
         expect(msgObject2).toBeDefined()

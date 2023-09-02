@@ -80,6 +80,7 @@ type MessageBody = {
 }
 type NftItemReponse = {
     ownerAddress: string;
+    publicKey: string;
     nftId: string;
 }
 type Network = {
@@ -244,10 +245,10 @@ class IotaCatClient {
         return ledgerValue
     }
 
-    async _getAddressListForGroupFromInxApi(groupId:string):Promise<string[]>{
+    async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
         //TODO try inx plugin 
         try {
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nfts?groupId=0x${groupId}`
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nftswithpublickey?groupId=0x${groupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
             {
@@ -261,14 +262,13 @@ class IotaCatClient {
             }
             console.log('_getAddressListForGroupFromInxApi res', res);
             const data = await res.json() as NftItemReponse[]
-            return data.map(item=>item.ownerAddress)
+            return data.filter(o=>o.publicKey)
         } catch (error) {
             console.log('_getAddressListForGroupFromInxApi error',error)
         }
         return []
     }
     async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
-        const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiIxMkQzS29vV0RqdnFSRFNHYzJKeE0xZ3U5aEJ6RFVORUZhaGhwZXBGcFVUaUhEYkF0Tm15IiwianRpIjoiMTY5MDk0NDk4MiIsImlhdCI6MTY5MDk0NDk4MiwiaXNzIjoiMTJEM0tvb1dEanZxUkRTR2MySnhNMWd1OWhCekRVTkVGYWhocGVwRnBVVGlIRGJBdE5teSIsIm5iZiI6MTY5MDk0NDk4Miwic3ViIjoiSE9STkVUIn0.suSlg42-9svWgh-4tCWIFgX3o-NXz_mYdLAUUN6opCM'
         try {
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
             try {
@@ -276,8 +276,7 @@ class IotaCatClient {
             const res = await fetch(url,{
                 method:'GET',
                 headers:{
-                'Content-Type':'application/json',
-                "Authorization":`Bearer ${jwtToken}`
+                'Content-Type':'application/json'
                 }})
                 const data = await res.json() as {outputId:string}
                 return data
@@ -352,14 +351,9 @@ class IotaCatClient {
         return {salt}
     }
     async _makeSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
-        const bech32AddrArr = await this._getAddressListForGroupFromInxApi(groupId)
-        // TODO remove commented test code
-        /*
-        if (!bech32AddrArr.includes(this._accountBech32Address!)) {
-            bech32AddrArr.push(this._accountBech32Address!)
-        }
-        */
-        const recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
+         const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)
+         const recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
+
         console.log('_makeSharedOutputForGroup recipients', recipients);
         const salt = IotaCatSDKObj._generateRandomStr(32)
         //TODO remove
@@ -599,7 +593,7 @@ class IotaCatClient {
     _getAmount(output:IBasicOutput){
         console.log('_getAmount', output, this._protocolInfo!.rentStructure)
         const deposit = TransactionHelper.getStorageDeposit(output, this._protocolInfo!.rentStructure)
-        return bigInt(deposit).multiply(bigInt('2'))
+        return bigInt(deposit)
     }
     async _bech32AddrArrToRecipients(bech32AddrArr:string[]){
         console.log(`_bech32AddrArrToRecipients before remove duplications size:${bech32AddrArr.length}`);
@@ -659,19 +653,11 @@ class IotaCatClient {
 
             const groupSaltMap:Record<string,string> = {}
             if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
-                const recipientAddresses = await this._getAddressListForGroupFromInxApi(groupId)
-                //TODO for demo add senderAddr if not exist
-
-                if (!recipientAddresses.includes(senderAddr)) {
-                    recipientAddresses.push(senderAddr)
-                    //return undefined
-                }
+                const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)
+                const recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
 
 
-                message.recipients = recipientAddresses.map(addr=>({addr,mkey:''}))
-            
-                const bech32AddrArr = message.recipients.map(recipient=>recipient.addr)
-                message.recipients = await this._bech32AddrArrToRecipients(bech32AddrArr)
+                message.recipients = recipients
             } else {
                 // get shared output
                 const {salt, outputId} = await this._getSaltForGroup(groupId,senderAddr)

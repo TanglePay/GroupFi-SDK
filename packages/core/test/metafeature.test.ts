@@ -39,15 +39,15 @@ describe('metafeature size test', () => {
             addr:accountBech32Address
         }
     }
-    const recipients: IMRecipient[] = []
-    beforeAll(async () => {
-        // generate 100 recipient then push to recipients
-        for (let i = 0; i < 80; i++) {
+    const generateRecpientList = (count:number)=>{
+        const recipients: IMRecipient[] = []
+        for (let i = 0; i < count; i++) {
             const recipient = generatePublicKeyAndAddressPair()
             recipients.push(recipient)
         }
-    })
-    test('test 100 recipients metafeature size', async () => {
+        return recipients
+    }
+    const generatePayload = async (recipients:IMRecipient[])=>{
         const tag = Converter.utf8ToBytes('IOTACAT')
         const salt = IotaCatSDKObj._generateRandomStr(32)
         const groupId = IotaCatSDKObj._groupToGroupId('iceberg-collection-1')
@@ -56,10 +56,35 @@ describe('metafeature size test', () => {
         const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
         const preparedRecipients:IMRecipient[] = encryptedPayloadList.map((payload)=>({addr:payload.addr,mkey:Converter.bytesToHex(payload.payload)}))
         const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId!)
-        // pl should be less than 8192 bytes
+        return pl
+    }
+    test('test 20 recipients metafeature size', async () => {
+        const recipients = generateRecpientList(20)
+        const pl = await generatePayload(recipients)
         const plSize = pl.length
-        console.log('plSize',plSize)
         expect(plSize).toBeLessThan(8192)
+        expect(plSize).toEqual(1584)
+    })
+    test('test 50 recipients metafeature size', async () => {
+        const recipients = generateRecpientList(50)
+        const pl = await generatePayload(recipients)
+        const plSize = pl.length
+        expect(plSize).toBeLessThan(8192)
+        expect(plSize).toEqual(3864)
+    })
+    test('test 80 recipients metafeature size', async () => {
+        const recipients = generateRecpientList(80)
+        const pl = await generatePayload(recipients)
+        const plSize = pl.length
+        expect(plSize).toBeLessThan(8192)
+        expect(plSize).toEqual(6144)
+    })
+    test('test 100 recipients metafeature size', async () => {
+        const recipients = generateRecpientList(100)
+        const pl = await generatePayload(recipients)
+        const plSize = pl.length
+        expect(plSize).toBeLessThan(8192)
+        expect(plSize).toEqual(7664)
     })
 })
 

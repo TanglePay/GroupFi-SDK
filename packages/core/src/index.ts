@@ -141,10 +141,8 @@ class IotaCatSDK {
     async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
         const meta = this._groupNameToGroupMeta(group)
         if (!meta) return undefined
-        console.log('meta',meta)
         const {schemaVersion,messageType,authScheme} = meta
         const groupId = this._groupMetaToGroupId(meta)
-        console.log('groupId',groupId)
         
         return {
             schemaVersion,
@@ -197,7 +195,6 @@ class IotaCatSDK {
             }))
         }
         const message_ = this._compileMessage(message)
-        console.log('message_',message_, message)
         const msgProto = IM.IMMessage.create(message_)
         const msgBytes = IM.IMMessage.encode(msgProto).finish()
         return concatBytes(groupBytes, msgBytes)
@@ -213,12 +210,10 @@ class IotaCatSDK {
         const msg_ = IM.IMMessage.decode(payload)
         // @ts-ignore
         const msg = this._decompileMessage(msg_)
-        console.log('msg_',msg_,msg)
         let salt = ''
         if (msg.authScheme === MessageAuthSchemeRecipeintInMessage) {
             if (!decryptUsingPrivateKey) throw new Error('decryptUsingPrivateKey is required for MessageAuthSchemeRecipeintInMessage')
             const addressHashValue = this.getAddressHashStr(address)
-            console.log('msg.recipients',msg.recipients, address, addressHashValue)
             
             for (const recipient of msg.recipients) {
                 if (!recipient.mkey) continue
@@ -290,7 +285,6 @@ class IotaCatSDK {
         return true
     }
     _encrypt(content:string,salt:string){
-        console.log('encrypt',content,salt)
         const contentWord = CryptoJS.enc.Utf8.parse(content)
         const [key,iv] = this._getKdf(salt)
         const encrypted = CryptoJS.AES.encrypt(
@@ -301,7 +295,6 @@ class IotaCatSDK {
         return encrypted
     }
     _decrypt(content:string,salt:string){
-        console.log('decrypt',content,salt)
         const [kdf,iv] = this._getKdf(salt)
         const encryptedWord = CryptoJS.enc.Hex.parse(content)
         const encryptedParam = CryptoJS.lib.CipherParams.create({
