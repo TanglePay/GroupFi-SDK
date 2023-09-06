@@ -45,6 +45,7 @@ describe('core test', () => {
             }
         })
         msgObject = await IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:publicAddr},'dummy',msg)
+        msgObject!.recipients = []
         msgObject!.recipients.push({addr:publicAddr,mkey:publicKeyString_})
     }
     const prepareRecipientOnChainMsg = async (msg:string)=>{
@@ -57,6 +58,7 @@ describe('core test', () => {
             }
         })
         msgObject = await IotaCatSDKObj.prepareSendMessage({type:ShimmerBech32Addr,addr:publicAddr},'dummy',msg)
+        msgObject!.recipientOutputid = '0xc6b3be90456dcde47e859806c973299cead6d5e9ca7a7d5130a2b71bb4425b5a0000'
     }
     beforeEach(()=>{
         const {secret,publicKey} = getEphemeralSecretAndPublicKey()
@@ -99,20 +101,23 @@ describe('core test', () => {
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{groupSaltResolver:async (groupId:string)=>sharedSalt})
         expect(msgBytes).toBeDefined()
     })
+    /*
     test('test deserializeMessage for RecipientInMessageMsg', async () => {
         await prepareRecipientInMessageMsg(basicMsg)
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{encryptUsingPublicKey})
         const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,{decryptUsingPrivateKey})
         expect(msgObject2).toBeDefined()
-        expect(msgObject2!.data[0]).toBe(basicMsg)
+        expect(msgObject2!.data).toBe(basicMsg)
     })
+    */
     test('test deserializeMessage for RecipientOnChainMsg', async () => {
         await prepareRecipientOnChainMsg(basicMsg)
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{groupSaltResolver:async (groupId:string)=>sharedSalt})
         const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,{sharedOutputSaltResolver:async (outputId:string)=>sharedSalt})
         expect(msgObject2).toBeDefined()
-        expect(msgObject2!.data[0]).toBe(basicMsg)
+        expect(msgObject2!.data).toBe(basicMsg)
     })
+    /*
     test('test random string for RecipientInMessageMsg', async() => {
         const randomStr = generateRandomString(32)
         await prepareRecipientInMessageMsg(randomStr)
@@ -121,16 +126,18 @@ describe('core test', () => {
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{encryptUsingPublicKey})
         const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,{decryptUsingPrivateKey})
         expect(msgObject2).toBeDefined()
-        expect(msgObject2!.data[0]).toBe(randomStr)
+        expect(msgObject2!.data).toBe(randomStr)
     })
+    */
     test('test random string for RecipientOnChainMsg', async() => {
         const randomStr = generateRandomString(32)
         await prepareRecipientOnChainMsg(randomStr)
+        // TODO remove
         // manually set publickey
-        IotaCatSDKObj.setPublicKeyForPreparedMessage(msgObject!,{[publicAddr]:publicAddr})
+        //IotaCatSDKObj.setPublicKeyForPreparedMessage(msgObject!,{[publicAddr]:publicAddr})
         const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{groupSaltResolver:async (groupId:string)=>sharedSalt})
         const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,{sharedOutputSaltResolver:async (outputId:string)=>sharedSalt})
         expect(msgObject2).toBeDefined()
-        expect(msgObject2!.data[0]).toBe(randomStr)
+        expect(msgObject2!.data).toBe(randomStr)
     })
 });

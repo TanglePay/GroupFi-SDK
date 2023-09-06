@@ -1,13 +1,13 @@
 
-import CryptoJS from 'crypto-js'
-import { concatBytes, hexToBytes, bytesToHex, serializeListOfBytes, deserializeListOfBytes, addressHash } from 'iotacat-sdk-utils'
-import { IM } from './proto/compiled'
-import { IMMessage, Address, ShimmerBech32Addr,MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, MessageAuthScheme, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN } from './types';
-import { Message } from 'protobufjs';
-export * from './types';
-import type { MqttClient,connect } from "mqtt";
+import CryptoJS from 'crypto-js';
+import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes } from 'iotacat-sdk-utils';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN } from './types';
+import type { MqttClient } from "mqtt";
 import EventEmitter from 'events';
-import exp from 'constants';
+import { serializeRecipientList, deserializeRecipientList, serializeIMMessage, deserializeIMMessage } from './codec';
+import { WriteStream, ReadStream } from '@iota/util.js';
+import LZString from 'lz-string'
+export * from './types';
 const SHA256_LEN = 32
 class IotaCatSDK {
 
@@ -146,15 +146,19 @@ class IotaCatSDK {
         
         return {
             schemaVersion,
-            group: groupId,
+            groupId,
             messageType,
             authScheme,
             recipients:[],
-            data: [message]
+            data: message
         }
     }
 
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
+        // check if message.recipients is null
+        if (message.recipients == undefined) {
+            throw new Error("recipients is null");
+        }
         message.recipients = message.recipients.map(pair=>{
             pair.mkey = publicKeyMap[pair.addr]
             return pair
@@ -177,27 +181,32 @@ class IotaCatSDK {
     }
     async serializeMessage(message:IMMessage, extra:{encryptUsingPublicKey?:(key:string,data:string)=>Promise<Uint8Array>, groupSaltResolver?:(groupId:string)=>Promise<string>}):Promise<Uint8Array>{
         const {encryptUsingPublicKey,groupSaltResolver} = extra
-        const groupSha256Hash = message.group
+        const groupSha256Hash = message.groupId
         const groupBytes = hexToBytes(groupSha256Hash)
         let salt = ''
         if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
             salt = this._generateRandomStr(32)
         } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
             if (!groupSaltResolver) throw new Error('groupSaltResolver is required for MessageAuthSchemeRecipeintOnChain')
-            salt = await groupSaltResolver(message.group)
+            salt = await groupSaltResolver(message.groupId)
         }
-        message.data = message.data.map(msg=>this._encrypt(msg,salt))
+        message.data =this._encrypt(message.data,salt)
         if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
             if (!encryptUsingPublicKey) throw new Error('encryptUsingPublicKey is required for MessageAuthSchemeRecipeintInMessage')
+            // check if message.recipients is null
+            if (message.recipients == undefined) {
+                throw new Error("recipients is null");
+            }
             message.recipients = await Promise.all(message.recipients.map(async (pair)=>{
                 pair.mkey = bytesToHex(await encryptUsingPublicKey(pair.mkey,salt))
                 return pair
             }))
         }
         const message_ = this._compileMessage(message)
-        const msgProto = IM.IMMessage.create(message_)
-        const msgBytes = IM.IMMessage.encode(msgProto).finish()
-        return concatBytes(groupBytes, msgBytes)
+        const ws = new WriteStream()
+        serializeIMMessage(ws,message_)
+        const msgBytes = ws.finalBytes()
+        return msgBytes
     }
               
     async sleep(ms:number) {
@@ -205,22 +214,23 @@ class IotaCatSDK {
     }
     async deserializeMessage(messageBytes:Uint8Array, address:string, extra:{decryptUsingPrivateKey?:(data:Uint8Array)=>Promise<string>, sharedOutputSaltResolver?:(outputId:string)=>Promise<string>} ):Promise<IMMessage>{
         const {decryptUsingPrivateKey,sharedOutputSaltResolver} = extra
-        const groupBytes = messageBytes.slice(0,SHA256_LEN)
-        const payload = messageBytes.slice(SHA256_LEN)
-        const msg_ = IM.IMMessage.decode(payload)
-        // @ts-ignore
+        const rs = new ReadStream(messageBytes)
+        const msg_ = deserializeIMMessage(rs)
         const msg = this._decompileMessage(msg_)
         let salt = ''
         if (msg.authScheme === MessageAuthSchemeRecipeintInMessage) {
             if (!decryptUsingPrivateKey) throw new Error('decryptUsingPrivateKey is required for MessageAuthSchemeRecipeintInMessage')
             const addressHashValue = this.getAddressHashStr(address)
-            
+            // check if message.recipients is null
+            if (msg.recipients == undefined) {
+                throw new Error("recipients is null");
+            }
             for (const recipient of msg.recipients) {
                 if (!recipient.mkey) continue
                 if (recipient.addr !== addressHashValue) continue
                 salt = await decryptUsingPrivateKey(hexToBytes(recipient.mkey))
                 if (!salt) break
-                if (!this.validateFirstMsg(msg,salt)) {
+                if (!this.validateMsgWithSalt(msg,salt)) {
                     salt = ''
                     break
                 }
@@ -233,20 +243,28 @@ class IotaCatSDK {
             console.log('invalid message',msg,msg_)
             throw new Error('invalid message')
         }
-        msg.data = msg.data.map(data=>this._decrypt(data,salt))
+        msg.data = this._decrypt(msg.data,salt)
         return msg as IMMessage
     }
+    
+
     serializeRecipientList(recipients:IMRecipient[], groupId:string):Uint8Array{
         const groupBytes = hexToBytes(groupId)
         const recipientIntermediateList = recipients.map(recipient=>this._compileRecipient(recipient))
-        const bytesList = recipientIntermediateList.map(recipient=>IM.Recipient.encode(recipient).finish())
-        const pl =  serializeListOfBytes(bytesList)
-        return  concatBytes(groupBytes,pl)
+        const ws = new WriteStream()
+        serializeRecipientList(ws,{
+            schemaVersion: MessageCurrentSchemaVersion,
+            groupId: groupBytes,
+            list: recipientIntermediateList,
+        })
+        const pl = ws.finalBytes()
+        return pl;
     }
     deserializeRecipientList(recipientListBytes:Uint8Array):IMRecipient[]{
-        const payload = recipientListBytes.slice(SHA256_LEN)
-        const bytesList = deserializeListOfBytes(payload)
-        return bytesList.map(bytes=>IM.Recipient.decode(bytes)).map(recipient=>this._decompileRecipient(recipient))
+        const rs = new ReadStream(recipientListBytes)
+        const  {list} = deserializeRecipientList(rs)
+
+        return list.map(recipient=>this._decompileRecipient(recipient))
     }
     _compileRecipient(recipient:IMRecipient):IMRecipientIntermediate{
         return {
@@ -258,10 +276,37 @@ class IotaCatSDK {
         return bytesToHex(addressHash(addr,IOTACATTAG))
     }
     _compileMessage(message:IMMessage):IMMessageIntermediate{
-        const recipients = message.recipients.map(recipient=>this._compileRecipient(recipient))
-        return {
-            ...message,
-            recipients,
+        const {schemaVersion,groupId,messageType,authScheme, data} = message
+        const compressedData = LZString.compress(data)
+        const portionOfRes = {
+            schemaVersion,
+            groupId: hexToBytes(groupId),
+            messageType,
+            authScheme,
+            data: strToBytes(compressedData),
+        }
+        if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
+            // check if message.recipients is null
+            if (message.recipients == undefined) {
+                throw new Error("recipients is null");
+            }
+            const recipients = message.recipients.map(recipient=>this._compileRecipient(recipient))
+            return {
+                ...portionOfRes,
+                recipients,
+            }
+        } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
+            // check if message.recipientOutputid is null
+            if (message.recipientOutputid == undefined) {
+                throw new Error("recipient_outputid is null");
+            }
+            const recipientOutputid = hexToBytes(message.recipientOutputid)
+            return {
+                ...portionOfRes,
+                recipientOutputid,
+            }
+        } else {
+            throw new Error('invalid authScheme')
         }
     }
 
@@ -273,14 +318,42 @@ class IotaCatSDK {
         }
     }
     _decompileMessage(message:IMMessageIntermediate):IMMessage{
-        const recipients = message.recipients.map(recipient=>this._decompileRecipient(recipient))
-        return {
-            ...message,
-            recipients,
+        const {schemaVersion,groupId,messageType,authScheme,data} = message
+        const compressedString = bytesToStr(data)
+        const decompressedString = LZString.decompress(compressedString)
+        const portionOfRes = {
+            schemaVersion,
+            groupId: bytesToHex(groupId,false),
+            messageType,
+            authScheme,
+            data:decompressedString,
+        }
+        if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
+            // check if message.recipients is null
+            if (message.recipients == undefined) {
+                throw new Error("recipients is null");
+            }
+            const recipients = message.recipients.map(recipient=>this._decompileRecipient(recipient))
+            return {
+                ...portionOfRes,
+                recipients,
+            }
+        } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
+            // check if message.recipientOutputid is null
+            if (message.recipientOutputid == undefined) {
+                throw new Error("recipient_outputid is null");
+            }
+            const recipientOutputid = bytesToHex(message.recipientOutputid,true)
+            return {
+                ...portionOfRes,
+                recipientOutputid,
+            }
+        } else {
+            throw new Error('invalid authScheme')
         }
     }
-    validateFirstMsg(msg:IMMessage, salt:string){
-        const firstMsgDecrypted = this._decrypt(msg.data[0],salt)
+    validateMsgWithSalt(msg:IMMessage, salt:string){
+        const firstMsgDecrypted = this._decrypt(msg.data,salt)
         if (!firstMsgDecrypted) return false
         return true
     }

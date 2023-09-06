@@ -63,28 +63,28 @@ describe('metafeature size test', () => {
         const pl = await generatePayload(recipients)
         const plSize = pl.length
         expect(plSize).toBeLessThan(8192)
-        expect(plSize).toEqual(1584)
+        expect(plSize).toEqual(1466)// was 1584
     })
     test('test 50 recipients metafeature size', async () => {
         const recipients = generateRecpientList(50)
         const pl = await generatePayload(recipients)
         const plSize = pl.length
         expect(plSize).toBeLessThan(8192)
-        expect(plSize).toEqual(3864)
+        expect(plSize).toEqual(3566)// was 3864
     })
     test('test 80 recipients metafeature size', async () => {
         const recipients = generateRecpientList(80)
         const pl = await generatePayload(recipients)
         const plSize = pl.length
         expect(plSize).toBeLessThan(8192)
-        expect(plSize).toEqual(6144)
+        expect(plSize).toEqual(5666) // was 6144
     })
     test('test 100 recipients metafeature size', async () => {
         const recipients = generateRecpientList(100)
         const pl = await generatePayload(recipients)
         const plSize = pl.length
         expect(plSize).toBeLessThan(8192)
-        expect(plSize).toEqual(7664)
+        expect(plSize).toEqual(7066) // 7664
     })
 })
 

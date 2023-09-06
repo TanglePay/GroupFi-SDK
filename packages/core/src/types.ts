@@ -1,3 +1,5 @@
+import { type } from "os";
+
 export interface IMRecipient {
     addr: string;
     mkey: string;
@@ -6,23 +8,29 @@ export interface IMRecipientIntermediate {
     addr: Uint8Array;
     mkey: Uint8Array;
 }
+export interface IMRecipientIntermediateList {
+    list: IMRecipientIntermediate[];
+    schemaVersion: number;
+    groupId: Uint8Array; 
+}
+
 export interface IMMessage {
     schemaVersion: number; // 0 or 1, 1 byte
-    group: string; // sha256  bytes
+    groupId: string; // sha256  bytes
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
-    recipients: IMRecipient[];
+    recipients?: IMRecipient[];
     recipientOutputid?: string; // 32 bytes
-    data: string[];
+    data: string;
 }
 export interface IMMessageIntermediate {
     schemaVersion: number; // 0 or 1, 1 byte
-    group: string; // sha256  bytes
+    groupId: Uint8Array; // sha256  bytes
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
-    recipients: IMRecipientIntermediate[];
-    recipientOutputid?: string; // 32 bytes
-    data: string[];
+    recipients?: IMRecipientIntermediate[];
+    recipientOutputid?: Uint8Array; // 32 bytes
+    data: Uint8Array;
 }
 export const ShimmerBech32Addr = 1
 export const ShimmerEvmAddr = 2
@@ -45,3 +53,7 @@ export interface MessageGroupMeta {
 export type PushedValue = {type:1,groupId:string,outputId:string}| {type:2, groupId:string, sender:string, meta:string}
 export type MessageGroupMetaKey = keyof MessageGroupMeta
 export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain
+
+export const AddressHashLength = 20
+export const GroupIDLength = 32
+export const OutputIDLength = 34
