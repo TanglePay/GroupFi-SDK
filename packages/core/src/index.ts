@@ -412,8 +412,8 @@ class IotaCatSDK {
 
 const instance = new IotaCatSDK
 
-export const IOTACATTAG = 'IOTACATV2'
-export const IOTACATSHAREDTAG = 'IOTACATSHAREDV2'
+export const IOTACATTAG = 'GROUPFIV1'
+export const IOTACATSHAREDTAG = 'GROUPFISHAREDV1'
 export const IotaCatSDKObj = instance
-
+export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2']
 export * from './misc'

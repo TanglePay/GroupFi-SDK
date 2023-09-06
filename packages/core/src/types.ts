@@ -1,4 +1,3 @@
-import { type } from "os";
 
 export interface IMRecipient {
     addr: string;
