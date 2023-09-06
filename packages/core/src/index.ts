@@ -402,7 +402,7 @@ class IotaCatSDK {
         } else if (type === 2) {
             const sender = value.slice(2,34).toString('hex')
             const meta = value.slice(34).toString('hex')
-            const groupId = value.slice(34,66).toString('hex')
+            const groupId = value.slice(35,67).toString('hex')
             console.log('parsePushedValue',value,type,groupId)
             return {type, groupId, sender, meta}
         }
