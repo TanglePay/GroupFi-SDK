@@ -1,4 +1,4 @@
-import { AddressHashLength, GroupIDLength, IMMessageIntermediate, IMRecipientIntermediate, IMRecipientIntermediateList, MessageAuthSchemeRecipeintInMessage, MessageAuthSchemeRecipeintOnChain, OutputIDLength } from "./types";
+import { AddressHashLength, GroupIDLength, IMMessageIntermediate, IMRecipientIntermediate, IMRecipientIntermediateList, MessageAuthSchemeRecipeintInMessage, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, OutputIDLength } from "./types";
 import { WriteStream, ReadStream } from "@iota/util.js";
 
 export function serializeRecipient(writer: WriteStream, recipient: IMRecipientIntermediate): void {
@@ -94,24 +94,26 @@ export function serializeIMMessage(writer: WriteStream, message: IMMessageInterm
     // Write auth_scheme as Int8
     writer.writeUInt8("auth_scheme", message.authScheme);
 
-    if (message.authScheme == MessageAuthSchemeRecipeintOnChain) {
-        // check if message.recipientOutputid is null
-        if (message.recipientOutputid == undefined) {
-            throw new Error("recipient_outputid is null");
-        }
+    if (message.messageType === MessageTypePrivate) {
+        if (message.authScheme == MessageAuthSchemeRecipeintOnChain) {
+            // check if message.recipientOutputid is null
+            if (message.recipientOutputid == undefined) {
+                throw new Error("recipient_outputid is null");
+            }
 
-        // Validate and write recipient_outputid (fixed 34 bytes length)
-        if (message.recipientOutputid.byteLength !== OutputIDLength) {
-            throw new Error("recipient_outputid length is not 34 bytes");
+            // Validate and write recipient_outputid (fixed 34 bytes length)
+            if (message.recipientOutputid.byteLength !== OutputIDLength) {
+                throw new Error("recipient_outputid length is not 34 bytes");
+            }
+            writer.writeBytes("recipient_outputid", OutputIDLength, message.recipientOutputid);
+        } else if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
+            // check if message.recipients is null
+            if (message.recipients == undefined) {
+                throw new Error("recipients is null");
+            }
+            // Write recipients
+            serializeRecipientArray(writer, message.recipients);
         }
-        writer.writeBytes("recipient_outputid", OutputIDLength, message.recipientOutputid);
-    } else if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
-        // check if message.recipients is null
-        if (message.recipients == undefined) {
-            throw new Error("recipients is null");
-        }
-        // Write recipients
-        serializeRecipientArray(writer, message.recipients);
     }
 
     // Write the length of mkey as UInt16
@@ -128,11 +130,12 @@ export function deserializeIMMessage(reader: ReadStream): IMMessageIntermediate 
 
     let recipientOutputid: Uint8Array | undefined;
     let recipients: IMRecipientIntermediate[] | undefined;
-
-    if (authScheme === MessageAuthSchemeRecipeintOnChain) {
-        recipientOutputid = reader.readBytes("recipient_outputid", OutputIDLength);
-    } else if (authScheme === MessageAuthSchemeRecipeintInMessage) {
-        recipients = deserializeRecipientArray(reader);
+    if (messageType === MessageTypePrivate) {
+        if (authScheme === MessageAuthSchemeRecipeintOnChain) {
+            recipientOutputid = reader.readBytes("recipient_outputid", OutputIDLength);
+        } else if (authScheme === MessageAuthSchemeRecipeintInMessage) {
+            recipients = deserializeRecipientArray(reader);
+        }
     }
 
     const dataLength = reader.readUInt16("data length");

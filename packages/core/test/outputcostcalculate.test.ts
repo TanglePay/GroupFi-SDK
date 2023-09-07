@@ -90,7 +90,7 @@ describe('output cost test', () => {
         }
         const pl = await IotaCatSDKObj.serializeMessage(messageObj!,{groupSaltResolver:async (groupId:string)=>groupSaltMap[groupId]})
         // pl should be less than 8192 bytes
-        expect(pl.length).toBeLessThan(331)
+        expect(pl.length).toBeLessThan(456)
         const cost = calculateCost(pl)
         expect(cost).toBeLessThan(77100)// was 77100
 

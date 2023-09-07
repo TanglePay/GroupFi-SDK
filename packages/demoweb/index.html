@@ -301,7 +301,7 @@
                     }
                 })
                 const {sender,message} = res
-                const messageStr = message.data[0]
+                const messageStr = message.data
                 const makedMessageList = [{sender,message:messageStr,timestamp:Math.floor(Date.now()/1000)}]
                 const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
                 const makelist = (messageList) => messageList.map(messageItem => {

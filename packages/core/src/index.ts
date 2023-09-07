@@ -179,29 +179,43 @@ class IotaCatSDK {
         const json = await res.json()
         return json
     }
+    _compressMessageText(message:IMMessage){
+        const compressed = LZString.compress(message.data)
+        message.data = compressed
+    }
+    _decompressMessageText(message:IMMessage){
+        const decompressed = LZString.decompress(message.data)
+        message.data = decompressed
+    }
     async serializeMessage(message:IMMessage, extra:{encryptUsingPublicKey?:(key:string,data:string)=>Promise<Uint8Array>, groupSaltResolver?:(groupId:string)=>Promise<string>}):Promise<Uint8Array>{
         const {encryptUsingPublicKey,groupSaltResolver} = extra
         const groupSha256Hash = message.groupId
         const groupBytes = hexToBytes(groupSha256Hash)
-        let salt = ''
-        if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
-            salt = this._generateRandomStr(32)
-        } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
-            if (!groupSaltResolver) throw new Error('groupSaltResolver is required for MessageAuthSchemeRecipeintOnChain')
-            salt = await groupSaltResolver(message.groupId)
-        }
-        message.data =this._encrypt(message.data,salt)
-        if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
-            if (!encryptUsingPublicKey) throw new Error('encryptUsingPublicKey is required for MessageAuthSchemeRecipeintInMessage')
-            // check if message.recipients is null
-            if (message.recipients == undefined) {
-                throw new Error("recipients is null");
+        this._compressMessageText(message)
+        // data encryption related
+        if (message.messageType === MessageTypePrivate) {
+            let salt = ''
+            if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
+                salt = this._generateRandomStr(32)
+            } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
+                if (!groupSaltResolver) throw new Error('groupSaltResolver is required for MessageAuthSchemeRecipeintOnChain')
+                salt = await groupSaltResolver(message.groupId)
             }
-            message.recipients = await Promise.all(message.recipients.map(async (pair)=>{
-                pair.mkey = bytesToHex(await encryptUsingPublicKey(pair.mkey,salt))
-                return pair
-            }))
+            message.data =this._encrypt(message.data,salt)
+            // recipient handling
+            if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
+                if (!encryptUsingPublicKey) throw new Error('encryptUsingPublicKey is required for MessageAuthSchemeRecipeintInMessage')
+                // check if message.recipients is null
+                if (message.recipients == undefined) {
+                    throw new Error("recipients is null");
+                }
+                message.recipients = await Promise.all(message.recipients.map(async (pair)=>{
+                    pair.mkey = bytesToHex(await encryptUsingPublicKey(pair.mkey,salt))
+                    return pair
+                }))
+            }
         }
+        
         const message_ = this._compileMessage(message)
         const ws = new WriteStream()
         serializeIMMessage(ws,message_)
@@ -217,33 +231,37 @@ class IotaCatSDK {
         const rs = new ReadStream(messageBytes)
         const msg_ = deserializeIMMessage(rs)
         const msg = this._decompileMessage(msg_)
-        let salt = ''
-        if (msg.authScheme === MessageAuthSchemeRecipeintInMessage) {
-            if (!decryptUsingPrivateKey) throw new Error('decryptUsingPrivateKey is required for MessageAuthSchemeRecipeintInMessage')
-            const addressHashValue = this.getAddressHashStr(address)
-            // check if message.recipients is null
-            if (msg.recipients == undefined) {
-                throw new Error("recipients is null");
-            }
-            for (const recipient of msg.recipients) {
-                if (!recipient.mkey) continue
-                if (recipient.addr !== addressHashValue) continue
-                salt = await decryptUsingPrivateKey(hexToBytes(recipient.mkey))
-                if (!salt) break
-                if (!this.validateMsgWithSalt(msg,salt)) {
-                    salt = ''
-                    break
+        // decryption handling
+        if (msg.messageType === MessageTypePrivate) {
+            let salt = ''
+            if (msg.authScheme === MessageAuthSchemeRecipeintInMessage) {
+                if (!decryptUsingPrivateKey) throw new Error('decryptUsingPrivateKey is required for MessageAuthSchemeRecipeintInMessage')
+                const addressHashValue = this.getAddressHashStr(address)
+                // check if message.recipients is null
+                if (msg.recipients == undefined) {
+                    throw new Error("recipients is null");
                 }
+                for (const recipient of msg.recipients) {
+                    if (!recipient.mkey) continue
+                    if (recipient.addr !== addressHashValue) continue
+                    salt = await decryptUsingPrivateKey(hexToBytes(recipient.mkey))
+                    if (!salt) break
+                    if (!this.validateMsgWithSalt(msg,salt)) {
+                        salt = ''
+                        break
+                    }
+                }
+            } else if (msg.authScheme === MessageAuthSchemeRecipeintOnChain) {
+                if (!sharedOutputSaltResolver) throw new Error('sharedOutputSaltResolver is required for MessageAuthSchemeRecipeintOnChain')
+                salt = await sharedOutputSaltResolver(msg.recipientOutputid!)
             }
-        } else if (msg.authScheme === MessageAuthSchemeRecipeintOnChain) {
-            if (!sharedOutputSaltResolver) throw new Error('sharedOutputSaltResolver is required for MessageAuthSchemeRecipeintOnChain')
-            salt = await sharedOutputSaltResolver(msg.recipientOutputid!)
+            if (!salt) {
+                console.log('invalid message',msg,msg_)
+                throw new Error('invalid message')
+            }
+            msg.data = this._decrypt(msg.data,salt)
         }
-        if (!salt) {
-            console.log('invalid message',msg,msg_)
-            throw new Error('invalid message')
-        }
-        msg.data = this._decrypt(msg.data,salt)
+        this._decompressMessageText(msg)
         return msg as IMMessage
     }
     
@@ -277,36 +295,39 @@ class IotaCatSDK {
     }
     _compileMessage(message:IMMessage):IMMessageIntermediate{
         const {schemaVersion,groupId,messageType,authScheme, data} = message
-        const compressedData = LZString.compress(data)
         const portionOfRes = {
             schemaVersion,
             groupId: hexToBytes(groupId),
             messageType,
             authScheme,
-            data: strToBytes(compressedData),
+            data: strToBytes(data),
         }
-        if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
-            // check if message.recipients is null
-            if (message.recipients == undefined) {
-                throw new Error("recipients is null");
-            }
-            const recipients = message.recipients.map(recipient=>this._compileRecipient(recipient))
-            return {
-                ...portionOfRes,
-                recipients,
-            }
-        } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
-            // check if message.recipientOutputid is null
-            if (message.recipientOutputid == undefined) {
-                throw new Error("recipient_outputid is null");
-            }
-            const recipientOutputid = hexToBytes(message.recipientOutputid)
-            return {
-                ...portionOfRes,
-                recipientOutputid,
+        if (message.messageType === MessageTypePrivate) {
+            if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
+                // check if message.recipients is null
+                if (message.recipients == undefined) {
+                    throw new Error("recipients is null");
+                }
+                const recipients = message.recipients.map(recipient=>this._compileRecipient(recipient))
+                return {
+                    ...portionOfRes,
+                    recipients,
+                }
+            } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
+                // check if message.recipientOutputid is null
+                if (message.recipientOutputid == undefined) {
+                    throw new Error("recipient_outputid is null");
+                }
+                const recipientOutputid = hexToBytes(message.recipientOutputid)
+                return {
+                    ...portionOfRes,
+                    recipientOutputid,
+                }
+            } else {
+                throw new Error('invalid authScheme')
             }
         } else {
-            throw new Error('invalid authScheme')
+            return portionOfRes
         }
     }
 
@@ -320,37 +341,49 @@ class IotaCatSDK {
     _decompileMessage(message:IMMessageIntermediate):IMMessage{
         const {schemaVersion,groupId,messageType,authScheme,data} = message
         const compressedString = bytesToStr(data)
-        const decompressedString = LZString.decompress(compressedString)
         const portionOfRes = {
             schemaVersion,
             groupId: bytesToHex(groupId,false),
             messageType,
             authScheme,
-            data:decompressedString,
+            data:bytesToStr(data),
         }
-        if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
-            // check if message.recipients is null
-            if (message.recipients == undefined) {
-                throw new Error("recipients is null");
-            }
-            const recipients = message.recipients.map(recipient=>this._decompileRecipient(recipient))
-            return {
-                ...portionOfRes,
-                recipients,
-            }
-        } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
-            // check if message.recipientOutputid is null
-            if (message.recipientOutputid == undefined) {
-                throw new Error("recipient_outputid is null");
-            }
-            const recipientOutputid = bytesToHex(message.recipientOutputid,true)
-            return {
-                ...portionOfRes,
-                recipientOutputid,
+        if (message.messageType === MessageTypePrivate) {
+            if (message.authScheme === MessageAuthSchemeRecipeintInMessage) {
+                // check if message.recipients is null
+                if (message.recipients == undefined) {
+                    throw new Error("recipients is null");
+                }
+                const recipients = message.recipients.map(recipient=>this._decompileRecipient(recipient))
+                return {
+                    ...portionOfRes,
+                    recipients,
+                }
+            } else if (message.authScheme === MessageAuthSchemeRecipeintOnChain) {
+                // check if message.recipientOutputid is null
+                if (message.recipientOutputid == undefined) {
+                    throw new Error("recipient_outputid is null");
+                }
+                const recipientOutputid = bytesToHex(message.recipientOutputid,true)
+                return {
+                    ...portionOfRes,
+                    recipientOutputid,
+                }
+            } else {
+                throw new Error('invalid authScheme')
             }
         } else {
-            throw new Error('invalid authScheme')
+            return portionOfRes
         }
+
+    }
+    makeErrorForGroupMemberTooMany(){
+        const err = new Error('group member too many')
+        err.name = 'GroupMemberTooManyError'
+        return err
+    }
+    verifyErrorForGroupMemberTooMany(err:any){
+        return err.name === 'GroupMemberTooManyError'
     }
     validateMsgWithSalt(msg:IMMessage, salt:string){
         const firstMsgDecrypted = this._decrypt(msg.data,salt)
@@ -412,8 +445,8 @@ class IotaCatSDK {
 
 const instance = new IotaCatSDK
 
-export const IOTACATTAG = 'GROUPFIV1'
-export const IOTACATSHAREDTAG = 'GROUPFISHAREDV1'
+export const IOTACATTAG = 'GROUPFIV2'
+export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
 export const IotaCatSDKObj = instance
-export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2']
+export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFISHAREDV1']
 export * from './misc'

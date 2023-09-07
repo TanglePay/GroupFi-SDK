@@ -44,6 +44,9 @@ import CryptoJS from 'crypto-js';
 import hkdf from 'js-crypto-hkdf';
 import { IMRecipient } from "iotacat-sdk-core";
 import { EventEmitter } from 'events';
+import { GroupMemberTooManyToPublicThreshold } from "iotacat-sdk-core";
+import { GroupMemberTooManyError } from "iotacat-sdk-core";
+import { MessageTypePublic } from "iotacat-sdk-core";
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -262,9 +265,16 @@ class IotaCatClient {
             }
             console.log('_getAddressListForGroupFromInxApi res', res);
             const data = await res.json() as NftItemReponse[]
-            return data.filter(o=>o.publicKey)
+            const memberList = data.filter(o=>o.publicKey)
+            // if length is more than GroupMemberTooManyThreshold, throw GroupMemberTooManyError
+            if (memberList.length > GroupMemberTooManyToPublicThreshold) throw IotaCatSDKObj.makeErrorForGroupMemberTooMany()
+            return memberList
         } catch (error) {
             console.log('_getAddressListForGroupFromInxApi error',error)
+            if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+                console.log('re throwing', error);
+                throw error
+            }
         }
         return []
     }
@@ -303,9 +313,17 @@ class IotaCatClient {
     //ensure group have shared output, if not create one
     async ensureGroupHaveSharedOutput(groupId:string){
         this._ensureClientInited()
-        const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
-        if (!res) {
-            await this._makeSharedOutputForGroup(groupId)
+        try {
+            const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+            if (!res) {
+                await this._makeSharedOutputForGroup(groupId)
+            }
+        } catch (error) {
+            if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+                console.log('GroupMemberTooMany,public for now', error);
+            } else {
+                throw error
+            }
         }
     }
     async _getSaltForGroup(groupId:string, address:string):Promise<{salt:string, outputId:string}>{
@@ -352,6 +370,7 @@ class IotaCatClient {
     }
     async _makeSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
          const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)
+         
          const recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
 
         console.log('_makeSharedOutputForGroup recipients', recipients);
@@ -649,27 +668,37 @@ class IotaCatClient {
         try {
             const protocolInfo = await this._client!.protocolInfo();
             console.log('ProtocolInfo', protocolInfo);
-
-
             const groupSaltMap:Record<string,string> = {}
-            if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
-                const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)
-                const recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
+            const groupSaltResolver = async (groupId:string)=>groupSaltMap[groupId]
+            try {
+                
+                if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
+                    const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)
+                    const recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
 
 
-                message.recipients = recipients
-            } else {
-                // get shared output
-                const {salt, outputId} = await this._getSaltForGroup(groupId,senderAddr)
-                message.recipientOutputid = outputId
-                groupSaltMap[groupId] = salt
+                    message.recipients = recipients
+                } else {
+                    // get shared output
+                    
+                    const {salt, outputId} = await this._getSaltForGroup(groupId,senderAddr)
+                    message.recipientOutputid = outputId
+                    groupSaltMap[groupId] = salt
+                    
+                }
+            } catch (error) {
+                if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+                    message.messageType = MessageTypePublic
+                } else {
+                    throw error
+                }
             }
             console.log('MessageWithPublicKeys', message);
             const pl = await IotaCatSDKObj.serializeMessage(message,{encryptUsingPublicKey:async (key,data)=>{
                 const publicKey = Converter.hexToBytes(key)
                 const encrypted = await encrypt(publicKey, data, tag)
                 return encrypted.payload
-            },groupSaltResolver:async (groupId:string)=>groupSaltMap[groupId]})
+            },groupSaltResolver})
             console.log('MessagePayload', pl);
             
             const tagFeature: ITagFeature = {
@@ -931,7 +960,7 @@ class IotaCatClient {
             if (!payload) return undefined;
             return {
             timestamp:messages[index].timestamp,
-            message:payload.message.data[0]??'',
+            message:payload.message.data??'',
             sender:payload.sender
             }
         })

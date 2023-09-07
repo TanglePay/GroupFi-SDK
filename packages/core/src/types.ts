@@ -56,3 +56,20 @@ export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typ
 export const AddressHashLength = 20
 export const GroupIDLength = 32
 export const OutputIDLength = 34
+
+export const GroupMemberTooManyToPublicThreshold = 100
+
+export class GroupMemberTooManyError extends Error {
+    constructor() {
+        super(`members in group exceed ${GroupMemberTooManyToPublicThreshold}`)
+         // Set the name for the custom error
+         this.name = this.constructor.name;
+    
+         // This ensures that CustomError instances have a proper stack trace.
+         if (Error.captureStackTrace) {
+             Error.captureStackTrace(this, this.constructor);
+         }
+    }
+    
+    
+}
