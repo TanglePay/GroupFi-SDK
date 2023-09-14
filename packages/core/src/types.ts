@@ -70,6 +70,12 @@ export class GroupMemberTooManyError extends Error {
              Error.captureStackTrace(this, this.constructor);
          }
     }
-    
-    
+}
+export type IMessage = {messageId:string, groupId:string, sender:string, message:string, timestamp:number}
+export interface IGroupFiSDK {
+    bootstrap(): Promise<void>;
+    getGroups(): Promise<{groupId:string,groupName:string}[]>;
+    getInboxMessages(from?:string,until?:string,limit?:number): Promise<IMessage[]>;
+    sendMessage(groupId:string, message:string): Promise<{status:number,message?:string}>;
+    onMessage(callback:(message:IMessage)=>void):void;
 }

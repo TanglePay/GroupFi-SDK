@@ -87,6 +87,9 @@ class IotaCatSDK {
         const groupId = CryptoJS.SHA256(JSON.stringify(sortedMap)).toString(CryptoJS.enc.Hex)
         return groupId
     }
+    addressToInboxId(address:string):string{
+        return CryptoJS.SHA256(address).toString(CryptoJS.enc.Hex)
+    }
     _groupIdToGroupMembers(groupId:string):string[]{
         return this._groupIdCache[groupId] || []
     }

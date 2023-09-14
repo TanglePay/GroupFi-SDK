@@ -282,19 +282,30 @@ class IotaCatClient {
         try {
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
             try {
-            // @ts-ignore
-            const res = await fetch(url,{
-                method:'GET',
-                headers:{
-                'Content-Type':'application/json'
-                }})
+                // @ts-ignore
+                const res = await fetch(url,{
+                    method:'GET',
+                    headers:{
+                    'Content-Type':'application/json'
+                    }})
+                if (!res.ok) {
+                    if (res.status === 901) {
+                        throw IotaCatSDKObj.makeErrorForGroupMemberTooMany()
+                    } 
+                }                    
                 const data = await res.json() as {outputId:string}
                 return data
             } catch (error) {
+                if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+                    throw error
+                }
                 console.log('error',error)
             }
             
         } catch (error) {
+            if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+                throw error
+            }
             console.log('error',error)
         }
         return undefined
