@@ -76,6 +76,10 @@ type MessageResponse = {
     headToken:string
     tailToken:string
 }
+type InboxMessageResponse = {
+    messages:MessageResponseItem[]
+    token:string
+}
 type MessageBody = {
     sender:string,
     message:string,
@@ -964,8 +968,33 @@ class IotaCatClient {
             console.log('error',error)
         }
     }
+    // fetch inbox message list
+    async fetchInboxMessageList(address:string, coninuationToken?:string, limit:number=10) {
+        try {
+            const params = {address:`${address}`,size:limit, token:coninuationToken}
+            const paramStr = formatUrlParams(params)
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/inboxmessage${paramStr}`
+            // @ts-ignore
+            const res = await fetch(url,{
+                method:'GET',
+                headers:{
+                'Content-Type':'application/json',
+                }})
+            const data = await res.json() as InboxMessageResponse
+            const {messages,token} = data
+            const messageList = await this._messagesToMessageBodies(messages,address)
+            return {messageList,token}
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
     async _messageResponseToMesssageListAndTokens(response:MessageResponse, address:string):Promise<{messageList:MessageBody[],headToken?:string,  tailToken?:string}>{
         const messages = response.messages
+        const messageList = await this._messagesToMessageBodies(messages,address)
+        return {messageList,headToken:response.headToken, tailToken:response.tailToken}
+    }
+    // messagesToMessageBodies
+    async _messagesToMessageBodies(messages:MessageResponseItem[],address:string):Promise<MessageBody[]>{
         const messagePayloads = await Promise.all(messages.map(msg => this.getMessageFromOutputId(msg.outputId,address)))
         const messageBodyArr:(MessageBody|undefined)[] = messagePayloads.map((payload,index)=>{
             if (!payload) return undefined;
@@ -976,7 +1005,7 @@ class IotaCatClient {
             }
         })
         const filterdMessageBodyArr = messageBodyArr.filter(msg=>msg!=undefined) as MessageBody[]
-        return {messageList:filterdMessageBodyArr,headToken:response.headToken, tailToken:response.tailToken}
+        return filterdMessageBodyArr
     }
 }
 
