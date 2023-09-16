@@ -10,7 +10,7 @@
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
-    "build": "yarn run clean && yarn run build:type && yarn run build:source",
+    "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
     "lint": "eslint src --fix --ext .ts,.js",
     "test": "jest"
   },
@@ -39,7 +39,8 @@
     "@iota/pow-node.js": "^2.0.0-rc.3",
     "@iota/util.js": "^2.0.0-rc.2",
     "crypto-js": "^4.1.1",
-    "iotacat-sdk-core": "^0.0.1",
+    "iotacat-sdk-core": "workspace:^",
+    "iotacat-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",
     "p-limit": "^4.0.0"
   },

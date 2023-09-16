@@ -7,10 +7,11 @@
   "type": "module",
   "moduleNameIife": "iotacatutils",
   "scripts": {
+    "bootstrap": "pnpm install -r",
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
-    "build": "yarn run clean && yarn run build:type && yarn run build:source",
+    "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
     "lint": "eslint src --fix --ext .ts,.js",
     "test": "jest"
   },

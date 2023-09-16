@@ -100,6 +100,18 @@ class GroupFiSDKFacade {
     }, 0);
   }
 
+  // getInboxMessage
+  async getInboxMessages(continuationToken?:string,limit = 5): Promise<{messageList:IMessage[],nextToken?:string}> {
+    this._ensureWalletConnected();
+    const res = await client.fetchInboxMessageList(
+      this._address!,
+      continuationToken,
+      limit
+    );
+    const { messageList, token } = res ?? {};
+    const fulfilledMessageList = messageList as IMessage[];
+    return {messageList:fulfilledMessageList,nextToken:token};
+  }
   async sendMessage(groupId: string, message: string) {
     const address: Address = {
       type: ShimmerBech32Addr,

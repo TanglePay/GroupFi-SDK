@@ -45,7 +45,6 @@ import hkdf from 'js-crypto-hkdf';
 import { IMRecipient } from "iotacat-sdk-core";
 import { EventEmitter } from 'events';
 import { GroupMemberTooManyToPublicThreshold } from "iotacat-sdk-core";
-import { GroupMemberTooManyError } from "iotacat-sdk-core";
 import { MessageTypePublic } from "iotacat-sdk-core";
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
@@ -1000,6 +999,7 @@ class IotaCatClient {
             if (!payload) return undefined;
             return {
             timestamp:messages[index].timestamp,
+            groupId:payload.message.groupId,
             message:payload.message.data??'',
             sender:payload.sender
             }
