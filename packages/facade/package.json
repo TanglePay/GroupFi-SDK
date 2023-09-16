@@ -1,0 +1,36 @@
+{
+  "name": "groupfi_trollbox_facade",
+  "version": "0.0.0",
+  "description": "GroupFi Facade",
+  "author": "",
+  "homepage": "https://github.com/TanglePay/GroupFi-SDK#readme",
+  "license": "ISC",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/index.d.ts",
+  "directories": {
+    "lib": "lib",
+    "test": "__tests__"
+  },
+  "files": [
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TanglePay/GroupFi-SDK.git"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "build:type": "tsc",
+    "build:source": "rollup --config rollup.config.mjs",
+    "build": "yarn run clean && yarn run build:type && yarn run build:source",
+    "lint": "eslint src --fix --ext .ts,.js",
+    "test": "jest"
+  },
+  "bugs": {
+    "url": "https://github.com/TanglePay/GroupFi-SDK/issues"
+  },
+  "dependencies": {
+    "mqtt": "^5.0.5"
+  }
+}
