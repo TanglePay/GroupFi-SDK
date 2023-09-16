@@ -37,7 +37,8 @@ export type Address = {
     type: typeof ShimmerBech32Addr | typeof ShimmerEvmAddr
     addr: string
 }
-export const INX_GROUPFI_DOMAIN = "test.api.iotacat.com"
+export const INX_GROUPFI_DOMAIN = "test2.api.iotacat.com"
+export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
 export const MessageTypePrivate = 1
 export const MessageTypePublic = 2
@@ -78,4 +79,16 @@ export interface IGroupFiSDK {
     getInboxMessages(from?:string,until?:string,limit?:number): Promise<IMessage[]>;
     sendMessage(groupId:string, message:string): Promise<{status:number,message?:string}>;
     onMessage(callback:(message:IMessage)=>void):void;
+}
+
+export const GroupQualifyTypeNFT = 0
+export const GroupQualifyTypeToken = 1
+export type GroupQualifyType  = typeof GroupQualifyTypeNFT | typeof GroupQualifyTypeToken
+export interface IGroupQualify {
+    groupId:string
+    groupName:string
+    groupQualifyType:GroupQualifyType
+    ipfsLink:string
+    tokenName:string
+    tokenThres:string
 }

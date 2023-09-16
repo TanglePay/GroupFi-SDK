@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify } from './types';
 import type { MqttClient } from "mqtt";
 import EventEmitter from 'events';
 import { serializeRecipientList, deserializeRecipientList, serializeIMMessage, deserializeIMMessage } from './codec';
@@ -156,7 +156,27 @@ class IotaCatSDK {
             data: message
         }
     }
-
+    async fetchIpfsOrigins(address:string):Promise<string[]>{
+        const url = `${NFT_CONFIG_URL}/nft.json?v=${new Date().getTime()}`
+        const res = await fetch(url)
+        const json = await res.json()
+        const {ipfsOrigins} = json
+        return ipfsOrigins
+    }
+    async fetchAddressQualifiedGroups(address:string,ipfsOrigins:string[]):Promise<IGroupQualify[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressgroupdetails?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json() as IGroupQualify[]
+        const ipfsPolyfilled = json.map((group:IGroupQualify)=>{
+            const ipfsOrigin = ipfsOrigins[Math.floor(Math.random() * ipfsOrigins.length)]
+            // check group.ipfsLink is contains ipfs://, if so, replace it with ipfsOrigin/ipfs/{ipfsLink replace ipfs:// with empty string}
+            if (group.ipfsLink.indexOf('ipfs://') === 0) {
+                group.ipfsLink = `${ipfsOrigin}/ipfs/${group.ipfsLink.replace('ipfs://','')}`
+            }
+            return group
+        })
+        return ipfsPolyfilled
+    }
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         // check if message.recipients is null
         if (message.recipients == undefined) {
