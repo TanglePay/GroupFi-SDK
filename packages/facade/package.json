@@ -8,6 +8,7 @@
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
+  "moduleNameIife": "iotacatsdkfacade",
   "directories": {
     "lib": "lib",
     "test": "__tests__"
@@ -31,7 +32,8 @@
     "url": "https://github.com/TanglePay/GroupFi-SDK/issues"
   },
   "dependencies": {
-    "mqtt": "^5.0.5",
+    "iotacat-sdk-client": "workspace:^",
+    "iotacat-sdk-core": "workspace:^",
     "tanglepaysdk-client": "^0.1.7"
   }
 }

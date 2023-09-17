@@ -6,7 +6,8 @@ import {
   IMessage,
 } from 'iotacat-sdk-core';
 import client from 'iotacat-sdk-client';
-import { connect } from 'mqtt';
+
+import { MessageBody } from 'iotacat-sdk-client';
 
 class GroupFiSDKFacade {
   private _address: string | undefined;
@@ -88,7 +89,7 @@ class GroupFiSDKFacade {
   }
 
   async setupMqttConnection() {
-    IotaCatSDKObj.setupMqttConnection(connect as any);
+    IotaCatSDKObj.setupMqttConnection({} as any);
     IotaCatSDKObj.switchMqttAddress(this._address!);
     this._mqttConnected = true;
   }
@@ -101,15 +102,37 @@ class GroupFiSDKFacade {
   }
 
   // getInboxMessage
-  async getInboxMessages(continuationToken?:string,limit = 5): Promise<{messageList:IMessage[],nextToken?:string}> {
+  async getInboxMessages(continuationToken?:string,limit = 3): Promise<{messageList:IMessage[],nextToken?:string}> {
     this._ensureWalletConnected();
-    const res = await client.fetchInboxMessageList(
-      this._address!,
-      continuationToken,
-      limit
-    );
-    const { messageList, token } = res ?? {};
-    const fulfilledMessageList = messageList as IMessage[];
+    const resstr = await IotaSDK.request({
+      method: 'iota_im_groupinboxmessagelist',
+      params: {
+      content: {
+          addr: this._address!,
+          continuationToken,
+          limit,
+      }
+      }
+  }) as string | undefined;
+    if (!resstr) {
+      return {messageList:[]};
+    }
+    console.log('***iota_im_groupinboxmessagelist success', resstr);
+    const res = JSON.parse(resstr) as { messageList: MessageBody[]; token?:string };
+    console.log('***iota_im_groupinboxmessagelist success', res);
+    const messageList = res.messageList;
+    const token = res.token;
+    // make fake message id
+    // log 
+    console.log('messageList', messageList);
+    const fulfilledMessageList = messageList != undefined? messageList.map((msgBody) => {
+      //const messageId = Math.random().toString(36).substr(2, 9);
+      //@ts-ignore
+      const msg:IMessage = msgBody
+      return msg
+    }) : [];
+    // log fulfilledMessageList
+    console.log('fulfilledMessageList', fulfilledMessageList);
     return {messageList:fulfilledMessageList,nextToken:token};
   }
   async sendMessage(groupId: string, message: string) {
@@ -131,6 +154,11 @@ class GroupFiSDKFacade {
     }
   }
 
+  async bootstrap() {
+    await this.waitWalletReadyAndConnectWallet();
+    //IotaCatSDKObj.setupMqttConnection(connect as any);
+    //IotaCatSDKObj.switchMqttAddress(this._address!);
+  }
   async waitWalletReadyAndConnectWallet() {
     return new Promise((resolve, reject) => {
       IotaSDK._events.on('iota-ready', async () => {
@@ -166,11 +194,7 @@ export default intance;
 
 //   private _nodeId: number | undefined;
 
-//   async bootstrap() {
-//     await this.connectWallet();
-//     IotaCatSDKObj.setupMqttConnection(connect as any);
-//     IotaCatSDKObj.switchMqttAddress(this._address!);
-//   }
+
 
 // async connectWallet(): Promise<ConnectTanglePayRes | null> {
 //   return new Promise((resolve, reject) => {

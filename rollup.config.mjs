@@ -30,10 +30,39 @@ export function decorateIifeExternal(config,obj,idx=0){
     config.output[idx] = Object.assign(config.output[idx],{globals: obj})
     config.external = Object.keys(obj)
 }
-
 export function createRollupConfig(pkg) {
-    const moduleName = pkg.name;
+    return [
+        createIifeRollupConfig(pkg),
+        createCommonEsmRollupConfig(pkg)
+    ];
+}
+export function createIifeRollupConfig(pkg) {
     const moduleNameIife = pkg.moduleNameIife;
+    const author = pkg.author;
+    const banner = `/**
+                       * @license
+                       * author: ${author}
+                       * ${moduleNameIife}.js v${pkg.version}
+                       * Released under the ${pkg.license} license.
+                       */
+                    `;
+
+    return {
+        input: 'src/index.ts',
+        output: [{
+            file: 'dist/iife/index.js',
+            format: 'iife',
+            name: moduleNameIife,
+            sourcemap: true,
+            banner
+        }],
+        plugins: getPlugins(),
+        external: getExternals(pkg)
+    };
+}
+
+export function createCommonEsmRollupConfig(pkg) {
+    const moduleName = pkg.name;
     const author = pkg.author;
     const banner = `/**
                        * @license
@@ -42,52 +71,52 @@ export function createRollupConfig(pkg) {
                        * Released under the ${pkg.license} license.
                        */
                     `;
-    return [{
-        input: 'src/index.ts', // bundle entry point
-        output:  [
+
+    return {
+        input: 'src/index.ts',
+        output: [
             {
-                file: 'dist/iife/index.js', // The IIFE bundle for browsers
-                format: 'iife',
-                name: moduleNameIife, // This will be the global variable name in browsers
+                file: 'dist/cjs/index.js',
+                format: 'cjs',
                 sourcemap: true,
                 banner
             },
             {
-              file: 'dist/cjs/index.js', // The CommonJS bundle
-              format: 'cjs',
-              sourcemap: true,
-              banner
-            },
-            {
-              file: 'dist/esm/index.js', // The ESM bundle
-              format: 'esm',
-              sourcemap: true,
-              banner
-            },
-            
-          ],
-        plugins: [
-            typescript({
-                "declaration": true,
-                "declarationMap": true,
-                "outDir": "dist",
-                "rootDir": "src",
-            }), // Transpiles your TypeScript
-            nodePolyfills(), // Polyfills required Node.js builtins
-            babel({ 
-                exclude: 'node_modules/**', 
-                babelHelpers: 'bundled' 
-            }), // Transpiles your JavaScript to ES5
-            commonjs(), // Converts CommonJS modules to ES6
-            resolve(), // Allows node_modules resolution
-            terser(), // Minifies the output
-            filesize() // Show the size of the output
+                file: 'dist/esm/index.js',
+                format: 'esm',
+                sourcemap: true,
+                banner
+            }
         ],
-        external: [
-            ...Object.keys(pkg.dependencies || {}),
-            ...Object.keys(pkg.devDependencies || {}),
-        ],
-
-    }];
-
+        plugins: getPlugins(),
+        external: getExternals(pkg)
+    };
 }
+
+function getPlugins() {
+    return [
+        typescript({
+            "declaration": true,
+            "declarationMap": true,
+            "outDir": "dist",
+            "rootDir": "src",
+        }),
+        nodePolyfills(),
+        babel({ 
+            exclude: 'node_modules/**', 
+            babelHelpers: 'bundled' 
+        }),
+        commonjs(),
+        resolve(),
+        terser(),
+        filesize()
+    ];
+}
+
+function getExternals(pkg) {
+    return [
+        ...Object.keys(pkg.dependencies || {}),
+        ...Object.keys(pkg.devDependencies || {}),
+    ];
+}
+

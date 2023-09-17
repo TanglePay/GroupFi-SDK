@@ -1,3 +1,4 @@
+import CryptoJS from 'crypto-js'
 import { Bip32Path, Blake2b, Ed25519, Bip39, Sha512 } from "@iota/crypto.js";
 import {
     ADDRESS_UNLOCK_CONDITION_TYPE,
@@ -40,7 +41,7 @@ setIotaCrypto({
     Ed25519,
     Sha512
 })
-import CryptoJS from 'crypto-js';
+
 import hkdf from 'js-crypto-hkdf';
 import { IMRecipient } from "iotacat-sdk-core";
 import { EventEmitter } from 'events';
@@ -79,9 +80,10 @@ type InboxMessageResponse = {
     messages:MessageResponseItem[]
     token:string
 }
-type MessageBody = {
+export type MessageBody = {
     sender:string,
     message:string,
+    groupId:string,
     timestamp:number
 }
 type NftItemReponse = {
