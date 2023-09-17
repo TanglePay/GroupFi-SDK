@@ -37,7 +37,7 @@ export type Address = {
     type: typeof ShimmerBech32Addr | typeof ShimmerEvmAddr
     addr: string
 }
-export const INX_GROUPFI_DOMAIN = "test2.api.iotacat.com"
+export const INX_GROUPFI_DOMAIN = "test.api.iotacat.com"
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
 export const MessageTypePrivate = 1
