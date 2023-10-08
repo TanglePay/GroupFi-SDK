@@ -195,6 +195,9 @@ importers:
       iotacat-sdk-core:
         specifier: workspace:^
         version: link:../core
+      iotacat-sdk-utils:
+        specifier: workspace:^
+        version: link:../util
       tanglepaysdk-client:
         specifier: ^0.1.7
         version: 0.1.7

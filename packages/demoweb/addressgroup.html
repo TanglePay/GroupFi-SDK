@@ -133,7 +133,7 @@
             <div class="block">
                 <h4>wallet address</h4>
                 <div class="address-input">
-                    <input id="cur_addr" type="text" placeholder="enter address in bech32">
+                    <input disabled id="cur_addr" type="text" placeholder="enter address in bech32">
                 </div>
                 
             </div>
@@ -161,7 +161,8 @@
 <script src="./js/crypto.js"></script>
 <script src="./js/util.js"></script>
 <script src="./js/core.js"></script>
-
+<script src="./js/tanglepaycommon.js"></script>
+<script src="./js/tanglepaysdk.js"></script>
 <script>
     var ipfsOrigins
     const loadIpfsOrigins = async () => {
@@ -172,6 +173,21 @@
     document.addEventListener("DOMContentLoaded", function () {
         loadIpfsOrigins()
     });
+    window.addEventListener('iota-ready',async ()=>{
+        console.log('tanglepaysdk',iota)
+        try {
+            const res = await iota.request({
+                        method: 'iota_connect',
+                        params: {
+                            // expires: 3000000
+                        }
+                    })
+            document.getElementById('cur_addr').value = res.address
+        } catch (error) {
+            console.log('error',error)
+        }
+
+    })
     const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
     // makeImgkv
     const makeImgkv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div><img src="${value}" width="100px" height="100px"></div></div>`
@@ -181,7 +197,7 @@
         "ipfsLink": "ipfs://bafkreiar6dthmnnrh2rkyousybzur5fh3qw225n6ota6smpvw6d7uc3aa4",
         "tokenName": "",
         "tokenThres": ""*/
-        const {groupName,groupQualifyType,ipfsLink,tokenName,tokenThres} = groupItem
+        const {groupName,groupQualifyType,ipfsLink,tokenName,tokenThres,marked} = groupItem
         const groupQualifyTypeStr = groupQualifyType === 0 ? 'nft' : 'token'
         // makekv for groupname and groupQualifyTypeStr, if groupQualifyType is nft, makekv for ipfsLink, if groupQualifyType is token, makekv for tokenName and tokenThres
         let content = []
@@ -193,13 +209,93 @@
             content.push(makekv('tokenName',tokenName))
             content.push(makekv('tokenThres',tokenThres))
         }
+        content.push(makekv('marked',marked?'joined':'not joined'))
+        // make button for joinGroup and leaveGroup
+        if(marked){
+            content.push(`<button onclick="leaveGroup('${groupName}')" class="btn btn-primary">leave</button>`)
+        }else{
+            content.push(`<button onclick="joinGroup('${groupName}')" class="btn btn-primary">join</button>`)
+        }
         return `<div class="block">${content.join('')}</div>`
     }).join('')
+    window.joinGroup = async (groupName) => {
+        const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
+        try {
+            const addr = document.getElementById("cur_addr").value
+            const res = await iota.request({
+                        method: 'iota_im_mark_group',
+                        params: {
+                            content: {
+                                addr,
+                                groupId
+                            }
+                        }
+                    })
+            console.log('joinGroup',res)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.leaveGroup = async (groupName) => {
+        const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
+        try {
+            const addr = document.getElementById("cur_addr").value
+            const res = await iota.request({
+                        method: 'iota_im_unmark_group',
+                        params: {
+                            content: {
+                                addr,
+                                groupId
+                            }
+                        }
+                    })
+            console.log('leaveGroup',res)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
     window.loadQualifiedGroups = async () => {
         const address = document.getElementById("cur_addr").value
         const groups = await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroups(address, ipfsOrigins)
-        console.log(groups)
+        console.log('groups',groups)
+        try {
+        const res = await iota.request({
+                    method: 'iota_im_getMarkedGroupIds',
+                    params: {
+                    content: {
+                        addr:address
+                    }
+                    }
+                })
+                console.log('markedGroupIds',res)
+        // check each groupId in res, make sure it is prefixed with '0x'
+        const mardedGroupIds = (res??[]).map(mark=>{
+            const {groupId} = mark
+            if(groupId.startsWith('0x')){
+                return groupId
+            }else{
+                return '0x'+groupId
+            }
+        })        
+        // res is string[], reduce to map[string]=true
+        const markedGroupIdsMap = mardedGroupIds.reduce((acc,cur)=>{
+            acc[cur] = true
+            return acc
+        },{})
+        // loop groups, if groupid in markedGroupIdsMap, add field marked=true, else add field marked=false
+        groups.forEach(groupItem=>{
+            const {groupId} = groupItem
+            if(markedGroupIdsMap[groupId]){
+                groupItem.marked = true
+            }else{
+                groupItem.marked = false
+            }
+        })
         document.getElementById("text").innerHTML = makelist(groups)
+        } catch (error) {
+            console.log('error',error)
+        }
+        
     }
 </script>    
 </html>

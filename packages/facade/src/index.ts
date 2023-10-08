@@ -7,6 +7,10 @@ import {
 } from 'iotacat-sdk-core';
 import client from 'iotacat-sdk-client';
 
+import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
+
+export { SimpleDataExtended }
+
 import { MessageBody } from 'iotacat-sdk-client';
 
 class GroupFiSDKFacade {
@@ -53,7 +57,9 @@ class GroupFiSDKFacade {
       }, 1000);
     });
   }
-
+  getObjectId(obj:Record<string, SimpleDataExtended>) {
+    return objectId(obj)
+  }
   async handlePushedMessage(pushed: any): Promise<IMessage | undefined> {
     const { type, groupId, outputId } = pushed;
     if (type === 1) {

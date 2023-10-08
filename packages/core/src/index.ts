@@ -8,6 +8,9 @@ import { serializeRecipientList, deserializeRecipientList, serializeIMMessage, d
 import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
 export * from './types';
+export * from './codec_mark';
+export * from './codec_mute';
+export * from './codec_vote';
 const SHA256_LEN = 32
 class IotaCatSDK {
 
@@ -71,6 +74,13 @@ class IotaCatSDK {
             },
             'iceberg-collection-8':{
                 groupName: 'iceberg-collection-8',
+                schemaVersion: MessageCurrentSchemaVersion,
+                messageType:MessageTypePrivate,
+                authScheme:MessageAuthSchemeRecipeintOnChain,
+            },
+            //smr-whale
+            'smr-whale':{
+                groupName: 'smr-whale',
                 schemaVersion: MessageCurrentSchemaVersion,
                 messageType:MessageTypePrivate,
                 authScheme:MessageAuthSchemeRecipeintOnChain,
@@ -176,6 +186,27 @@ class IotaCatSDK {
             return group
         })
         return ipfsPolyfilled
+    }
+    // fetch qualified addresses for a group, /groupqualifiedaddresses
+    async fetchGroupQualifiedAddresses(groupId:string):Promise<string[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresses?groupId=0x${groupId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // fetch marked addresses for a group, /groupmarkedaddresses
+    async fetchGroupMarkedAddresses(groupId:string):Promise<string[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmarkedaddresses?groupId=0x${groupId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // fetch member addresses for a group, /groupmemberaddresses
+    async fetchGroupMemberAddresses(groupId:string):Promise<string[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmemberaddresses?groupId=0x${groupId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
     }
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         // check if message.recipients is null
@@ -470,6 +501,9 @@ const instance = new IotaCatSDK
 
 export const IOTACATTAG = 'GROUPFIV2'
 export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
+export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
+export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
+export const GROUPFIVOTETAG = 'GROUPFIVOTEV1'
 export const IotaCatSDKObj = instance
-export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFISHAREDV1']
+export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

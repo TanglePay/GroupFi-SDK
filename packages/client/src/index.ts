@@ -30,7 +30,13 @@ import {
 import { Converter, WriteStream,  } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
-import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN } from "iotacat-sdk-core";
+import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
+    IMUserMarkedGroupId, serializeUserMarkedGroupIds, deserializeUserMarkedGroupIds,
+    IMUserMuteGroupMember,serializeUserMuteGroupMembers, deserializeUserMuteGroupMembers,
+    IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
+    GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG
+
+} from "iotacat-sdk-core";
 import {runBatch, formatUrlParams} from 'iotacat-sdk-utils';
 
 //TODO tune concurrency
@@ -603,6 +609,7 @@ class IotaCatClient {
         if (amountLargerThan) {
             outputs = outputs.filter(output=>bigInt(output.output.amount).greater(amountLargerThan))
         }
+        // TODO filter tag with groupfi related
         return {outputs,nextCursor}
     }
     //get outputs from outputIds filter out spent
@@ -814,37 +821,53 @@ class IotaCatClient {
         };
         return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs, [consolidatedBasicOutput])
     }
-    async _sendBasicOutput(basicOutput:IBasicOutput){
+    async _sendBasicOutput(basicOutput:IBasicOutput,extraOutputsToBeConsumed:BasicOutputWrapper[] = []){
         const amountToSend = this._getAmount(basicOutput)
         console.log('AmountToSend', amountToSend);
         basicOutput.amount = amountToSend.toString()
+        const createdOutputs:IBasicOutput[] = [basicOutput]
         // get first output with amount > amountToSend
+        let depositFromExtraOutputs = bigInt('0')
 
-        const threshold = amountToSend.multiply(2)
-        const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1})
-        console.log('unspent Outputs', outputs);
-        
-        const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
-        if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
-        const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
-        console.log('ConsumedOutput', consumedOutput);
-        const remainderBasicOutput: IBasicOutput = {
-            type: BASIC_OUTPUT_TYPE,
-            amount: bigInt(consumedOutput.amount).minus(amountToSend).toString(),
-            nativeTokens: [],
-            unlockConditions: [
-                {
-                    type: ADDRESS_UNLOCK_CONDITION_TYPE,
-                    address: {
-                        type: ED25519_ADDRESS_TYPE,
-                        pubKeyHash: this._accountHexAddress!
+        for (const extraOutput of extraOutputsToBeConsumed) {
+            const amount = bigInt(extraOutput.output.amount)
+            depositFromExtraOutputs = depositFromExtraOutputs.add(amount)
+        }
+        const cashNeeded = amountToSend.subtract(depositFromExtraOutputs)
+        console.log('cashNeeded', cashNeeded);
+        if (cashNeeded.lesser(bigInt('0'))) {
+            basicOutput.amount = depositFromExtraOutputs.toString()
+        } else {
+            const threshold = cashNeeded.multiply(2)
+            const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
+            const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
+            console.log('unspent Outputs', outputs);
+            
+            const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
+            
+            if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
+            extraOutputsToBeConsumed.push(consumedOutputWrapper)
+            const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
+            console.log('ConsumedOutput', consumedOutput);
+            const remainderBasicOutput: IBasicOutput = {
+                type: BASIC_OUTPUT_TYPE,
+                amount: bigInt(consumedOutput.amount).minus(cashNeeded).toString(),
+                nativeTokens: [],
+                unlockConditions: [
+                    {
+                        type: ADDRESS_UNLOCK_CONDITION_TYPE,
+                        address: {
+                            type: ED25519_ADDRESS_TYPE,
+                            pubKeyHash: this._accountHexAddress!
+                        }
                     }
-                }
-            ],
-            features: []
-        };
-        console.log("Remainder Basic Output: ", remainderBasicOutput);
-        return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs([{outputId:consumedOutputId,output:consumedOutput}], [basicOutput,remainderBasicOutput])
+                ],
+                features: []
+            };
+            createdOutputs.push(remainderBasicOutput)
+            console.log("Remainder Basic Output: ", remainderBasicOutput);
+        }
+        return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(extraOutputsToBeConsumed, createdOutputs)
     }
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
     async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:BasicOutputWrapper[],createdOutputs:IBasicOutput[]){
@@ -1008,6 +1031,181 @@ class IotaCatClient {
         })
         const filterdMessageBodyArr = messageBodyArr.filter(msg=>msg!=undefined) as MessageBody[]
         return filterdMessageBodyArr
+    }
+
+    // iota shimmer service
+    async _getOneOutputWithTag(tag:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const outputsResponse = await this._indexer!.basicOutputs({
+            addressBech32: this._accountBech32Address,
+            tagHex:`0x${Converter.utf8ToHex(tag)}`,
+            hasStorageDepositReturn: false,
+            hasExpiration: false,
+            hasTimelock: false,
+            hasNativeTokens: false,
+            pageSize:1,
+        });
+        const outputId = outputsResponse.items ? outputsResponse.items[0] : undefined
+        if (!outputId) return undefined
+        const outputResponse = await this._client!.output(outputId)
+        const output = outputResponse.output as IBasicOutput
+        return {outputId,output}
+    }
+    async getMarkedGroupIds(){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {list} = await this._getMarkedGroupIds()
+        return list
+    }
+    async markGroup(groupId:string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getMarkedGroupIds()
+        // log existing list
+        console.log('existing list', list, outputWrapper);
+        if (list.find(id=>id.groupId === groupId)) {
+            // already marked, log
+            console.log('already marked', groupId);
+            return
+        }
+        list.push({groupId,timestamp:Date.now()})
+        await this._persistMarkedGroupIds(list,outputWrapper)
+    }
+    async unmarkGroup(groupId:string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getMarkedGroupIds()
+        const idx = list.findIndex(id=>id.groupId === groupId)
+        if (idx === -1) return
+        list.splice(idx,1)
+        await this._persistMarkedGroupIds(list,outputWrapper)
+    }
+    async _persistMarkedGroupIds(list:IMUserMarkedGroupId[],outputWrapper?:BasicOutputWrapper){
+        const tag = `0x${Converter.utf8ToHex(GROUPFIMARKTAG)}`
+        const data = serializeUserMarkedGroupIds(list)
+        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const toBeConsumed = outputWrapper ? [outputWrapper] : []
+        const {blockId,outputId} = await this._sendBasicOutput(basicOutput,toBeConsumed);
+    }
+    async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
+        const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
+        console.log('_getMarkedGroupIds existing', existing);
+        if (!existing) return {list:[]}
+        const {output} = existing
+        const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
+        if (!meta) return {list:[]}
+        const data = Converter.hexToBytes(meta.data)
+        const groupIds = deserializeUserMarkedGroupIds(data)
+        return {outputWrapper:existing,list:groupIds}
+    }
+
+    async _dataAndTagToBasicOutput(data:Uint8Array,tag:string):Promise<IBasicOutput>{
+        const tagFeature: ITagFeature = {
+            type: 3,
+            tag
+        };
+        const metadataFeature: IMetadataFeature = {
+            type: 2,
+            data: Converter.bytesToHex(data, true)
+        };
+        const basicOutput: IBasicOutput = {
+            type: BASIC_OUTPUT_TYPE,
+            amount: '',
+            nativeTokens: [],
+            unlockConditions: [
+                {
+                    type: ADDRESS_UNLOCK_CONDITION_TYPE,
+                    address: {
+                        type: ED25519_ADDRESS_TYPE,
+                        pubKeyHash: this._accountHexAddress!
+                    }
+                }
+            ],
+            features: [
+                metadataFeature,
+                tagFeature
+            ]
+        };
+        return basicOutput
+    }
+
+    async muteGroupMember(groupId:string,addrSha256Hash:string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getUserMuteGroupMembers()
+        if (list.find(id=>id.groupId === groupId && id.addrSha256Hash === addrSha256Hash)) return
+        list.push({groupId,addrSha256Hash})
+        await this._persistUserMuteGroupMembers(list,outputWrapper)
+    }
+    async unmuteGroupMember(groupId:string,addrSha256Hash:string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getUserMuteGroupMembers()
+        const idx = list.findIndex(id=>id.groupId === groupId && id.addrSha256Hash === addrSha256Hash)
+        if (idx === -1) return
+        list.splice(idx,1)
+        await this._persistUserMuteGroupMembers(list,outputWrapper)
+    }
+    async _persistUserMuteGroupMembers(list:IMUserMuteGroupMember[],outputWrapper?:BasicOutputWrapper){
+        const tag = `0x${Converter.utf8ToHex(GROUPFIMUTETAG)}`
+        const data = serializeUserMuteGroupMembers(list)
+        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const toBeConsumed = outputWrapper ? [outputWrapper] : []
+        const {blockId,outputId} = await this._sendBasicOutput(basicOutput,toBeConsumed);
+    }
+
+    async _getUserMuteGroupMembers():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
+        const existing = await this._getOneOutputWithTag(GROUPFIMUTETAG)
+        if (!existing) return {list:[]}
+        const {output} = existing
+        const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
+        if (!meta) return {list:[]}
+        const data = Converter.hexToBytes(meta.data)
+        const groupIds = deserializeUserMuteGroupMembers(data)
+        return {outputWrapper:existing,list:groupIds}
+    }
+
+    async voteGroup(groupId:string, vote:number){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getUserVoteGroups()
+        const existing = list.find(id=>id.groupId === groupId)
+        if (existing) {
+            if (existing.vote === vote) return
+            existing.vote = vote
+        } else {
+            list.push({groupId,vote})
+        }
+        await this._persistUserVoteGroups(list,outputWrapper)
+    }
+
+    async unvoteGroup(groupId:string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getUserVoteGroups()
+        const idx = list.findIndex(id=>id.groupId === groupId)
+        if (idx === -1) return
+        list.splice(idx,1)
+        await this._persistUserVoteGroups(list,outputWrapper)
+    }
+
+    async _persistUserVoteGroups(list:IMUserVoteGroup[],outputWrapper?:BasicOutputWrapper){
+        const tag = `0x${Converter.utf8ToHex(GROUPFIVOTETAG)}`
+        const data = serializeUserVoteGroups(list)
+        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const toBeConsumed = outputWrapper ? [outputWrapper] : []
+        const {blockId,outputId} = await this._sendBasicOutput(basicOutput,toBeConsumed);
+    }
+    async _getUserVoteGroups():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserVoteGroup[]}>{
+        const existing = await this._getOneOutputWithTag(GROUPFIVOTETAG)
+        if (!existing) return {list:[]}
+        const {output} = existing
+        const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
+        if (!meta) return {list:[]}
+        const data = Converter.hexToBytes(meta.data)
+        const groupIds = deserializeUserVoteGroups(data)
+        return {outputWrapper:existing,list:groupIds}
     }
 }
 

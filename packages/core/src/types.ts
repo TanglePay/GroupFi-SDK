@@ -31,6 +31,35 @@ export interface IMMessageIntermediate {
     recipientOutputid?: Uint8Array; // 32 bytes
     data: Uint8Array;
 }
+export interface IMUserMarkedGroupId {
+    groupId: string;
+    timestamp: number;
+}
+export interface IMUserMarkedGroupIdIntermediate {
+    groupId: Uint8Array;
+    timestamp: Uint8Array;
+}
+
+export interface IMUserMuteGroupMember {
+    groupId: string;
+    addrSha256Hash: string;
+}
+
+export interface IMUserMuteGroupMemberIntermediate {
+    groupId: Uint8Array;
+    addrSha256Hash: Uint8Array;
+}
+
+export interface IMUserVoteGroup {
+    groupId: string;
+    vote: number;
+}
+export type VotePublic = 0
+export type VotePrivate = 1
+export interface IMUserVoteGroupIntermediate {
+    groupId: Uint8Array;
+    vote: Uint8Array;
+}
 export const ShimmerBech32Addr = 1
 export const ShimmerEvmAddr = 2
 export type Address = {

@@ -1,6 +1,7 @@
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { Blake2b } from "@iota/crypto.js"
 export * from './runbatch'
+export * from './objectId'
 export const concatBytes = (...args: Uint8Array[]) => {
     let totalLength = 0;
     args.forEach((bytes) => {
@@ -80,4 +81,27 @@ export const parseUrlParams = (url: string) => {
         }
     }
     return result;
+}
+// number to 1 byte array
+export const numberToBytes = (num: number): Uint8Array => {
+    const bytes = new Uint8Array(1);
+    bytes[0] = num & 0xff;
+    return bytes;
+}
+
+// unix epoch in seconds to 4 byte array
+export const unixSecondsToBytes = (seconds: number): Uint8Array => {
+    const bytes = new Uint8Array(4);
+    bytes[0] = (seconds >> 24) & 0xff;
+    bytes[1] = (seconds >> 16) & 0xff;
+    bytes[2] = (seconds >> 8) & 0xff;
+    bytes[3] = seconds & 0xff;
+    return bytes;
+}
+// 4 byte array to unix epoch in seconds
+export const bytesToUnixSeconds = (bytes: Uint8Array): number => {
+    if (bytes.length !== 4) {
+        throw new Error(`bytes length is not 4`);
+    }
+    return (bytes[0] << 24) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3];
 }
