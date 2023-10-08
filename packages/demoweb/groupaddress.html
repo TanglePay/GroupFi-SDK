@@ -190,14 +190,16 @@
     }
 
     window.loadGroupAddresses = async (groupId) => {
-        const [qualifiedAddresses,
+        let [qualifiedAddresses,
             markedAddresses,
         memberAddresses] = await Promise.all([
             iotacatsdk.IotaCatSDKObj.fetchGroupQualifiedAddresses(groupId),
             iotacatsdk.IotaCatSDKObj.fetchGroupMarkedAddresses(groupId),
             iotacatsdk.IotaCatSDKObj.fetchGroupMemberAddresses(groupId),
         ])
-        
+        qualifiedAddresses = qualifiedAddresses || []
+        markedAddresses = markedAddresses || []
+        memberAddresses = memberAddresses || []
         qualifiedAddresses.unshift("qualified addresses")
         markedAddresses.unshift("marked addresses")
         memberAddresses.unshift("member addresses")
