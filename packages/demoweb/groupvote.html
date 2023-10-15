@@ -160,8 +160,8 @@
                 <div id="publicVoteCount"  style="margin-bottom: 5px;"></div>
                 <div id="privateVoteCount" style="margin-bottom: 5px;"></div>
                 <div id="memberCount" style="margin-bottom: 5px;"></div>
+                <div id="isPublic" style="margin-bottom: 5px;"></div>
             </div>
-            
         </div>
     </div>
 
@@ -186,15 +186,23 @@
 
     window.loadGroupVotes = async (groupId) => {
 
+        const [
+            voteCountRes,
+            isPublic
+        ] = await Promise.all([
+                iotacatsdk.IotaCatSDKObj.fetchGroupVotesCount(groupId),
+                iotacatsdk.IotaCatSDKObj.checkIsGroupPublicFromSharedApiCall(groupId)
+        ])
         const {
             publicCount,
             privateCount,
             memberCount
-        } = await iotacatsdk.IotaCatSDKObj.fetchGroupVotesCount(groupId)
+        } = voteCountRes
             
         document.getElementById("publicVoteCount").innerHTML = makekv("public vote count",publicCount)
         document.getElementById("privateVoteCount").innerHTML = makekv("private vote count",privateCount)
         document.getElementById("memberCount").innerHTML = makekv("member count",memberCount)
+        document.getElementById("isPublic").innerHTML = makekv("is public",isPublic)
     }
 </script>    
 </html>
