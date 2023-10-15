@@ -192,12 +192,8 @@
     // makeImgkv
     const makeImgkv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div><img src="${value}" width="100px" height="100px"></div></div>`
     const makelist = (groupList) => groupList.map(groupItem => {
-        /*"groupName": "iceberg-collection-3",
-        "groupQualifyType": 0,
-        "ipfsLink": "ipfs://bafkreiar6dthmnnrh2rkyousybzur5fh3qw225n6ota6smpvw6d7uc3aa4",
-        "tokenName": "",
-        "tokenThres": ""*/
-        const {groupName,groupQualifyType,ipfsLink,tokenName,tokenThres,marked} = groupItem
+
+        const {groupName,groupQualifyType,ipfsLink,tokenName,tokenThres,marked, vote} = groupItem
         const groupQualifyTypeStr = groupQualifyType === 0 ? 'nft' : 'token'
         // makekv for groupname and groupQualifyTypeStr, if groupQualifyType is nft, makekv for ipfsLink, if groupQualifyType is token, makekv for tokenName and tokenThres
         let content = []
@@ -216,6 +212,27 @@
         }else{
             content.push(`<button onclick="joinGroup('${groupName}')" class="btn btn-primary">join</button>`)
         }
+        // show current vote status
+        if(vote === 0){
+            content.push(`<div>voted public</div>`)
+        }else if(vote === 1){
+            content.push(`<div>voted private</div>`)
+        }else{
+            content.push(`<div>not voted</div>`)
+        }
+        // make button for vote, if vote is -1,  both vote public and vote private button should be shown, if vote is 0, only vote private button should be shown, if vote is 1, only vote public button should be shown
+        if(vote === -1 || vote === 1){
+            content.push(`<div style="margin-top: 10px;">
+                <button onclick="voteGroup('${groupName}',0)" class="btn btn-primary">vote public</button>
+                </div>`)
+        } 
+        if(vote === -1 || vote === 0){
+            content.push(`<div style="margin-top: 10px;">
+                <button onclick="voteGroup('${groupName}',1)" class="btn btn-primary">vote private</button>
+                </div>`)
+        }
+          
+
         return `<div class="block">${content.join('')}</div>`
     }).join('')
     window.joinGroup = async (groupName) => {
@@ -254,22 +271,54 @@
             console.log('error',error)
         }
     }
+    window.voteGroup = async (groupName,vote) => {
+        const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
+        try {
+            const addr = document.getElementById("cur_addr").value
+            const res = await iota.request({
+                        method: 'iota_im_voteGroup',
+                        params: {
+                            content: {
+                                addr,
+                                groupId,
+                                vote
+                            }
+                        }
+                    })
+            console.log('voteGroup',res)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
     window.loadQualifiedGroups = async () => {
         const address = document.getElementById("cur_addr").value
-        const groups = await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroups(address, ipfsOrigins)
-        console.log('groups',groups)
         try {
-        const res = await iota.request({
-                    method: 'iota_im_getMarkedGroupIds',
-                    params: {
-                    content: {
-                        addr:address
-                    }
-                    }
-                })
-                console.log('markedGroupIds',res)
+        const [groups, markRes, voteRes] = await Promise.all([
+            iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroups(address, ipfsOrigins),
+            iota.request({
+                method: 'iota_im_getMarkedGroupIds',
+                params: {
+                content: {
+                    addr:address
+                }
+                }
+            }),
+            iota.request({
+                method: 'iota_im_getAllGroupVotes',
+                params: {
+                content: {
+                    addr:address
+                }
+                }
+            }),
+
+        ])
+
+        console.log('groups',groups)
+        console.log('markedGroupIds', markRes)
+        console.log('voteRes', voteRes)
         // check each groupId in res, make sure it is prefixed with '0x'
-        const mardedGroupIds = (res??[]).map(mark=>{
+        const mardedGroupIds = (markRes??[]).map(mark=>{
             const {groupId} = mark
             if(groupId.startsWith('0x')){
                 return groupId
@@ -282,6 +331,21 @@
             acc[cur] = true
             return acc
         },{})
+
+        /*
+export type VotePublic = 0
+export type VotePrivate = 1
+*/
+        // voteRes is IMUserVoteGroup[], reduce to map[string]=VotePublic|VotePrivate
+        const voteGroupIdsMap = (voteRes??[]).reduce((acc,cur)=>{
+            const {groupId,vote} = cur
+            if(groupId.startsWith('0x')){
+                acc[groupId] = vote
+            }else{
+                acc['0x'+groupId] = vote
+            }
+            return acc
+        },{})
         // loop groups, if groupid in markedGroupIdsMap, add field marked=true, else add field marked=false
         groups.forEach(groupItem=>{
             const {groupId} = groupItem
@@ -289,6 +353,12 @@
                 groupItem.marked = true
             }else{
                 groupItem.marked = false
+            }
+            // if voteGroupIdsMap[groupId] is not undefined
+            if(voteGroupIdsMap[groupId] !== undefined){
+                groupItem.vote = voteGroupIdsMap[groupId]
+            }else{
+                groupItem.vote = -1
             }
         })
         document.getElementById("text").innerHTML = makelist(groups)

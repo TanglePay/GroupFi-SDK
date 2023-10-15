@@ -208,6 +208,41 @@ class IotaCatSDK {
         const json = await res.json()
         return json
     }
+    // fetch group votes for a group, /groupvotes
+    async fetchGroupVotes(groupId:string):Promise<{groupId:string,addressSha256Hash:string,vote:number}>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotes?groupId=0x${groupId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // fetch group votes count for a group, /groupvotescount
+    async fetchGroupVotesCount(groupId:string):Promise<number>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotescount?groupId=0x${groupId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // get shared output for a group
+    async checkIsGroupPublicFromSharedApiCall(groupId:string):Promise<boolean>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
+            try {
+                // @ts-ignore
+                const res = await fetch(url,{
+                    method:'GET',
+                    headers:{
+                    'Content-Type':'application/json'
+                    }})
+                if (!res.ok) {
+                    if (res.status === 901) {
+                        return true
+                    } 
+                }                    
+                return false
+            } catch (error) {
+                console.log('error',error)
+                return false
+            }
+    }
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         // check if message.recipients is null
         if (message.recipients == undefined) {
@@ -503,7 +538,7 @@ export const IOTACATTAG = 'GROUPFIV2'
 export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
 export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
-export const GROUPFIVOTETAG = 'GROUPFIVOTEV1'
+export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const IotaCatSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

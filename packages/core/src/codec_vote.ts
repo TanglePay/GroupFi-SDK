@@ -13,6 +13,8 @@ export function serializeUserVoteGroups(list:IMUserVoteGroup[]) : Uint8Array {
 }
 
 export function serializeUserVoteGroupIntermediates(writer: WriteStream, list: IMUserVoteGroupIntermediate[]) {
+    // first write schema version
+    writer.writeUInt8("schema_version", MessageCurrentSchemaVersion);
     for (const userVoteGroupIntermediate of list) {
         const { groupId, vote } = userVoteGroupIntermediate;
         // check if list.groupId is 32 bytes

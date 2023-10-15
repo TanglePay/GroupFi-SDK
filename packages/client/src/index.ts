@@ -1166,6 +1166,13 @@ class IotaCatClient {
         return {outputWrapper:existing,list:groupIds}
     }
 
+    // get group votes
+    async getAllGroupVotes(){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getUserVoteGroups()
+        return list
+    }
     async voteGroup(groupId:string, vote:number){
         this._ensureClientInited()
         this._ensureWalletInited()

@@ -12,6 +12,8 @@ export function serializeUserMuteGroupMembers(list:IMUserMuteGroupMember[]) : Ui
 }
 
 export function serializeUserMuteGroupMemberIntermediates(writer: WriteStream, list: IMUserMuteGroupMemberIntermediate[]) {
+    // first write schema version
+    writer.writeUInt8("schema_version", MessageCurrentSchemaVersion);
     for (const userMuteGroupMemberIntermediate of list) {
         const { groupId, addrSha256Hash } = userMuteGroupMemberIntermediate;
         // check if list.groupId is 32 bytes

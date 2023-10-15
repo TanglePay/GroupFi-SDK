@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+        <link
+            rel="stylesheet"
+            href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+            integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+            crossorigin="anonymous"
+        />
+        <script
+            src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+            integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
+            crossorigin="anonymous"
+        ></script>
+        <script
+            src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+            integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+            crossorigin="anonymous"
+        ></script>
+        <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+            integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+            crossorigin="anonymous"
+        ></script>
+        <style>
+            body {
+                padding: 20px;
+            }
+            #text {
+                word-break: break-all;
+            }
+            h2 {
+                padding-top: 30px;
+            }
+            .w100{
+                width: 100%;
+            }
+            .block{
+                background: #f5f5f5;
+                border-radius: 10px;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            .hList{
+                display: flex;
+                flex-direction: row;
+                justify-content: start;
+                align-items: center;
+            }
+            .vList{
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+            }
+            .content {
+                display: flex;
+                align-items: flex-start;
+            }
+            .middle{
+                margin-left: 20px;
+                margin-top: 75px;
+            }
+            .right {
+                flex: 1;
+                padding: 0px 20px 20px 20px;
+                border-radius: 10px;
+                margin-top: 75px;
+                margin-left: 20px;
+                box-sizing: border-box;
+            }
+            .radio-con{
+                margin-bottom: 5px;
+            }
+            .radio-con span{
+                margin-right: 10px;
+            }
+            .address-input input{
+                width: 300px;
+                margin-bottom: 10px;
+                display: block;
+            }
+            .toast {
+                position: fixed;
+                bottom: 10%;
+                left: 50%;
+                transform: translateX(-50%);
+                background-color: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                display: none;
+                font-size: 16px;
+            }
+
+            body.toast-active .toast {
+                display: block;
+            }
+
+            @media screen and (max-width: 768px) {
+                .content {
+                    flex-direction: column;
+                }
+                .middle{
+                    margin-top: 0;
+                    margin-left: 0;
+                }
+                .right {
+                    flex: 1;
+                    padding: 10px;
+                    background: #f5f5f5;
+                    border-radius: 10px;
+                    margin-top: 20px;
+                    margin-left: 0;
+                    box-sizing: border-box;
+                }
+            }
+        </style>
+    </head>
+
+<body>
+    select group to check votes
+    <br />
+    <div class="content">
+        
+        <div class="left">
+            <h2>group addresses</h2>
+            <div class="block">
+                <h4>current group name</h4>
+                <div class="address-input">
+                    <select class="w100" onchange="handleGroupChange(this.value)">
+                        <option value=""></option>
+                        <option value="iceberg-collection-1">iceberg-collection-1</option>
+                        <option value="iceberg-collection-2">iceberg-collection-2</option>
+                        <option value="iceberg-collection-3">iceberg-collection-3</option>
+                        <option value="iceberg-collection-4">iceberg-collection-4</option>
+                        <option value="iceberg-collection-5">iceberg-collection-5</option>
+                        <option value="iceberg-collection-6">iceberg-collection-6</option>
+                        <option value="iceberg-collection-7">iceberg-collection-7</option>
+                        <option value="iceberg-collection-8">iceberg-collection-8</option>
+                        <option value="smr-whale">smr-whale</option>
+                    </select>
+                </div>
+            </div>
+            
+        </div>
+        <div class="middle">
+            <div class="block">
+                
+            </div>
+        </div>
+
+        <div class="right">
+            <div class="vList" style="align-items: start;">
+                <div id="publicVoteCount"  style="margin-bottom: 5px;"></div>
+                <div id="privateVoteCount" style="margin-bottom: 5px;"></div>
+                <div id="memberCount" style="margin-bottom: 5px;"></div>
+            </div>
+            
+        </div>
+    </div>
+
+</body>
+<script src="./js/BigInteger.min.js"></script>
+<script src="./js/crypto.js"></script>
+<script src="./js/util.js"></script>
+<script src="./js/core.js"></script>
+<script src="./js/tanglepaycommon.js"></script>
+<script src="./js/tanglepaysdk.js"></script>
+<script>
+    const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
+    
+    window.handleGroupChange = async (value) => {
+        if (!value) {
+            return
+        }
+
+        const selectedGroupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(value)
+        await window.loadGroupVotes(selectedGroupId)
+    }
+
+    window.loadGroupVotes = async (groupId) => {
+
+        const {
+            publicCount,
+            privateCount,
+            memberCount
+        } = await iotacatsdk.IotaCatSDKObj.fetchGroupVotesCount(groupId)
+            
+        document.getElementById("publicVoteCount").innerHTML = makekv("public vote count",publicCount)
+        document.getElementById("privateVoteCount").innerHTML = makekv("private vote count",privateCount)
+        document.getElementById("memberCount").innerHTML = makekv("member count",memberCount)
+    }
+</script>    
+</html>
