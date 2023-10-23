@@ -263,32 +263,34 @@ function hideLoadingMask() {
         }else{
             content.push(`<button onclick="joinGroup('${groupName}')" class="btn btn-primary">join</button>`)
         }
-        // show current vote status
-        if(vote === 0){
-            content.push(`<div>voted public</div>`)
-        }else if(vote === 1){
-            content.push(`<div>voted private</div>`)
-        }else{
-            content.push(`<div>not voted</div>`)
+        // handle vote only if joined
+        if(marked) {
+            // show current vote status
+            if(vote === 0){
+                content.push(`<div>voted public</div>`)
+            }else if(vote === 1){
+                content.push(`<div>voted private</div>`)
+            }else{
+                content.push(`<div>not voted</div>`)
+            }
+            // make button for vote, if vote is -1,  both vote public and vote private button should be shown, if vote is 0, only vote private button should be shown, if vote is 1, only vote public button should be shown
+            if(vote === -1 || vote === 1){
+                content.push(`<div style="margin-top: 10px;">
+                    <button onclick="voteGroup('${groupName}',0)" class="btn btn-primary">vote public</button>
+                    </div>`)
+            } 
+            if(vote === -1 || vote === 0){
+                content.push(`<div style="margin-top: 10px;">
+                    <button onclick="voteGroup('${groupName}',1)" class="btn btn-primary">vote private</button>
+                    </div>`)
+            }
+            // if vote is not -1, show unvote button
+            if(vote !== -1){
+                content.push(`<div style="margin-top: 10px;">
+                    <button onclick="unvoteGroup('${groupName}')" class="btn btn-primary">unvote</button>
+                    </div>`)
+            }
         }
-        // make button for vote, if vote is -1,  both vote public and vote private button should be shown, if vote is 0, only vote private button should be shown, if vote is 1, only vote public button should be shown
-        if(vote === -1 || vote === 1){
-            content.push(`<div style="margin-top: 10px;">
-                <button onclick="voteGroup('${groupName}',0)" class="btn btn-primary">vote public</button>
-                </div>`)
-        } 
-        if(vote === -1 || vote === 0){
-            content.push(`<div style="margin-top: 10px;">
-                <button onclick="voteGroup('${groupName}',1)" class="btn btn-primary">vote private</button>
-                </div>`)
-        }
-        // if vote is not -1, show unvote button
-        if(vote !== -1){
-            content.push(`<div style="margin-top: 10px;">
-                <button onclick="unvoteGroup('${groupName}')" class="btn btn-primary">unvote</button>
-                </div>`)
-        }
-          
 
         return `<div class="block">${content.join('')}</div>`
     }).join('')
