@@ -108,19 +108,19 @@ importers:
   packages/client:
     dependencies:
       '@iota/crypto.js':
-        specifier: ^2.0.0-rc.2
+        specifier: 2.0.0-rc.2
         version: 2.0.0-rc.2
       '@iota/iota.js':
-        specifier: ^2.0.0-rc.4
+        specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4
       '@iota/pow-browser.js':
-        specifier: ^2.0.0-rc.3
+        specifier: 2.0.0-rc.3
         version: 2.0.0-rc.3
       '@iota/pow-node.js':
-        specifier: ^2.0.0-rc.3
+        specifier: 2.0.0-rc.3
         version: 2.0.0-rc.3
       '@iota/util.js':
-        specifier: ^2.0.0-rc.2
+        specifier: 2.0.0-rc.2
         version: 2.0.0-rc.2
       big-integer:
         specifier: ^1.6.51
@@ -170,11 +170,14 @@ importers:
         version: 7.2.5
     devDependencies:
       '@iota/crypto.js':
-        specifier: ^2.0.0-rc.2
+        specifier: 2.0.0-rc.2
         version: 2.0.0-rc.2
       '@iota/iota.js':
-        specifier: ^2.0.0-rc.4
+        specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4
+      '@iota/mqtt.js':
+        specifier: 2.0.0-rc.3
+        version: 2.0.0-rc.3
       '@types/crypto-js':
         specifier: ^4.1.1
         version: 4.1.2
@@ -1702,7 +1705,6 @@ packages:
     dependencies:
       '@iota/util.js': 2.0.0-rc.1
       big-integer: 1.6.51
-    dev: false
 
   /@iota/crypto.js@2.0.0-rc.2:
     resolution: {integrity: sha512-gydR6weJ4g8W67yGffpYd3N7Bt83pgqqOCLBM1SV6+wztNuwMYcO8V/yMTyqI9P4Er426QB83cTiwdaOJzs/zQ==}
@@ -1710,6 +1712,18 @@ packages:
     dependencies:
       '@iota/util.js': 2.0.0-rc.2
       big-integer: 1.6.51
+
+  /@iota/iota.js@2.0.0-rc.3:
+    resolution: {integrity: sha512-lrnmFDmI3vWscJAGzka2VOpi+x/kH1xMwvLgPOQ2WlyKOouLv/gmjc6S0K3TYCxKPRgw6DsVYMkFsK4GXXV5BA==}
+    engines: {node: '>=14.0.0'}
+    dependencies:
+      '@iota/crypto.js': 2.0.0-rc.1
+      '@iota/util.js': 2.0.0-rc.1
+      big-integer: 1.6.51
+      node-fetch: 2.6.7
+    transitivePeerDependencies:
+      - encoding
+    dev: true
 
   /@iota/iota.js@2.0.0-rc.4:
     resolution: {integrity: sha512-fXlM6Q/jSQG0dEXULugbgE9ZT9R5nN3G8oz71Ti6vhbxL1lbQN4M/IzddGg+cn2NfKezNcdMjs8xBbOOBJveCQ==}
@@ -1721,6 +1735,20 @@ packages:
       node-fetch: 2.6.7
     transitivePeerDependencies:
       - encoding
+
+  /@iota/mqtt.js@2.0.0-rc.3:
+    resolution: {integrity: sha512-uS8EtyY78t+periL8tp41HxaI0vkQkQ7jfrW4W2Qyb1YhaTCsGfvfV1RFr8S0LSks6f7TCRk79UpA+Ys8b1tjw==}
+    engines: {node: '>=12.0.0'}
+    dependencies:
+      '@iota/iota.js': 2.0.0-rc.3
+      '@iota/util.js': 2.0.0-rc.1
+      mqtt: 4.3.7
+    transitivePeerDependencies:
+      - bufferutil
+      - encoding
+      - supports-color
+      - utf-8-validate
+    dev: true
 
   /@iota/pow-browser.js@2.0.0-rc.3:
     resolution: {integrity: sha512-QcvLvF+xraf3pSxS7jwghTNl/RAKOBCR2N4TsKmSaBMSR1+SMtZOVI9FwH9fnyPAi7Hex//u/6viwyr0uYZ6ZQ==}
@@ -1747,7 +1775,6 @@ packages:
     engines: {node: '>=14.0.0'}
     dependencies:
       big-integer: 1.6.51
-    dev: false
 
   /@iota/util.js@2.0.0-rc.2:
     resolution: {integrity: sha512-c6n5LPiimwkz5aCKsMjRg3GKWzcK+zELmJK1AVaziLneJ8BsdZBKvWJyQGNqjREQjOhRaixizmZc3nGuihldnQ==}
@@ -3046,6 +3073,14 @@ packages:
     resolution: {integrity: sha512-2/mKyZH9K85bzOEfhXDBFZTGd1CTs+5IHpeFQo9luiBG7hghdC851Pj2WAhb6E3R6b9tZj/XKhbg4fum+Kepug==}
     dev: false
 
+  /bl@4.1.0:
+    resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
+    dependencies:
+      buffer: 5.7.1
+      inherits: 2.0.4
+      readable-stream: 3.6.2
+    dev: true
+
   /bl@5.1.0:
     resolution: {integrity: sha512-tv1ZJHLfTDnXE6tMHv73YgSJaWR2AFuPwMntBe7XL/GBFHnT0CLnsHMogfk5+GzCDC5ZWarSCYaIGATZt9dNsQ==}
     dependencies:
@@ -3225,7 +3260,6 @@ packages:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
-    dev: false
 
   /buffer@6.0.3:
     resolution: {integrity: sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==}
@@ -3475,6 +3509,13 @@ packages:
 
   /commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
+    dev: true
+
+  /commist@1.1.0:
+    resolution: {integrity: sha512-rraC8NXWOEjhADbZe9QBNzLAN5Q3fsTPQtBV+fEVj6xKIgDgNiEVE6ZNfHpZOqfQ21YUzfVNUXLOEZquYvQPPg==}
+    dependencies:
+      leven: 2.1.0
+      minimist: 1.2.8
     dev: true
 
   /commist@3.2.0:
@@ -4926,6 +4967,13 @@ packages:
       inherits: 2.0.4
       minimalistic-assert: 1.0.1
 
+  /help-me@3.0.0:
+    resolution: {integrity: sha512-hx73jClhyk910sidBB7ERlnhMlFsJJIBqSVMFDwPN8o2v9nmp5KgLq1Xz1Bf1fCMMZ6mPrX159iG0VLy/fPMtQ==}
+    dependencies:
+      glob: 7.2.3
+      readable-stream: 3.6.2
+    dev: true
+
   /help-me@4.2.0:
     resolution: {integrity: sha512-TAOnTB8Tz5Dw8penUuzHVrKNKlCIbwwbHnXraNJxPwf8LRtE2HlM84RYuezMFcwOJmoYOCWVDyJ8TQGxn9PgxA==}
     dependencies:
@@ -5963,6 +6011,11 @@ packages:
     engines: {node: '>=6'}
     dev: true
 
+  /leven@2.1.0:
+    resolution: {integrity: sha512-nvVPLpIHUxCUoRLrFqTgSxXJ614d8AgQoWl7zPe/2VadE8+1dpU3LBhowRuBAcuwruWtOdD8oYC9jDNJjXDPyA==}
+    engines: {node: '>=0.10.0'}
+    dev: true
+
   /leven@3.1.0:
     resolution: {integrity: sha512-qsda+H8jTaUaN/x5vzW2rzc+8Rw4TAQ/4KjB46IwK5VH+IlVeeeje/EoZRpiXvIqjFgK84QffqPztGI3VBLG1A==}
     engines: {node: '>=6'}
@@ -6334,6 +6387,16 @@ packages:
     resolution: {integrity: sha512-qYvlv/exQ4+svI3UOvPUpLDF0OMX5euvUH0Ny4N5QyRyhNdgAgUrVH3iUINSzEPLvx0kbo/Bp28GJKIqvE7URw==}
     dev: false
 
+  /mqtt-packet@6.10.0:
+    resolution: {integrity: sha512-ja8+mFKIHdB1Tpl6vac+sktqy3gA8t9Mduom1BA75cI+R9AHnZOiaBQwpGiWnaVJLDGRdNhQmFaAqd7tkKSMGA==}
+    dependencies:
+      bl: 4.1.0
+      debug: 4.3.4
+      process-nextick-args: 2.0.1
+    transitivePeerDependencies:
+      - supports-color
+    dev: true
+
   /mqtt-packet@8.2.0:
     resolution: {integrity: sha512-21Vo7XdRXUw2qhdTfk8GeOl2jtb8Dkwd4dKxn/epvf37mxTxHodvBJoozTPZGVwh57JXlsh2ChsaxMsAfqxp+A==}
     dependencies:
@@ -6342,6 +6405,34 @@ packages:
       process-nextick-args: 2.0.1
     transitivePeerDependencies:
       - supports-color
+    dev: true
+
+  /mqtt@4.3.7:
+    resolution: {integrity: sha512-ew3qwG/TJRorTz47eW46vZ5oBw5MEYbQZVaEji44j5lAUSQSqIEoul7Kua/BatBW0H0kKQcC9kwUHa1qzaWHSw==}
+    engines: {node: '>=10.0.0'}
+    hasBin: true
+    dependencies:
+      commist: 1.1.0
+      concat-stream: 2.0.0
+      debug: 4.3.4
+      duplexify: 4.1.2
+      help-me: 3.0.0
+      inherits: 2.0.4
+      lru-cache: 6.0.0
+      minimist: 1.2.8
+      mqtt-packet: 6.10.0
+      number-allocator: 1.0.14
+      pump: 3.0.0
+      readable-stream: 3.6.2
+      reinterval: 1.1.0
+      rfdc: 1.3.0
+      split2: 3.2.2
+      ws: 7.5.9
+      xtend: 4.0.2
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
     dev: true
 
   /mqtt@5.0.5:
@@ -6990,7 +7081,6 @@ packages:
     dependencies:
       end-of-stream: 1.4.4
       once: 1.4.0
-    dev: false
 
   /punycode@2.1.0:
     resolution: {integrity: sha512-Yxz2kRwT90aPiWEMHVYnEf4+rhwF1tBmmZ4KepCP+Wkium9JxtWnUm1nqGwpiAHr/tnTSeHqr3wb++jgSkXjhA==}
@@ -7555,6 +7645,12 @@ packages:
   /source-map@0.6.1:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
+    dev: true
+
+  /split2@3.2.2:
+    resolution: {integrity: sha512-9NThjpgZnifTkJpzTZ7Eue85S49QwpNhZTq6GRJwObb6jnLFNGB7Qm73V5HewTROPyxD0C29xqmaI68bQtV+hg==}
+    dependencies:
+      readable-stream: 3.6.2
     dev: true
 
   /split2@4.2.0:
@@ -8590,6 +8686,19 @@ packages:
       ultron: 1.1.1
     dev: false
 
+  /ws@7.5.9:
+    resolution: {integrity: sha512-F+P9Jil7UiSKSkppIiD94dN07AwvFixvLIj1Og1Rl9GGMuNipJnV9JzjD6XuqmAeiswGvUmNLjr5cFuXwNS77Q==}
+    engines: {node: '>=8.3.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: ^5.0.2
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+    dev: true
+
   /ws@8.14.1:
     resolution: {integrity: sha512-4OOseMUq8AzRBI/7SLMUwO+FEDnguetSk7KMb1sHwvF2w2Wv5Hoj0nlifx8vtGsftE/jWHojPy8sMMzYLJ2G/A==}
     engines: {node: '>=10.0.0'}
@@ -8633,7 +8742,6 @@ packages:
   /xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
     engines: {node: '>=0.4'}
-    dev: false
 
   /y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}

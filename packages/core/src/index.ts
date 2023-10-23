@@ -3,6 +3,7 @@ import CryptoJS from 'crypto-js';
 import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes } from 'iotacat-sdk-utils';
 import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify } from './types';
 import type { MqttClient } from "mqtt";
+import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
 import { serializeRecipientList, deserializeRecipientList, serializeIMMessage, deserializeIMMessage } from './codec';
 import { WriteStream, ReadStream } from '@iota/util.js';
@@ -13,7 +14,69 @@ export * from './codec_mute';
 export * from './codec_vote';
 const SHA256_LEN = 32
 class IotaCatSDK {
-
+    private groupMap:Record<string,MessageGroupMeta> = {
+        'iceberg':{
+            groupName: 'iceberg',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        'iceberg-collection-1':{
+            groupName: 'iceberg-collection-1',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        'iceberg-collection-2':{
+            groupName: 'iceberg-collection-2',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        'iceberg-collection-3':{
+            groupName: 'iceberg-collection-3',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        'iceberg-collection-4':{
+            groupName: 'iceberg-collection-4',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        'iceberg-collection-5':{
+            groupName: 'iceberg-collection-5',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        'iceberg-collection-6':{
+            groupName: 'iceberg-collection-6',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        'iceberg-collection-7':{
+            groupName: 'iceberg-collection-7',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        'iceberg-collection-8':{
+            groupName: 'iceberg-collection-8',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+        //smr-whale
+        'smr-whale':{
+            groupName: 'smr-whale',
+            schemaVersion: MessageCurrentSchemaVersion,
+            messageType:MessageTypePrivate,
+            authScheme:MessageAuthSchemeRecipeintOnChain,
+        },
+    }
     _groupIdCache:Record<string,string[]> = {}
 
     _groupToGroupId(group:string){
@@ -23,70 +86,15 @@ class IotaCatSDK {
         return groupId
     }
     _groupNameToGroupMeta(group:string):MessageGroupMeta|undefined{
-        const map:Record<string,MessageGroupMeta> = {
-            'iceberg':{
-                groupName: 'iceberg',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            'iceberg-collection-1':{
-                groupName: 'iceberg-collection-1',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            'iceberg-collection-2':{
-                groupName: 'iceberg-collection-2',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            'iceberg-collection-3':{
-                groupName: 'iceberg-collection-3',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            'iceberg-collection-4':{
-                groupName: 'iceberg-collection-4',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            'iceberg-collection-5':{
-                groupName: 'iceberg-collection-5',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            'iceberg-collection-6':{
-                groupName: 'iceberg-collection-6',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            'iceberg-collection-7':{
-                groupName: 'iceberg-collection-7',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            'iceberg-collection-8':{
-                groupName: 'iceberg-collection-8',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
-            //smr-whale
-            'smr-whale':{
-                groupName: 'smr-whale',
-                schemaVersion: MessageCurrentSchemaVersion,
-                messageType:MessageTypePrivate,
-                authScheme:MessageAuthSchemeRecipeintOnChain,
-            },
+        return this.groupMap[group]
+    }
+    _groupIdToGroupMeta(groupId:string):MessageGroupMeta|undefined{
+        for (const group in this.groupMap) {
+            const meta = this.groupMap[group]
+            const groupId_ = this._groupMetaToGroupId(meta)
+            if (this._addHexPrefixIfAbsent(groupId_) === this._addHexPrefixIfAbsent(groupId)) return meta
         }
-        return map[group]
+        return undefined
     }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
         const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
@@ -97,8 +105,15 @@ class IotaCatSDK {
         const groupId = CryptoJS.SHA256(JSON.stringify(sortedMap)).toString(CryptoJS.enc.Hex)
         return groupId
     }
+    _addHexPrefixIfAbsent(hex:string){
+        if (hex.indexOf('0x') === 0) return hex
+        return '0x'+hex
+    }
     addressToInboxId(address:string):string{
-        return CryptoJS.SHA256(address).toString(CryptoJS.enc.Hex)
+        return this._sha256Hash(address)
+    }
+    _sha256Hash(str:string):string{
+        return CryptoJS.SHA256(str).toString(CryptoJS.enc.Hex)
     }
     _groupIdToGroupMembers(groupId:string):string[]{
         return this._groupIdCache[groupId] || []
@@ -121,6 +136,26 @@ class IotaCatSDK {
         })
         client.on('message', this._handleMqttMessage.bind(this))
         this._mqttClient = client
+    }
+    _iotaMqttClient?:IotaMqttClient
+    setupIotaMqttConnection(mqttClient:new (...args: any[])=>IotaMqttClient){
+        const client = new mqttClient(`wss://api.shimmer.network:443/api/mqtt/v1`)
+        console.log('iota mqtt client setup',client)
+
+        this._iotaMqttClient = client
+        
+
+    }
+    async waitOutput(outputId:string) {
+        if (!this._iotaMqttClient) throw new Error('iota mqtt client not setup')
+        return new Promise((resolve,reject)=>{
+            const subscriptionId = this._iotaMqttClient!.output(outputId, (topic,data)=>{
+                this._iotaMqttClient!.unsubscribe(subscriptionId)
+                console.log('output',topic,data,subscriptionId,this._iotaMqttClient)
+                resolve(data)
+            })
+            console.log('waitOutput',outputId,this._iotaMqttClient)
+        })
     }
     _events:EventEmitter = new EventEmitter();
     _handleMqttMessage(topic:string, message:Buffer){
@@ -218,6 +253,20 @@ class IotaCatSDK {
     // fetch group votes count for a group, /groupvotescount
     async fetchGroupVotesCount(groupId:string):Promise<number>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotescount?groupId=0x${groupId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // fetch group blacklist for a group, /groupblacklist
+    async fetchGroupBlacklist(groupId:string):Promise<string[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupblacklist?groupId=0x${groupId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // fetch address member groups for an address, /addressmembergroups
+    async fetchAddressMemberGroups(address:string):Promise<string[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmembergroups?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json

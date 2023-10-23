@@ -120,6 +120,20 @@
                     box-sizing: border-box;
                 }
             }
+
+            .loading-mask {
+                display: none; /* Hidden by default */
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(255, 255, 255, 0.8);
+                z-index: 1000;
+                text-align: center;
+                font-size: 24px;
+                padding-top: 20%;
+            }
         </style>
     </head>
 
@@ -166,9 +180,14 @@
     </div>
 
 </body>
+<div class="loading-mask" id="loadingMask">
+    Loading...
+</div>
 <script src="./js/BigInteger.min.js"></script>
 <script src="./js/crypto.js"></script>
 <script src="./js/util.js"></script>
+<script src="./js/iota.js"></script>
+<script src="./js/iota-mqtt.js"></script>
 <script src="./js/core.js"></script>
 <script src="./js/tanglepaycommon.js"></script>
 <script src="./js/tanglepaysdk.js"></script>

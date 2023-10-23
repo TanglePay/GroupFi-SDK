@@ -111,7 +111,7 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://test.shimmer.node.tanglepay.com",
+    apiUrl: "https://soon.dlt.builders/api/core/v2/info",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
@@ -165,6 +165,15 @@ class IotaCatClient {
         this._storage = storage
     }
 
+    async _getDltShimmer(){
+        const url = 'https://dlt.green/api?dns=shimmer&id=tanglepay&token=egm9jvee56sfjrohylvs0tkc6quwghyo'
+        const res = await fetch(url)
+        const json = await res.json()
+        const domains = json.filter((item:any)=>item.ShimmerHornet.isHealthy).map((item:any) => item.ShimmerHornet.Domain)
+        // random pick one
+        const domain = domains[Math.floor(Math.random() * domains.length)];
+        return domain
+    }
     async setHexSeed(hexSeed:string){
         this._ensureClientInited()
         if (this._hexSeed == hexSeed) return
@@ -174,6 +183,8 @@ class IotaCatClient {
         console.log('BaseSeed', baseSeed);
         this._walletKeyPair = this._getPair(baseSeed)
         console.log('WalletKeyPair', this._walletKeyPair);
+        console.log('public key', Converter.bytesToHex(this._walletKeyPair.publicKey, true));
+        console.log('private key', Converter.bytesToHex(this._walletKeyPair.privateKey, true));
         const genesisEd25519Address = new Ed25519Address(this._walletKeyPair.publicKey);
         console.log('GenesisEd25519Address', genesisEd25519Address);
         const genesisWalletAddress = genesisEd25519Address.toAddress();
@@ -403,7 +414,7 @@ class IotaCatClient {
 
         const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
         const preparedRecipients:IMRecipient[] = encryptedPayloadList.map((payload)=>({addr:payload.addr,mkey:Converter.bytesToHex(payload.payload)}))
-        
+        console.log('preparedRecipients', preparedRecipients,preparedRecipients.map(r => ({addr:IotaCatSDKObj.getAddressHashStr(r.addr),mkey:r.mkey})));
         const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId)
         const tagFeature: ITagFeature = {
             type: 3,
@@ -933,7 +944,7 @@ class IotaCatClient {
             unlocks:unlockConditionArray
         };
         console.log("Transaction payload: ", transactionPayload);
-        const outputId = Converter.bytesToHex(TransactionHelper.getTransactionPayloadHash(transactionPayload), true) + "0000";
+        const outputId = this.getFirstOutputIdFromTransactionPayload(transactionPayload)
         // 8. Create Block
         const block: IBlock = {
             protocolVersion: DEFAULT_PROTOCOL_VERSION,
@@ -972,6 +983,17 @@ class IotaCatClient {
         } catch (error) {
             console.log('error',error)
         }
+    }
+    getTransactionPayloadHash(transactionPayload:ITransactionPayload){
+
+        return Converter.bytesToHex(TransactionHelper.getTransactionPayloadHash(transactionPayload), true)
+    }
+    getOutputIdFromTransactionPayloadHashAndIndex(transactionPayloadHash:string,index:number){
+        return TransactionHelper.outputIdFromTransactionData( transactionPayloadHash, index)
+    }
+    getFirstOutputIdFromTransactionPayload(transactionPayload:ITransactionPayload){
+        const transactionPayloadHash = this.getTransactionPayloadHash(transactionPayload)
+        return this.getOutputIdFromTransactionPayloadHashAndIndex(transactionPayloadHash,0)
     }
     // fetchMessageListUntil
     async fetchMessageListUntil(groupId:string, address:string, coninuationToken:string, limit:number=10) {
@@ -1070,7 +1092,7 @@ class IotaCatClient {
             return
         }
         list.push({groupId,timestamp:Date.now()})
-        await this._persistMarkedGroupIds(list,outputWrapper)
+        return await this._persistMarkedGroupIds(list,outputWrapper)
     }
     async unmarkGroup(groupId:string){
         this._ensureClientInited()
@@ -1079,14 +1101,14 @@ class IotaCatClient {
         const idx = list.findIndex(id=>id.groupId === groupId)
         if (idx === -1) return
         list.splice(idx,1)
-        await this._persistMarkedGroupIds(list,outputWrapper)
+        return await this._persistMarkedGroupIds(list,outputWrapper)
     }
     async _persistMarkedGroupIds(list:IMUserMarkedGroupId[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMARKTAG)}`
         const data = serializeUserMarkedGroupIds(list)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
-        const {blockId,outputId} = await this._sendBasicOutput(basicOutput,toBeConsumed);
+        return await this._sendBasicOutput(basicOutput,toBeConsumed);
     }
     async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
@@ -1136,7 +1158,7 @@ class IotaCatClient {
         const {outputWrapper,list} = await this._getUserMuteGroupMembers()
         if (list.find(id=>id.groupId === groupId && id.addrSha256Hash === addrSha256Hash)) return
         list.push({groupId,addrSha256Hash})
-        await this._persistUserMuteGroupMembers(list,outputWrapper)
+        return await this._persistUserMuteGroupMembers(list,outputWrapper)
     }
     async unmuteGroupMember(groupId:string,addrSha256Hash:string){
         this._ensureClientInited()
@@ -1145,14 +1167,14 @@ class IotaCatClient {
         const idx = list.findIndex(id=>id.groupId === groupId && id.addrSha256Hash === addrSha256Hash)
         if (idx === -1) return
         list.splice(idx,1)
-        await this._persistUserMuteGroupMembers(list,outputWrapper)
+        return await this._persistUserMuteGroupMembers(list,outputWrapper)
     }
     async _persistUserMuteGroupMembers(list:IMUserMuteGroupMember[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMUTETAG)}`
         const data = serializeUserMuteGroupMembers(list)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
-        const {blockId,outputId} = await this._sendBasicOutput(basicOutput,toBeConsumed);
+        return await this._sendBasicOutput(basicOutput,toBeConsumed);
     }
 
     async _getUserMuteGroupMembers():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
@@ -1165,7 +1187,12 @@ class IotaCatClient {
         const groupIds = deserializeUserMuteGroupMembers(data)
         return {outputWrapper:existing,list:groupIds}
     }
-
+    async getAllUserMuteGroupMembers(){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {list} = await this._getUserMuteGroupMembers()
+        return list
+    }
     // get group votes
     async getAllGroupVotes(){
         this._ensureClientInited()
@@ -1184,7 +1211,7 @@ class IotaCatClient {
         } else {
             list.push({groupId,vote})
         }
-        await this._persistUserVoteGroups(list,outputWrapper)
+        return await this._persistUserVoteGroups(list,outputWrapper)
     }
 
     async unvoteGroup(groupId:string){
@@ -1194,7 +1221,7 @@ class IotaCatClient {
         const idx = list.findIndex(id=>id.groupId === groupId)
         if (idx === -1) return
         list.splice(idx,1)
-        await this._persistUserVoteGroups(list,outputWrapper)
+        return await this._persistUserVoteGroups(list,outputWrapper)
     }
 
     async _persistUserVoteGroups(list:IMUserVoteGroup[],outputWrapper?:BasicOutputWrapper){
@@ -1202,7 +1229,7 @@ class IotaCatClient {
         const data = serializeUserVoteGroups(list)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
-        const {blockId,outputId} = await this._sendBasicOutput(basicOutput,toBeConsumed);
+        return await this._sendBasicOutput(basicOutput,toBeConsumed);
     }
     async _getUserVoteGroups():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserVoteGroup[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIVOTETAG)

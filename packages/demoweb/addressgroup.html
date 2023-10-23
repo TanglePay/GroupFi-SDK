@@ -120,6 +120,19 @@
                     box-sizing: border-box;
                 }
             }
+            .loading-mask {
+                display: none; /* Hidden by default */
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(255, 255, 255, 0.8);
+                z-index: 1000;
+                text-align: center;
+                font-size: 24px;
+                padding-top: 20%;
+            }
         </style>
     </head>
 
@@ -129,6 +142,14 @@
     <div class="content">
         
         <div class="left">
+            <h2>navigation</h2>
+            <div class="block">
+                <div class="hList">
+                    <div><a href="./index.html">send message</a></div>
+                    <div style="margin-left: 15px;"><a href="./addressgroup.html">qualified groups</a></div>
+                    <div style="margin-left: 15px;"><a href="./groupstatus.html">group status</a></div>
+                </div>
+            </div>
             <h2>message send</h2>
             <div class="block">
                 <h4>wallet address</h4>
@@ -157,13 +178,32 @@
     </div>
 
 </body>
+<div class="loading-mask" id="loadingMask">
+    Loading...
+</div>
 <script src="./js/BigInteger.min.js"></script>
+<script src="https://unpkg.com/mqtt@4.2.8/dist/mqtt.min.js"></script>
 <script src="./js/crypto.js"></script>
 <script src="./js/util.js"></script>
+<script src="./js/iota.js"></script>
+<script src="./js/iota-mqtt.js"></script>
 <script src="./js/core.js"></script>
 <script src="./js/tanglepaycommon.js"></script>
 <script src="./js/tanglepaysdk.js"></script>
 <script>
+    // Get the loading mask element
+const loadingMask = document.getElementById('loadingMask');
+// Function to show the loading mask
+function showLoadingMask() {
+    loadingMask.style.display = 'block';
+}
+
+// Function to hide the loading mask
+function hideLoadingMask() {
+    loadingMask.style.display = 'none';
+}
+
+
     var ipfsOrigins
     const loadIpfsOrigins = async () => {
         ipfsOrigins = await iotacatsdk.IotaCatSDKObj.fetchIpfsOrigins()
@@ -173,8 +213,19 @@
     document.addEventListener("DOMContentLoaded", function () {
         loadIpfsOrigins()
     });
+    const waitThenRefresh = async ({outputId}) => {
+        try{
+            await iotacatsdk.IotaCatSDKObj.waitOutput(outputId)
+            await window.loadQualifiedGroups()
+        }catch(e){
+            console.log('error',e)
+        }finally{
+            hideLoadingMask()
+        }
+    }
     window.addEventListener('iota-ready',async ()=>{
         console.log('tanglepaysdk',iota)
+        iotacatsdk.IotaCatSDKObj.setupIotaMqttConnection(window.IotaMqtt.MqttClient)
         try {
             const res = await iota.request({
                         method: 'iota_connect',
@@ -231,11 +282,18 @@
                 <button onclick="voteGroup('${groupName}',1)" class="btn btn-primary">vote private</button>
                 </div>`)
         }
+        // if vote is not -1, show unvote button
+        if(vote !== -1){
+            content.push(`<div style="margin-top: 10px;">
+                <button onclick="unvoteGroup('${groupName}')" class="btn btn-primary">unvote</button>
+                </div>`)
+        }
           
 
         return `<div class="block">${content.join('')}</div>`
     }).join('')
     window.joinGroup = async (groupName) => {
+        showLoadingMask()
         const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
         try {
             const addr = document.getElementById("cur_addr").value
@@ -249,11 +307,13 @@
                         }
                     })
             console.log('joinGroup',res)
+            await waitThenRefresh(res)
         } catch (error) {
             console.log('error',error)
         }
     }
     window.leaveGroup = async (groupName) => {
+        showLoadingMask()
         const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
         try {
             const addr = document.getElementById("cur_addr").value
@@ -267,11 +327,13 @@
                         }
                     })
             console.log('leaveGroup',res)
+            await waitThenRefresh(res)
         } catch (error) {
             console.log('error',error)
         }
     }
     window.voteGroup = async (groupName,vote) => {
+        showLoadingMask()
         const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
         try {
             const addr = document.getElementById("cur_addr").value
@@ -284,13 +346,35 @@
                                 vote
                             }
                         }
-                    })
+                    })       
             console.log('voteGroup',res)
+            await waitThenRefresh(res)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.unvoteGroup = async (groupName) => {
+        showLoadingMask()
+        const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
+        try {
+            const addr = document.getElementById("cur_addr").value
+            const res = await iota.request({
+                        method: 'iota_im_unvoteGroup',
+                        params: {
+                            content: {
+                                addr,
+                                groupId
+                            }
+                        }
+                    })
+            console.log('unvoteGroup',res)
+            await waitThenRefresh(res)
         } catch (error) {
             console.log('error',error)
         }
     }
     window.loadQualifiedGroups = async () => {
+        showLoadingMask()
         const address = document.getElementById("cur_addr").value
         try {
         const [groups, markRes, voteRes] = await Promise.all([
@@ -332,11 +416,7 @@
             return acc
         },{})
 
-        /*
-export type VotePublic = 0
-export type VotePrivate = 1
-*/
-        // voteRes is IMUserVoteGroup[], reduce to map[string]=VotePublic|VotePrivate
+
         const voteGroupIdsMap = (voteRes??[]).reduce((acc,cur)=>{
             const {groupId,vote} = cur
             if(groupId.startsWith('0x')){
@@ -364,6 +444,8 @@ export type VotePrivate = 1
         document.getElementById("text").innerHTML = makelist(groups)
         } catch (error) {
             console.log('error',error)
+        } finally {
+            hideLoadingMask()
         }
         
     }

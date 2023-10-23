@@ -33,8 +33,9 @@
   },
   "homepage": "https://github.com/TanglePay/TanglePay-SDK#readme",
   "devDependencies": {
-    "@iota/crypto.js": "^2.0.0-rc.2",
-    "@iota/iota.js": "^2.0.0-rc.4",
+    "@iota/crypto.js": "2.0.0-rc.2",
+    "@iota/iota.js": "2.0.0-rc.4",
+    "@iota/mqtt.js": "2.0.0-rc.3",
     "@types/crypto-js": "^4.1.1",
     "js-crypto-hkdf": "^1.0.4",
     "mqtt": "^5.0.5"
