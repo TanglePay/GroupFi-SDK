@@ -251,7 +251,12 @@ class IotaCatSDK {
         return json
     }
     // fetch group votes count for a group, /groupvotescount
-    async fetchGroupVotesCount(groupId:string):Promise<number>{
+    async fetchGroupVotesCount(groupId:string):Promise<{
+        groupId: string;
+        publicCount: number;
+        privateCount: number;
+        memberCount: number;
+    }>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotescount?groupId=0x${groupId}`
         const res = await fetch(url)
         const json = await res.json()
