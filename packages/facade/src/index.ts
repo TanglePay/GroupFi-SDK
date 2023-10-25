@@ -171,7 +171,8 @@ class GroupFiSDKFacade {
 
   async waitWalletReadyAndConnectWallet() {
     return new Promise((resolve, reject) => {
-      IotaSDK._events.on('iota-ready', async () => {
+      const listener = async () => {
+        IotaSDK._events.off('iota-ready', listener);
         console.log('****iota ready');
         try {
           const res = (await IotaSDK.request({
@@ -181,14 +182,13 @@ class GroupFiSDKFacade {
             },
           })) as { address: string; nodeId: string };
           console.log('****iota connect', res);
-          // this._address = res.address;
-          this._address =
-            'smr1qqc9fkdqy2esmnnqkv3aylvalz05vjkfd0368hgjy3f2nfp4dvdk67a3xdt';
+          this._address = res.address;
           resolve(res);
         } catch (error) {
           reject(null);
         }
-      });
+      }
+      IotaSDK._events.on('iota-ready', listener);
     });
   }
 

@@ -89,6 +89,11 @@ class IotaCatSDK {
     _groupNameToGroupMeta(group:string):MessageGroupMeta|undefined{
         return this.groupMap[group]
     }
+    groupIdToGroupName(groupId:string):string|undefined{
+        const meta = this._groupIdToGroupMeta(groupId)
+        if (!meta) return undefined
+        return meta.groupName
+    }
     _groupIdToGroupMeta(groupId:string):MessageGroupMeta|undefined{
         for (const group in this.groupMap) {
             const meta = this.groupMap[group]
