@@ -5,6 +5,7 @@ import {
   Address,
   IMessage,
   MessageGroupMeta,
+  IMMessage,
 } from 'iotacat-sdk-core';
 import client from 'iotacat-sdk-client';
 
@@ -50,30 +51,49 @@ class GroupFiSDKFacade {
   }
 
   async handlePushedMessage(pushed: any): Promise<IMessage | undefined> {
-    const { type, groupId, outputId } = pushed;
-    if (type === 1) {
-      const res = await client.getMessageFromOutputId(outputId, this._address!);
-      if (res !== undefined) {
-        const message: IMessage = {
-          // Question: Why no message id
-          messageId: 'why no message id',
-          groupId,
-          sender: res.sender,
-          message: res.message.data,
-          timestamp: new Date().getTime(),
-        };
-        return message;
+    const {type,groupId} = pushed
+
+    if (type === 1 ) { 
+        throw new Error('type 1 not supported for pushed message')
+    } else if (type === 2) {
+        const {sender, meta} = pushed
+        const res = await IotaSDK.request({
+          method: 'iota_im_p2p_pushed',
+          params: {
+          content: {
+              addr:this._address!,
+              pushed: {
+                  meta,
+                  sender
+              },
+          }
+          }
+      })
+      if (res === undefined) {
+          return undefined
       }
+      const resUnwrapped = res as {messageId:string, message:IMMessage, sender:string}
+      const message:IMessage = {
+        messageId:resUnwrapped.messageId,
+        groupId:resUnwrapped.message.groupId,
+        sender:resUnwrapped.sender,
+        message:resUnwrapped.message.data,
+        timestamp:resUnwrapped.message.timestamp
+      }
+      return message
     }
+
+    
     return undefined;
   }
 
   listenningNewMessage(callback: (message: IMessage) => void): () => void {
     this._ensureWalletConnected();
     if (!this._mqttConnected) {
-      this.setupMqttConnection();
+      throw new Error('MQTT not connected');
     }
     const listener = async (pushed: any) => {
+      console.log('pushed', pushed);
       const pushedMessage = await this.handlePushedMessage(pushed);
       if (pushedMessage) {
         callback(pushedMessage);
@@ -83,9 +103,11 @@ class GroupFiSDKFacade {
     return () => IotaCatSDKObj.off('inbox', listener);
   }
 
-  async setupMqttConnection() {
-    IotaCatSDKObj.setupMqttConnection({} as any);
+  async setupMqttConnection(connect: any) {
+    IotaCatSDKObj.setupMqttConnection(connect);
     IotaCatSDKObj.switchMqttAddress(this._address!);
+    // log switchMqttAddress
+    console.log('switchMqttAddress', this._address);
     this._mqttConnected = true;
   }
 

@@ -2,7 +2,7 @@
 import CryptoJS from 'crypto-js';
 import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash } from 'iotacat-sdk-utils';
 import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify } from './types';
-import type { MqttClient } from "mqtt";
+import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
 import { serializeRecipientList, deserializeRecipientList, serializeIMMessage, deserializeIMMessage } from './codec';
@@ -181,6 +181,8 @@ class IotaCatSDK {
     async switchMqttAddress(address:string){
         this._ensureMqttClient()
         const groupIds = await this._fetchAddressGroupIds(address)
+        // log address groupIds
+        console.log('switchMqttAddress address groupIds',address,groupIds)
         // loop through groupIds then subscribe to inbox/groupId
         for (const groupId of groupIds) {
             this.subscribeToGroupId(groupId)
