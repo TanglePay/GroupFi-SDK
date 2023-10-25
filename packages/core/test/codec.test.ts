@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test, beforeAll } from '@jest/globals';
 import { AddressHashLength, IMRecipient } from '../src';
 import { serializeRecipient, deserializeRecipient, serializeIMMessage, deserializeIMMessage } from '../src/codec';
 import { IotaCatSDKObj, IMMessage, ShimmerBech32Addr, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage } from '../src';
-
+import { getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
 import { WriteStream, ReadStream } from '@iota/util.js'
 
 describe('codec test', () => {
@@ -48,10 +48,12 @@ describe('codec test', () => {
     test('test one message serialization and deserialization, with recipients on chain', () => {
         const group = 'iceberg'
         const groupId = IotaCatSDKObj._groupToGroupId(group)
+        const timestamp = getCurrentEpochInSeconds()
         const message:IMMessage = {
             schemaVersion: MessageCurrentSchemaVersion,
             messageType:MessageTypePrivate,
             authScheme:MessageAuthSchemeRecipeintOnChain,
+            timestamp,
             groupId:groupId!,
             recipientOutputid:'0xc6b3be90456dcde47e859806c973299cead6d5e9ca7a7d5130a2b71bb4425b5a0000',
             data:'hehe'

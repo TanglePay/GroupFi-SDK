@@ -13,7 +13,7 @@ type MockedMqttClient = {
 describe('seed related test', () => {
 
     beforeAll(async ()=>{
-        await IotaCatClient.setup(101,NodePowProvider)
+        await IotaCatClient.setup(102,NodePowProvider)
     })
     test('test client initialized', async () => {
         expect(IotaCatClient._nodeInfo).toBeDefined()

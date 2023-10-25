@@ -18,6 +18,7 @@ export interface IMMessage {
     groupId: string; // sha256  bytes
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
+    timestamp: number; // 4 bytes
     recipients?: IMRecipient[];
     recipientOutputid?: string; // 32 bytes
     data: string;
@@ -27,6 +28,7 @@ export interface IMMessageIntermediate {
     groupId: Uint8Array; // sha256  bytes
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
+    timestamp: number; // 4 bytes
     recipients?: IMRecipientIntermediate[];
     recipientOutputid?: Uint8Array; // 32 bytes
     data: Uint8Array;

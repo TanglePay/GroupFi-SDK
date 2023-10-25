@@ -89,6 +89,7 @@ type InboxMessageResponse = {
 export type MessageBody = {
     sender:string,
     message:string,
+    messageId:string,
     groupId:string,
     timestamp:number
 }
@@ -489,17 +490,18 @@ class IotaCatClient {
             const metadataFeature = features.find(feature=>feature.type === 2) as IMetadataFeature
             if (!metadataFeature) throw new Error('No metadata feature')
             const data = Converter.hexToBytes(metadataFeature.data)
-            const {sender, message} = await this.getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address})
-            return { sender , message }
+            const {sender, message, messageId} = await this.getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address})
+            return { sender, message, messageId }
         } catch(e) {
             console.log(`getMessageFromOutputId:${outputId}`);
         }
     }
     // getMessageFromMetafeaturepayloadandsender
-    async getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address}:{data:Uint8Array|string,senderAddressBytes:Uint8Array|string,address:string}):Promise<{sender:string,message:IMMessage}>{
+    async getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address}:{data:Uint8Array|string,senderAddressBytes:Uint8Array|string,address:string}):Promise<{sender:string,message:IMMessage,messageId:string}>{
         const data_ = typeof data === 'string' ? Converter.hexToBytes(data) : data
         const senderAddressBytes_ = typeof senderAddressBytes === 'string' ? Converter.hexToBytes(senderAddressBytes) : senderAddressBytes
         console.log('getMessageFromMetafeaturepayloadAndSender', data_, senderAddressBytes_, address);
+        const messageId = IotaCatSDKObj.getMessageId(data_, senderAddressBytes_)
         const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
         const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
             const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
@@ -508,7 +510,7 @@ class IotaCatClient {
             const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
             return salt
         }})
-        return {sender,message}
+        return {sender,message,messageId}
     }
     async _getUnSpentOutputs({numbersWanted, amountLargerThan, idsForFiltering}:{numbersWanted:number,amountLargerThan?:bigInt.BigNumber, idsForFiltering?:Set<string>} = {numbersWanted : 100}) {
         this._ensureClientInited()
@@ -1048,6 +1050,7 @@ class IotaCatClient {
             timestamp:messages[index].timestamp,
             groupId:payload.message.groupId,
             message:payload.message.data??'',
+            messageId:payload.messageId,
             sender:payload.sender
             }
         })

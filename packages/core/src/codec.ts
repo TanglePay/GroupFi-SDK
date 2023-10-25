@@ -94,6 +94,9 @@ export function serializeIMMessage(writer: WriteStream, message: IMMessageInterm
     // Write auth_scheme as Int8
     writer.writeUInt8("auth_scheme", message.authScheme);
 
+    // Write timestamp as UInt32
+    writer.writeUInt32("timestamp", message.timestamp);
+
     if (message.messageType === MessageTypePrivate) {
         if (message.authScheme == MessageAuthSchemeRecipeintOnChain) {
             // check if message.recipientOutputid is null
@@ -127,6 +130,7 @@ export function deserializeIMMessage(reader: ReadStream): IMMessageIntermediate 
     const groupId = reader.readBytes("groupId", GroupIDLength);
     const messageType = reader.readUInt8("message_type");
     const authScheme = reader.readUInt8("auth_scheme");
+    const timestamp = reader.readUInt32("timestamp");
 
     let recipientOutputid: Uint8Array | undefined;
     let recipients: IMRecipientIntermediate[] | undefined;
@@ -146,6 +150,7 @@ export function deserializeIMMessage(reader: ReadStream): IMMessageIntermediate 
         groupId,
         messageType,
         authScheme,
+        timestamp,
         recipientOutputid,
         recipients,
         data

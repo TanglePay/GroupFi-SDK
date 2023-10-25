@@ -42,7 +42,9 @@ export const serializeListOfBytes = (list: Uint8Array[]):Uint8Array => {
     }
     return stream.finalBytes();
 }
-
+export const blake256Hash = (bytes: Uint8Array):Uint8Array => {
+    return Blake2b.sum256(bytes)
+}
 export const deserializeListOfBytes = (bytes: Uint8Array):Uint8Array[] => {
     const stream = new ReadStream(bytes);
     const list: Uint8Array[] = [];
@@ -104,4 +106,8 @@ export const bytesToUnixSeconds = (bytes: Uint8Array): number => {
         throw new Error(`bytes length is not 4`);
     }
     return (bytes[0] << 24) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3];
+}
+
+export function getCurrentEpochInSeconds() {
+    return Math.floor(Date.now() / 1000);
 }

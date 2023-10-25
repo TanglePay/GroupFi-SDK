@@ -1,6 +1,6 @@
 
 import CryptoJS from 'crypto-js';
-import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes } from 'iotacat-sdk-utils';
+import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash } from 'iotacat-sdk-utils';
 import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify } from './types';
 import type { MqttClient } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
@@ -8,6 +8,7 @@ import EventEmitter from 'events';
 import { serializeRecipientList, deserializeRecipientList, serializeIMMessage, deserializeIMMessage } from './codec';
 import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
+import { concatBytes } from 'iotacat-sdk-utils';
 export * from './types';
 export * from './codec_mark';
 export * from './codec_mute';
@@ -191,12 +192,13 @@ class IotaCatSDK {
         if (!meta) return undefined
         const {schemaVersion,messageType,authScheme} = meta
         const groupId = this._groupMetaToGroupId(meta)
-        
+        const timestamp = getCurrentEpochInSeconds()
         return {
             schemaVersion,
             groupId,
             messageType,
             authScheme,
+            timestamp,
             recipients:[],
             data: message
         }
@@ -364,6 +366,10 @@ class IotaCatSDK {
     async sleep(ms:number) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
+    getMessageId(messageBytes:Uint8Array,senderAddressBytes:Uint8Array):string{
+        const msgIdBytes = blake256Hash(concatBytes(messageBytes,senderAddressBytes))
+        return bytesToHex(msgIdBytes, true)
+    }
     async deserializeMessage(messageBytes:Uint8Array, address:string, extra:{decryptUsingPrivateKey?:(data:Uint8Array)=>Promise<string>, sharedOutputSaltResolver?:(outputId:string)=>Promise<string>} ):Promise<IMMessage>{
         const {decryptUsingPrivateKey,sharedOutputSaltResolver} = extra
         const rs = new ReadStream(messageBytes)
@@ -432,12 +438,13 @@ class IotaCatSDK {
         return bytesToHex(addressHash(addr,IOTACATTAG))
     }
     _compileMessage(message:IMMessage):IMMessageIntermediate{
-        const {schemaVersion,groupId,messageType,authScheme, data} = message
+        const {schemaVersion,groupId,messageType,authScheme, timestamp, data} = message
         const portionOfRes = {
             schemaVersion,
             groupId: hexToBytes(groupId),
             messageType,
             authScheme,
+            timestamp,
             data: strToBytes(data),
         }
         if (message.messageType === MessageTypePrivate) {
@@ -477,13 +484,14 @@ class IotaCatSDK {
         }
     }
     _decompileMessage(message:IMMessageIntermediate):IMMessage{
-        const {schemaVersion,groupId,messageType,authScheme,data} = message
+        const {schemaVersion,groupId,messageType,authScheme,timestamp,data} = message
         const compressedString = bytesToStr(data)
         const portionOfRes = {
             schemaVersion,
             groupId: bytesToHex(groupId,false),
             messageType,
             authScheme,
+            timestamp,
             data:bytesToStr(data),
         }
         if (message.messageType === MessageTypePrivate) {
@@ -583,11 +591,11 @@ class IotaCatSDK {
 
 const instance = new IotaCatSDK
 
-export const IOTACATTAG = 'GROUPFIV2'
+export const IOTACATTAG = 'GROUPFIV3'
 export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
 export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const IotaCatSDKObj = instance
-export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFISHAREDV1','GROUPFIMARKV1']
+export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

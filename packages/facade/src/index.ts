@@ -132,8 +132,6 @@ class GroupFiSDKFacade {
     // log 
     console.log('messageList', messageList);
     const fulfilledMessageList = messageList != undefined? messageList.map((msgBody) => {
-      //const messageId = Math.random().toString(36).substr(2, 9);
-      //@ts-ignore
       const msg:IMessage = msgBody
       return msg
     }) : [];
