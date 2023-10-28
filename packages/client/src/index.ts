@@ -179,17 +179,10 @@ class IotaCatClient {
         this._ensureClientInited()
         if (this._hexSeed == hexSeed) return
         this._hexSeed = hexSeed
-        console.log('HexSeed', hexSeed);
         const baseSeed = this._hexSeedToEd25519Seed(hexSeed);
-        console.log('BaseSeed', baseSeed);
         this._walletKeyPair = this._getPair(baseSeed)
-        console.log('WalletKeyPair', this._walletKeyPair);
-        console.log('public key', Converter.bytesToHex(this._walletKeyPair.publicKey, true));
-        console.log('private key', Converter.bytesToHex(this._walletKeyPair.privateKey, true));
         const genesisEd25519Address = new Ed25519Address(this._walletKeyPair.publicKey);
-        console.log('GenesisEd25519Address', genesisEd25519Address);
         const genesisWalletAddress = genesisEd25519Address.toAddress();
-        console.log('GenesisWalletAddress', genesisWalletAddress);   
         this._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
         console.log('AccountHexAddress', this._accountHexAddress);
         this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
