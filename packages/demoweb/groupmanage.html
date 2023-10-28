@@ -152,20 +152,25 @@
                 </div>
                 
             </div>
+            <h2>address member groups</h2>
+            <div class="block">
+                <h4>wallet address</h4>
+                <div class="address-input">
+                    <input disabled id="cur_addr" type="text" placeholder="enter address in bech32">
+                </div>
+                
+            </div>
+            <div class="block">
+                <h4>load address member groups</h4>                
+                <button onclick="loadAddressMemberGroups()" class="btn btn-primary">load</button>
+            </div>
             <h2>group addresses</h2>
             <div class="block">
                 <h4>currently joined group</h4>
                 <div class="address-input">
                     <select id="group_select" class="w100" onchange="handleGroupChange(this.value)">
                         <option value=""></option>
-                        <option value="iceberg-collection-1">iceberg-collection-1</option>
-                        <option value="iceberg-collection-2">iceberg-collection-2</option>
-                        <option value="iceberg-collection-3">iceberg-collection-3</option>
-                        <option value="iceberg-collection-4">iceberg-collection-4</option>
-                        <option value="iceberg-collection-5">iceberg-collection-5</option>
-                        <option value="iceberg-collection-6">iceberg-collection-6</option>
-                        <option value="iceberg-collection-7">iceberg-collection-7</option>
-                        <option value="iceberg-collection-8">iceberg-collection-8</option>                       
+                        
                     </select>
                 </div>
             </div>
@@ -224,7 +229,22 @@ function showLoadingMask() {
 function hideLoadingMask() {
     loadingMask.style.display = 'none';
 }
-    
+    window.addEventListener('iota-ready',async ()=>{
+        iotacatsdk.IotaCatSDKObj.setupIotaMqttConnection(window.IotaMqtt.MqttClient)
+        try {
+            const res = await iota.request({
+                        method: 'iota_connect',
+                        params: {
+                            // expires: 3000000
+                        }
+                    })       
+            document.getElementById('cur_addr').value = res.address
+            await loadAddressMemberGroups() 
+        } catch (error) {
+            console.log('error',error)
+        }
+
+    })
     const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
     const makeSelect = (groupIds) => {
         const groupNames = groupIds.map(groupId=>iotacatsdk.IotaCatSDKObj._groupIdToGroupMeta(groupId).groupName)
@@ -235,10 +255,12 @@ function hideLoadingMask() {
     }
     /*{address:string, isBlackListed:boolean, isUserMuted}*/
     const makeMemberAddress = (memberAddress) => {
-        const {address, isBlackListed} = memberAddress
+        const {address, isBlackListed, isUserMuted} = memberAddress
         return `<div>
                     ${makekv('address',address)}
                     ${makekv('isBlackListed',isBlackListed)}
+                    ${makekv('isUserMuted',isUserMuted)}
+                    <button onclick="muteOrUnmuteAddress('${address}',${isUserMuted})" class="btn btn-primary">${isUserMuted?'unmute':'mute'}</button>
                 </div>`
     }
     let selectedGroupId
@@ -317,14 +339,25 @@ function hideLoadingMask() {
         ])
     }
     window.loadGroupMembersAndMute = async (groupId) => {
+        const address = document.getElementById("cur_addr").value
         let [memberAddresses,
-            blackListedAddresseHashs] = await Promise.all([
+            blackListedAddresseHashs, userMutedAddressHashs] = await Promise.all([
             iotacatsdk.IotaCatSDKObj.fetchGroupMemberAddresses(groupId),
-            iotacatsdk.IotaCatSDKObj.fetchGroupBlacklist(groupId)
+            iotacatsdk.IotaCatSDKObj.fetchGroupBlacklist(groupId),
+            iota.request({
+                method: 'iota_im_getAllUserMuteGroupMembers',
+                params: {
+                content: {
+                    addr:address,
+                    addrHash: iotacatsdk.IotaCatSDKObj._sha256Hash(address)
+                }
+                }
+            }),
         ])
         memberAddresses = memberAddresses || []
         blackListedAddresseHashs = blackListedAddresseHashs || []
-
+        userMutedAddressHashs = userMutedAddressHashs || []
+        console.log('userMutedAddressHashs',userMutedAddressHashs)
         //blackListedAddresseHashs to map
         const blackListedAddresseHashsMap = blackListedAddresseHashs.reduce((acc,cur)=>{
             // _addHexPrefixIfAbsent for cur
@@ -333,6 +366,14 @@ function hideLoadingMask() {
             return acc
         },{})
 
+        // userMutedAddressHashs to map
+        const userMutedAddressHashsMap = userMutedAddressHashs.reduce((acc,cur)=>{
+            let {addrSha256Hash} = cur
+            // _addHexPrefixIfAbsent for addrSha256Hash
+            addrSha256Hash = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(addrSha256Hash)
+            acc[addrSha256Hash] = true
+            return acc
+        },{})
 
         // memberAddresses to {address:string, isBlackListed:boolean, isUserMuted}[]
         memberAddresses = memberAddresses.map((address)=>{
@@ -341,7 +382,8 @@ function hideLoadingMask() {
             addressHash = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(addressHash)
             return {
                 address,
-                isBlackListed: blackListedAddresseHashsMap[addressHash] || false
+                isBlackListed: blackListedAddresseHashsMap[addressHash] || false,
+                isUserMuted: userMutedAddressHashsMap[addressHash] || false
             }
         })
         const memberAddressesHtml = memberAddresses.map(makeMemberAddress).join('')

@@ -167,18 +167,68 @@ class GroupFiSDKFacade {
     console.log('fulfilledMessageList', fulfilledMessageList);
     return { messageList: fulfilledMessageList, nextToken: token };
   }
-
-  async sendMessage(groupId: string, message: string) {
+  async ensureGroupHaveSharedOutput(groupId: string) {
+    try {
+        const res = await IotaSDK.request({
+            method: 'iota_im_ensure_group_shared',
+            params: {
+            content: {
+                addr: this._address!,
+                groupId
+            }
+            }
+        })
+        console.log('ensureGroupHasShared res',res)
+    } catch (error) {
+        console.log('ensureGroupHasShared error',error)
+    }
+  }
+  async consolidateGroupMessages(groupId: string) {
+    try {
+        const res = await IotaSDK.request({
+            method: 'iota_im_check_and_consolidate_messages',
+            params: {
+            content: {
+                addr: this._address!,
+                groupId
+            }
+            }
+        })
+    } catch (error) {
+        console.log('consolidateMessages error',error)
+    }
+  }
+  async enteringGroupByGroupId(groupId: string) {
+    const [ensureRes,
+      consolidateRes] = await Promise.all([
+      this.ensureGroupHaveSharedOutput(groupId),
+      this.consolidateGroupMessages(groupId)
+    ])
+    console.log('enteringGroupByGroupId ensureRes',ensureRes)
+    console.log('enteringGroupByGroupId consolidateRes',consolidateRes)
+  }
+  async sendMessage(groupId: string, messageText: string) {
     const address: Address = {
       type: ShimmerBech32Addr,
       addr: this._address!,
     };
-    const preparedMessage = await IotaCatSDKObj.prepareSendMessage(
+    const message = await IotaCatSDKObj.prepareSendMessage(
       address,
       groupId,
-      message
+      messageText
     );
-    await client.sendMessage(this._address!, groupId, preparedMessage!);
+    const res = await IotaSDK.request({
+        method: 'iota_im',
+        params: {
+          content: {
+                dappName:'trollbox',
+                addr:this._address!,
+                groupId,
+                message
+            }
+        }
+    })
+    console.log('send message res', res);
   }
 
   _ensureWalletConnected() {

@@ -147,6 +147,7 @@
                 <div class="hList">
                     <div><a href="./index.html">send message</a></div>
                     <div style="margin-left: 15px;"><a href="./addressgroup.html">qualified groups</a></div>
+                    <div style="margin-left: 15px;"><a href="./groupmanage.html">group manage</a></div>
                     <div style="margin-left: 15px;"><a href="./groupstatus.html">group status</a></div>
                 </div>
             </div>
@@ -209,10 +210,7 @@ function hideLoadingMask() {
         ipfsOrigins = await iotacatsdk.IotaCatSDKObj.fetchIpfsOrigins()
         console.log(ipfsOrigins)
     }
-    // on dom ready, do not use jquery, use pure js
-    document.addEventListener("DOMContentLoaded", function () {
-        loadIpfsOrigins()
-    });
+
     const waitThenRefresh = async ({outputId}) => {
         try{
             await iotacatsdk.IotaCatSDKObj.waitOutput(outputId)
@@ -234,6 +232,8 @@ function hideLoadingMask() {
                         }
                     })
             document.getElementById('cur_addr').value = res.address
+            await loadIpfsOrigins()
+            await loadQualifiedGroups()
         } catch (error) {
             console.log('error',error)
         }
