@@ -434,6 +434,10 @@ class GroupFiSDKFacade {
       await IotaCatSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
     }
   }
+
+  setupIotaMqttConnection(mqttClient: any) {
+    return IotaCatSDKObj.setupIotaMqttConnection(mqttClient)
+  }
 }
 
 const intance = new GroupFiSDKFacade();
