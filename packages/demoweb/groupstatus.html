@@ -154,7 +154,7 @@
             </div>
             <h2>group addresses</h2>
             <div class="block">
-                <h4>currently joined group</h4>
+                <h4>currently selected group</h4>
                 <div class="address-input">
                     <select id="group_select" class="w100" onchange="handleGroupChange(this.value)">
                         <option value=""></option>
@@ -235,10 +235,11 @@ function hideLoadingMask() {
     }
     /*{address:string, isBlackListed:boolean, isUserMuted}*/
     const makeMemberAddress = (memberAddress) => {
-        const {address, isBlackListed} = memberAddress
+        const {address, isBlackListed, reputation} = memberAddress
         return `<div>
                     ${makekv('address',address)}
                     ${makekv('isBlackListed',isBlackListed)}
+                    ${makekv('reputation',reputation)}
                 </div>`
     }
     let selectedGroupId
@@ -318,9 +319,12 @@ function hideLoadingMask() {
     }
     window.loadGroupMembersAndMute = async (groupId) => {
         let [memberAddresses,
-            blackListedAddresseHashs] = await Promise.all([
+            blackListedAddresseHashs,
+            groupUserReputation
+        ] = await Promise.all([
             iotacatsdk.IotaCatSDKObj.fetchGroupMemberAddresses(groupId),
-            iotacatsdk.IotaCatSDKObj.fetchGroupBlacklist(groupId)
+            iotacatsdk.IotaCatSDKObj.fetchGroupBlacklist(groupId),
+            iotacatsdk.IotaCatSDKObj.fetchGroupUserReputation(groupId)
         ])
         memberAddresses = memberAddresses || []
         blackListedAddresseHashs = blackListedAddresseHashs || []
@@ -333,15 +337,21 @@ function hideLoadingMask() {
             return acc
         },{})
 
+        // groupUserReputation IGroupUserReputation[] to map[addressSha256Hash]:reputation,
+        const groupUserReputationMap = groupUserReputation.reduce((acc,cur)=>{
+            acc[cur.addressSha256Hash] = cur.reputation
+            return acc
+        },{})
 
-        // memberAddresses to {address:string, isBlackListed:boolean, isUserMuted}[]
+        // memberAddresses to {address:string, isBlackListed:boolean, isUserMuted, reputation}[]
         memberAddresses = memberAddresses.map((address)=>{
             let addressHash = iotacatsdk.IotaCatSDKObj._sha256Hash(address)
             // _addHexPrefixIfAbsent
             addressHash = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(addressHash)
             return {
                 address,
-                isBlackListed: blackListedAddresseHashsMap[addressHash] || false
+                isBlackListed: blackListedAddresseHashsMap[addressHash] || false,
+                reputation: groupUserReputationMap[addressHash] || 0
             }
         })
         const memberAddressesHtml = memberAddresses.map(makeMemberAddress).join('')

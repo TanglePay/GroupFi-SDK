@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -281,6 +281,22 @@ class IotaCatSDK {
     // fetch address member groups for an address, /addressmembergroups
     async fetchAddressMemberGroups(address:string):Promise<string[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmembergroups?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+
+    // RouteGroupUserReputation = "/groupuserreputation"
+    async fetchGroupUserReputation(groupId:string):Promise<IGroupUserReputation[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupuserreputation?groupId=0x${groupId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+
+    // RouteUserGroupReputation = "/usergroupreputation"
+    async fetchUserGroupReputation(groupId:string,address:string):Promise<IGroupUserReputation>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/usergroupreputation?address=${address}&groupId=0x${groupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json

@@ -123,3 +123,9 @@ export interface IGroupQualify {
     tokenName:string
     tokenThres:string
 }
+
+export interface IGroupUserReputation {
+    groupId:string
+    addressSha256Hash:string
+    reputation:number
+}

@@ -6,6 +6,7 @@ import {
   IMessage,
   MessageGroupMeta,
   IMMessage,
+  IGroupUserReputation,
 } from 'iotacat-sdk-core';
 import client from 'iotacat-sdk-client';
 
@@ -312,7 +313,11 @@ class GroupFiSDKFacade {
       await IotaCatSDKObj.waitOutput(res.outputId);
     }
   }
-
+  // get user group 
+  async getUserGroupReputation(groupId: string):Promise<IGroupUserReputation> {
+    const allUserGroup = await IotaCatSDKObj.fetchUserGroupReputation(groupId, this._address!)
+    return allUserGroup
+  }
   async getGroupVoteRes(groupId: string) {
     const allGroupVotes = (await IotaSDK.request({
       method: 'iota_im_getAllGroupVotes',
