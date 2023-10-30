@@ -486,6 +486,10 @@ class GroupFiSDKFacade {
       muted,
     };
   }
+
+  groupIdToGroupName(groupId: string) {
+    return IotaCatSDKObj.groupIdToGroupName(groupId);
+  }
 }
 
 const intance = new GroupFiSDKFacade();
