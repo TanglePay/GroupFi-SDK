@@ -51,39 +51,42 @@ class GroupFiSDKFacade {
   }
 
   async handlePushedMessage(pushed: any): Promise<IMessage | undefined> {
-    const {type,groupId} = pushed
+    const { type, groupId } = pushed;
 
-    if (type === 1 ) { 
-        throw new Error('type 1 not supported for pushed message')
+    if (type === 1) {
+      throw new Error('type 1 not supported for pushed message');
     } else if (type === 2) {
-        const {sender, meta} = pushed
-        const res = await IotaSDK.request({
-          method: 'iota_im_p2p_pushed',
-          params: {
+      const { sender, meta } = pushed;
+      const res = await IotaSDK.request({
+        method: 'iota_im_p2p_pushed',
+        params: {
           content: {
-              addr:this._address!,
-              pushed: {
-                  meta,
-                  sender
-              },
-          }
-          }
-      })
+            addr: this._address!,
+            pushed: {
+              meta,
+              sender,
+            },
+          },
+        },
+      });
       if (res === undefined) {
-          return undefined
+        return undefined;
       }
-      const resUnwrapped = res as {messageId:string, message:IMMessage, sender:string}
-      const message:IMessage = {
-        messageId:resUnwrapped.messageId,
-        groupId:resUnwrapped.message.groupId,
-        sender:resUnwrapped.sender,
-        message:resUnwrapped.message.data,
-        timestamp:resUnwrapped.message.timestamp
-      }
-      return message
+      const resUnwrapped = res as {
+        messageId: string;
+        message: IMMessage;
+        sender: string;
+      };
+      const message: IMessage = {
+        messageId: resUnwrapped.messageId,
+        groupId: resUnwrapped.message.groupId,
+        sender: resUnwrapped.sender,
+        message: resUnwrapped.message.data,
+        timestamp: resUnwrapped.message.timestamp,
+      };
+      return message;
     }
 
-    
     return undefined;
   }
 
@@ -159,10 +162,13 @@ class GroupFiSDKFacade {
     // make fake message id
     // log
     console.log('messageList', messageList);
-    const fulfilledMessageList = messageList != undefined? messageList.map((msgBody) => {
-      const msg:IMessage = msgBody
-      return msg
-    }) : [];
+    const fulfilledMessageList =
+      messageList != undefined
+        ? messageList.map((msgBody) => {
+            const msg: IMessage = msgBody;
+            return msg;
+          })
+        : [];
     // log fulfilledMessageList
     console.log('fulfilledMessageList', fulfilledMessageList);
     return { messageList: fulfilledMessageList, nextToken: token };
@@ -209,7 +215,7 @@ class GroupFiSDKFacade {
         } catch (error) {
           reject(null);
         }
-      }
+      };
       IotaSDK._events.on('iota-ready', listener);
     });
   }
@@ -314,7 +320,24 @@ class GroupFiSDKFacade {
       ipfsOrigins
     );
     return !!qualifiedGroups.find(
-      (qualifiedGroup) => qualifiedGroup.groupId === groupId
+      (qualifiedGroup) =>
+        qualifiedGroup.groupId === IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    );
+  }
+
+  async marked(groupId: string) {
+    this._ensureWalletConnected();
+    const markedGroupIds = (await IotaSDK.request({
+      method: 'iota_im_getMarkedGroupIds',
+      params: {
+        content: {
+          addr: this._address,
+        },
+      },
+    })) as Array<{ groupId: string }>;
+
+    return !!(markedGroupIds ?? []).find(
+      (markedGroup) => markedGroup.groupId === groupId
     );
   }
 
@@ -348,9 +371,10 @@ class GroupFiSDKFacade {
     const blackListedAddresseHashs = await IotaCatSDKObj.fetchGroupBlacklist(
       groupId
     );
-    return !!blackListedAddresseHashs.find(
-      (blackListedAddress) => blackListedAddress === this._address
-    );
+    return !!blackListedAddresseHashs.find((blackListedAddressHash) => {
+      const addressHash = IotaCatSDKObj._sha256Hash(this._address!);
+      return blackListedAddressHash === addressHash;
+    });
   }
 
   async muteGroupMember(groupId: string, memberAddress: string) {
@@ -386,7 +410,26 @@ class GroupFiSDKFacade {
   }
 
   setupIotaMqttConnection(mqttClient: any) {
-    return IotaCatSDKObj.setupIotaMqttConnection(mqttClient)
+    return IotaCatSDKObj.setupIotaMqttConnection(mqttClient);
+  }
+
+  async getAddressStatusInGroup(groupId: string): Promise<{
+    isGroupPublic: boolean;
+    isQualified: boolean;
+    marked: boolean;
+    muted: boolean;
+  }> {
+    const isGroupPublic = await this.isGroupPublic(groupId);
+    const isQualified = await this.isQualified(groupId);
+    const marked = await this.marked(groupId);
+    const muted = await this.isBlackListed(groupId);
+
+    return {
+      isGroupPublic,
+      isQualified,
+      marked,
+      muted,
+    };
   }
 }
 
