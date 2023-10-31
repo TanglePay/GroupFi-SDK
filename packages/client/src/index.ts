@@ -53,6 +53,7 @@ import { IMRecipient } from "iotacat-sdk-core";
 import { EventEmitter } from 'events';
 import { GroupMemberTooManyToPublicThreshold } from "iotacat-sdk-core";
 import { MessageTypePublic } from "iotacat-sdk-core";
+import { IMessage } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -495,6 +496,7 @@ class IotaCatClient {
         const senderAddressBytes_ = typeof senderAddressBytes === 'string' ? Converter.hexToBytes(senderAddressBytes) : senderAddressBytes
         console.log('getMessageFromMetafeaturepayloadAndSender', data_, senderAddressBytes_, address);
         const messageId = IotaCatSDKObj.getMessageId(data_, senderAddressBytes_)
+        console.log('messageId', messageId, data_, senderAddressBytes_);
         const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
         const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
             const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
@@ -694,6 +696,7 @@ class IotaCatClient {
     async sendMessage(senderAddr:string, groupId:string,message: IMMessage){
         this._ensureClientInited()
         this._ensureWalletInited()
+        const {data:rawText} = message
         try {
             const protocolInfo = await this._client!.protocolInfo();
             console.log('ProtocolInfo', protocolInfo);
@@ -738,7 +741,15 @@ class IotaCatClient {
                 type: 2,
                 data: Converter.bytesToHex(pl, true)
             };
-
+            const messageId = IotaCatSDKObj.getMessageId(pl, Converter.hexToBytes(this._accountHexAddress!))
+            // IMessage = {messageId:string, groupId:string, sender:string, message:string, timestamp:number}
+            const messageSent: IMessage = {
+                messageId,
+                groupId,
+                sender: senderAddr,
+                message: rawText,
+                timestamp: message.timestamp
+            };
             // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
             const basicOutput: IBasicOutput = {
                 type: BASIC_OUTPUT_TYPE,
@@ -762,7 +773,7 @@ class IotaCatClient {
 
             
             const {blockId,outputId} = await this._sendBasicOutput(basicOutput);
-            return blockId
+            return {blockId,outputId,messageSent}
         } catch (e) {
             console.log("Error submitting block: ", e);
         }

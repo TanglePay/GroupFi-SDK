@@ -477,7 +477,8 @@
                 }
             })
             console.log('message',res)
-            const url = `https://explorer.shimmer.network/shimmer/block/${res}`
+            const {blockId} = res
+            const url = `https://explorer.shimmer.network/shimmer/block/${blockId}`
             // open new tab
             window.open(url)
         }

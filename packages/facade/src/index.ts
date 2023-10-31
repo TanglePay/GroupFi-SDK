@@ -219,11 +219,13 @@ class GroupFiSDKFacade {
       type: ShimmerBech32Addr,
       addr: this._address!,
     };
+    const groupName = IotaCatSDKObj.groupIdToGroupName(groupId);
     const message = await IotaCatSDKObj.prepareSendMessage(
       address,
-      groupId,
+      groupName!,
       messageText
     );
+
     const res = await IotaSDK.request({
         method: 'iota_im',
         params: {
@@ -236,6 +238,7 @@ class GroupFiSDKFacade {
         }
     })
     console.log('send message res', res);
+    return res;
   }
 
   _ensureWalletConnected() {
@@ -474,10 +477,18 @@ class GroupFiSDKFacade {
     marked: boolean;
     muted: boolean;
   }> {
+    console.log('isGroupPublic start calling');
     const isGroupPublic = await this.isGroupPublic(groupId);
+    console.log('isGroupPublic end calling', isGroupPublic);
+    console.log('isQualified start calling');
     const isQualified = await this.isQualified(groupId);
+    console.log('isQualified end calling', isQualified);
+    console.log('marked start calling');
     const marked = await this.marked(groupId);
+    console.log('marked end calling', marked);
+    console.log('muted start calling');
     const muted = await this.isBlackListed(groupId);
+    console.log('muted end calling', muted);
 
     return {
       isGroupPublic,
