@@ -494,9 +494,7 @@ class IotaCatClient {
     async getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address}:{data:Uint8Array|string,senderAddressBytes:Uint8Array|string,address:string}):Promise<{sender:string,message:IMMessage,messageId:string}>{
         const data_ = typeof data === 'string' ? Converter.hexToBytes(data) : data
         const senderAddressBytes_ = typeof senderAddressBytes === 'string' ? Converter.hexToBytes(senderAddressBytes) : senderAddressBytes
-        console.log('getMessageFromMetafeaturepayloadAndSender', data_, senderAddressBytes_, address);
         const messageId = IotaCatSDKObj.getMessageId(data_, senderAddressBytes_)
-        console.log('messageId', messageId, data_, senderAddressBytes_);
         const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
         const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
             const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
