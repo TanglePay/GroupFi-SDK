@@ -615,9 +615,22 @@ class IotaCatClient {
         if (amountLargerThan) {
             outputs = outputs.filter(output=>bigInt(output.output.amount).greater(amountLargerThan))
         }
-        // TODO filter tag with groupfi related
+        // filter out output that have tag feature or metadata feature or native tokens
+        outputs = outputs.filter(this._filterOutputsCannotBeConsolidated)
         return {outputs,nextCursor}
     }
+    _filterOutputsCannotBeConsolidated(outputs:BasicOutputWrapper){
+        // filter out output that have tag feature or metadata feature or native tokens
+        const features = outputs.output.features
+        if (!features) return false
+        const tagFeature = features.find(feature=>feature.type === 3)
+        if (tagFeature) return false
+        const metadataFeature = features.find(feature=>feature.type === 2)
+        if (metadataFeature) return false
+        if (outputs.output.nativeTokens && outputs.output.nativeTokens.length > 0) return false
+        return true
+    }
+
     //get outputs from outputIds filter out spent
     async _getUnSpentOutputsFromOutputIds(outputIds:string[]){
         this._ensureClientInited()
