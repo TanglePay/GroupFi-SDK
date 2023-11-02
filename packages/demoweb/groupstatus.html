@@ -351,7 +351,7 @@ function hideLoadingMask() {
             return {
                 address,
                 isBlackListed: blackListedAddresseHashsMap[addressHash] || false,
-                reputation: groupUserReputationMap[addressHash] || 0
+                reputation: groupUserReputationMap[addressHash] || 100
             }
         })
         const memberAddressesHtml = memberAddresses.map(makeMemberAddress).join('')
