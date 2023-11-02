@@ -213,7 +213,7 @@ function hideLoadingMask() {
 
     const waitThenRefresh = async ({outputId}) => {
         try{
-            await iotacatsdk.IotaCatSDKObj.waitOutput(outputId)
+            //await iotacatsdk.IotaCatSDKObj.waitOutput(outputId)
             await window.loadQualifiedGroups()
         }catch(e){
             console.log('error',e)
@@ -309,6 +309,8 @@ function hideLoadingMask() {
                         }
                     })
             console.log('joinGroup',res)
+            const prefixedGroupId = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            markedGroupIdsMap[prefixedGroupId] = true
             await waitThenRefresh(res)
         } catch (error) {
             console.log('error',error)
@@ -329,6 +331,8 @@ function hideLoadingMask() {
                         }
                     })
             console.log('leaveGroup',res)
+            const prefixedGroupId = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            delete markedGroupIdsMap[prefixedGroupId]
             await waitThenRefresh(res)
         } catch (error) {
             console.log('error',error)
@@ -350,6 +354,8 @@ function hideLoadingMask() {
                         }
                     })       
             console.log('voteGroup',res)
+            const prefixedGroupId = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            voteGroupIdsMap[prefixedGroupId] = vote
             await waitThenRefresh(res)
         } catch (error) {
             console.log('error',error)
@@ -370,56 +376,61 @@ function hideLoadingMask() {
                         }
                     })
             console.log('unvoteGroup',res)
+            const prefixedGroupId = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            delete voteGroupIdsMap[prefixedGroupId]
             await waitThenRefresh(res)
         } catch (error) {
             console.log('error',error)
         }
     }
-    window.loadQualifiedGroups = async () => {
-        showLoadingMask()
+    let markedGroupIdsMap = {}
+    let voteGroupIdsMap = {}
+    let qualifiedGroups = []
+    window.loadMarkedIfEmpty = async () => {
+        if (Object.keys(markedGroupIdsMap).length > 0) return
         const address = document.getElementById("cur_addr").value
         try {
-        const [groups, markRes, voteRes] = await Promise.all([
-            iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroups(address, ipfsOrigins),
-            iota.request({
+            const res = await iota.request({
                 method: 'iota_im_getMarkedGroupIds',
                 params: {
                 content: {
                     addr:address
                 }
                 }
-            }),
-            iota.request({
+            })
+            console.log('loadMarkedIfEmpty',res)
+            // check each groupId in res, make sure it is prefixed with '0x'
+            const markedGroupIds = (res??[]).map(mark=>{
+                const {groupId} = mark
+                if(groupId.startsWith('0x')){
+                    return groupId
+                }else{
+                    return '0x'+groupId
+                }
+            })        
+            // res is string[], reduce to map[string]=true
+            markedGroupIdsMap = markedGroupIds.reduce((acc,cur)=>{
+                acc[cur] = true
+                return acc
+            },{})
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.loadVoteIfEmpty = async () => {
+        if (Object.keys(voteGroupIdsMap).length > 0) return
+        const address = document.getElementById("cur_addr").value
+        try {
+            const voteRes = await iota.request({
                 method: 'iota_im_getAllGroupVotes',
                 params: {
                 content: {
                     addr:address
                 }
                 }
-            }),
-
-        ])
-
-        console.log('groups',groups)
-        console.log('markedGroupIds', markRes)
-        console.log('voteRes', voteRes)
-        // check each groupId in res, make sure it is prefixed with '0x'
-        const mardedGroupIds = (markRes??[]).map(mark=>{
-            const {groupId} = mark
-            if(groupId.startsWith('0x')){
-                return groupId
-            }else{
-                return '0x'+groupId
-            }
-        })        
-        // res is string[], reduce to map[string]=true
-        const markedGroupIdsMap = mardedGroupIds.reduce((acc,cur)=>{
-            acc[cur] = true
-            return acc
-        },{})
-
-
-        const voteGroupIdsMap = (voteRes??[]).reduce((acc,cur)=>{
+            })
+            console.log('loadVoteIfEmpty',voteRes)
+            voteGroupIdsMap = (voteRes??[]).reduce((acc,cur)=>{
             const {groupId,vote} = cur
             if(groupId.startsWith('0x')){
                 acc[groupId] = vote
@@ -428,22 +439,49 @@ function hideLoadingMask() {
             }
             return acc
         },{})
-        // loop groups, if groupid in markedGroupIdsMap, add field marked=true, else add field marked=false
-        groups.forEach(groupItem=>{
-            const {groupId} = groupItem
-            if(markedGroupIdsMap[groupId]){
-                groupItem.marked = true
-            }else{
-                groupItem.marked = false
-            }
-            // if voteGroupIdsMap[groupId] is not undefined
-            if(voteGroupIdsMap[groupId] !== undefined){
-                groupItem.vote = voteGroupIdsMap[groupId]
-            }else{
-                groupItem.vote = -1
-            }
-        })
-        document.getElementById("text").innerHTML = makelist(groups)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    // load qualified groups if empty
+    window.loadQualifedGroupsIfEmpty = async () => {
+        if (qualifiedGroups.length > 0) return
+        try {
+            const address = document.getElementById("cur_addr").value
+            const res = await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroups(address, ipfsOrigins)
+            console.log('loadQualifedGroupsIfEmpty',res)
+            qualifiedGroups = res
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.loadQualifiedGroups = async () => {
+        showLoadingMask()
+        const address = document.getElementById("cur_addr").value
+        try {
+            await Promise.all([
+                loadQualifedGroupsIfEmpty(),
+                loadMarkedIfEmpty(),
+                loadVoteIfEmpty(),
+            ])
+
+
+            // loop groups, if groupid in markedGroupIdsMap, add field marked=true, else add field marked=false
+            qualifiedGroups.forEach(groupItem=>{
+                const {groupId} = groupItem
+                if(markedGroupIdsMap[groupId]){
+                    groupItem.marked = true
+                }else{
+                    groupItem.marked = false
+                }
+                // if voteGroupIdsMap[groupId] is not undefined
+                if(voteGroupIdsMap[groupId] !== undefined){
+                    groupItem.vote = voteGroupIdsMap[groupId]
+                }else{
+                    groupItem.vote = -1
+                }
+            })
+            document.getElementById("text").innerHTML = makelist(qualifiedGroups)
         } catch (error) {
             console.log('error',error)
         } finally {
