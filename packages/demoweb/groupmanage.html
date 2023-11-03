@@ -160,10 +160,6 @@
                 </div>
                 
             </div>
-            <div class="block">
-                <h4>load address member groups</h4>                
-                <button onclick="loadAddressMemberGroups()" class="btn btn-primary">load</button>
-            </div>
             <h2>group addresses</h2>
             <div class="block">
                 <h4>currently joined group</h4>
@@ -264,9 +260,9 @@ function hideLoadingMask() {
                 </div>`
     }
     let selectedGroupId
-    const waitThenRefresh = async ({outputId}) => {
+    const waitThenRefresh = async () => {
         try{
-            await iotacatsdk.IotaCatSDKObj.waitOutput(outputId)
+            // await iotacatsdk.IotaCatSDKObj.waitOutput(outputId)
             await window.loadSelectedGroupId()
         }catch(e){
             console.log('error',e)
@@ -289,6 +285,9 @@ function hideLoadingMask() {
                     }
                 })
                 console.log('unmuteGroupMemberRes',unmuteGroupMemberRes)
+                const addressHash = iotacatsdk.IotaCatSDKObj._sha256Hash(address)
+                const addressHashPrefixed = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(addressHash)
+                userMutedAddressHashsMap[addressHashPrefixed] = false
                 await waitThenRefresh(unmuteGroupMemberRes)
             } else {
                 const muteGroupMemberRes = await iota.request({
@@ -302,6 +301,9 @@ function hideLoadingMask() {
                     }
                 })
                 console.log('muteGroupMemberRes',muteGroupMemberRes)
+                const addressHash = iotacatsdk.IotaCatSDKObj._sha256Hash(address)
+                const addressHashPrefixed = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(addressHash)
+                userMutedAddressHashsMap[addressHashPrefixed] = true
                 await waitThenRefresh(muteGroupMemberRes)
             }
         } catch (error) {
@@ -327,6 +329,7 @@ function hideLoadingMask() {
             return
         }
         selectedGroupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(value)
+        inited = false
         await Promise.all([
             window.loadGroupMembersAndMute(selectedGroupId),
             window.loadGroupVotes(selectedGroupId)
@@ -334,49 +337,56 @@ function hideLoadingMask() {
     }
     window.loadSelectedGroupId = async () => {
         await Promise.all([
-            window.loadGroupMembersAndMute(selectedGroupId),
-            window.loadGroupVotes(selectedGroupId)
+            window.loadGroupMembersAndMute(selectedGroupId)
         ])
     }
+    let userMutedAddressHashsMap = {}
+    let memberAddresses = []
+    let blackListedAddresseHashsMap = {}
+    let inited = false
     window.loadGroupMembersAndMute = async (groupId) => {
-        const address = document.getElementById("cur_addr").value
-        let [memberAddresses,
-            blackListedAddresseHashs, userMutedAddressHashs] = await Promise.all([
-            iotacatsdk.IotaCatSDKObj.fetchGroupMemberAddresses(groupId),
-            iotacatsdk.IotaCatSDKObj.fetchGroupBlacklist(groupId),
-            iota.request({
-                method: 'iota_im_getAllUserMuteGroupMembers',
-                params: {
-                content: {
-                    addr:address,
-                    addrHash: iotacatsdk.IotaCatSDKObj._sha256Hash(address)
-                }
-                }
-            }),
-        ])
-        memberAddresses = memberAddresses || []
-        blackListedAddresseHashs = blackListedAddresseHashs || []
-        userMutedAddressHashs = userMutedAddressHashs || []
-        console.log('userMutedAddressHashs',userMutedAddressHashs)
-        //blackListedAddresseHashs to map
-        const blackListedAddresseHashsMap = blackListedAddresseHashs.reduce((acc,cur)=>{
-            // _addHexPrefixIfAbsent for cur
-            cur = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(cur)
-            acc[cur] = true
-            return acc
-        },{})
+        if (!inited) {
+            inited = true
+            
+            const address = document.getElementById("cur_addr").value
+            let [memberAddressesRes,
+                blackListedAddresseHashs, userMutedAddressHashs] = await Promise.all([
+                iotacatsdk.IotaCatSDKObj.fetchGroupMemberAddresses(groupId),
+                iotacatsdk.IotaCatSDKObj.fetchGroupBlacklist(groupId),
+                iota.request({
+                    method: 'iota_im_getAllUserMuteGroupMembers',
+                    params: {
+                    content: {
+                        addr:address,
+                        addrHash: iotacatsdk.IotaCatSDKObj._sha256Hash(address)
+                    }
+                    }
+                }),
+            ])
+            memberAddresses = memberAddressesRes || []
+            blackListedAddresseHashs = blackListedAddresseHashs || []
+            userMutedAddressHashs = userMutedAddressHashs || []
+            console.log('userMutedAddressHashs',userMutedAddressHashs)
+            //blackListedAddresseHashs to map
+            blackListedAddresseHashsMap = blackListedAddresseHashs.reduce((acc,cur)=>{
+                // _addHexPrefixIfAbsent for cur
+                cur = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(cur)
+                acc[cur] = true
+                return acc
+            },{})
 
-        // userMutedAddressHashs to map
-        const userMutedAddressHashsMap = userMutedAddressHashs.reduce((acc,cur)=>{
-            let {addrSha256Hash} = cur
-            // _addHexPrefixIfAbsent for addrSha256Hash
-            addrSha256Hash = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(addrSha256Hash)
-            acc[addrSha256Hash] = true
-            return acc
-        },{})
+            // userMutedAddressHashs to map
+            userMutedAddressHashsMap = userMutedAddressHashs.reduce((acc,cur)=>{
+                let {addrSha256Hash} = cur
+                // _addHexPrefixIfAbsent for addrSha256Hash
+                addrSha256Hash = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(addrSha256Hash)
+                acc[addrSha256Hash] = true
+                return acc
+            },{})
+        }
 
         // memberAddresses to {address:string, isBlackListed:boolean, isUserMuted}[]
-        memberAddresses = memberAddresses.map((address)=>{
+        const memberAddressesForRender = memberAddresses.map((address)=>{
             let addressHash = iotacatsdk.IotaCatSDKObj._sha256Hash(address)
             // _addHexPrefixIfAbsent
             addressHash = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(addressHash)
@@ -386,7 +396,7 @@ function hideLoadingMask() {
                 isUserMuted: userMutedAddressHashsMap[addressHash] || false
             }
         })
-        const memberAddressesHtml = memberAddresses.map(makeMemberAddress).join('')
+        const memberAddressesHtml = memberAddressesForRender.map(makeMemberAddress).join('')
         document.getElementById("group_members").innerHTML = memberAddressesHtml
     }
     window.loadGroupVotes = async (groupId) => {
