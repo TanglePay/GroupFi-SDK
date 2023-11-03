@@ -7,6 +7,7 @@ import {
   MessageGroupMeta,
   IMMessage,
   IGroupUserReputation,
+  IMUserMuteGroupMember,
 } from 'iotacat-sdk-core';
 import client from 'iotacat-sdk-client';
 
@@ -28,7 +29,7 @@ class GroupFiSDKFacade {
 
   private _mqttConnected: boolean = false;
 
-  get address() {
+  getUserAddress() {
     return this._address;
   }
 
@@ -176,43 +177,42 @@ class GroupFiSDKFacade {
   }
   async ensureGroupHaveSharedOutput(groupId: string) {
     try {
-        const res = await IotaSDK.request({
-            method: 'iota_im_ensure_group_shared',
-            params: {
-            content: {
-                addr: this._address!,
-                groupId
-            }
-            }
-        })
-        console.log('ensureGroupHasShared res',res)
+      const res = await IotaSDK.request({
+        method: 'iota_im_ensure_group_shared',
+        params: {
+          content: {
+            addr: this._address!,
+            groupId,
+          },
+        },
+      });
+      console.log('ensureGroupHasShared res', res);
     } catch (error) {
-        console.log('ensureGroupHasShared error',error)
+      console.log('ensureGroupHasShared error', error);
     }
   }
   async consolidateGroupMessages(groupId: string) {
     try {
-        const res = await IotaSDK.request({
-            method: 'iota_im_check_and_consolidate_messages',
-            params: {
-            content: {
-                addr: this._address!,
-                groupId
-            }
-            }
-        })
+      const res = await IotaSDK.request({
+        method: 'iota_im_check_and_consolidate_messages',
+        params: {
+          content: {
+            addr: this._address!,
+            groupId,
+          },
+        },
+      });
     } catch (error) {
-        console.log('consolidateMessages error',error)
+      console.log('consolidateMessages error', error);
     }
   }
   async enteringGroupByGroupId(groupId: string) {
-    const [ensureRes,
-      consolidateRes] = await Promise.all([
+    const [ensureRes, consolidateRes] = await Promise.all([
       this.ensureGroupHaveSharedOutput(groupId),
-      this.consolidateGroupMessages(groupId)
-    ])
-    console.log('enteringGroupByGroupId ensureRes',ensureRes)
-    console.log('enteringGroupByGroupId consolidateRes',consolidateRes)
+      this.consolidateGroupMessages(groupId),
+    ]);
+    console.log('enteringGroupByGroupId ensureRes', ensureRes);
+    console.log('enteringGroupByGroupId consolidateRes', consolidateRes);
   }
   async sendMessage(groupId: string, messageText: string) {
     const address: Address = {
@@ -227,16 +227,16 @@ class GroupFiSDKFacade {
     );
 
     const res = await IotaSDK.request({
-        method: 'iota_im',
-        params: {
-          content: {
-                dappName:'trollbox',
-                addr:this._address!,
-                groupId,
-                message
-            }
-        }
-    })
+      method: 'iota_im',
+      params: {
+        content: {
+          dappName: 'trollbox',
+          addr: this._address!,
+          groupId,
+          message,
+        },
+      },
+    });
     console.log('send message res', res);
     return res;
   }
@@ -316,10 +316,13 @@ class GroupFiSDKFacade {
       await IotaCatSDKObj.waitOutput(res.outputId);
     }
   }
-  // get user group 
-  async getUserGroupReputation(groupId: string):Promise<IGroupUserReputation> {
-    const allUserGroup = await IotaCatSDKObj.fetchUserGroupReputation(groupId, this._address!)
-    return allUserGroup
+  // get user group
+  async getUserGroupReputation(groupId: string): Promise<IGroupUserReputation> {
+    const allUserGroup = await IotaCatSDKObj.fetchUserGroupReputation(
+      groupId,
+      this._address!
+    );
+    return allUserGroup;
   }
   async getGroupVoteRes(groupId: string) {
     const allGroupVotes = (await IotaSDK.request({
@@ -404,14 +407,15 @@ class GroupFiSDKFacade {
     return await IotaCatSDKObj.checkIsGroupPublicFromSharedApiCall(groupId!);
   }
 
-  async loadAddressMemberGroups() {
+  async loadAddressMemberGroups(address: string) {
     this._ensureWalletConnected();
     const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
-      this._address!
+      address
     );
-    const groups = groupIds
-      .map((groupId) => IotaCatSDKObj._groupIdToGroupMeta(groupId))
-      .filter(Boolean) as MessageGroupMeta[];
+    const groups = groupIds.map((groupId) => ({
+      groupId,
+      groupName: this.groupIdToGroupName(groupId) ?? 'unknown',
+    }));
     return groups;
   }
 
@@ -436,6 +440,8 @@ class GroupFiSDKFacade {
   }
 
   async muteGroupMember(groupId: string, memberAddress: string) {
+    this._ensureWalletConnected();
+    console.log('****muteGroupMember start');
     const muteGroupMemberRes = (await IotaSDK.request({
       method: 'iota_im_muteGroupMember',
       params: {
@@ -446,12 +452,14 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    console.log('****muteGroupMember res', muteGroupMemberRes);
     if (muteGroupMemberRes !== undefined) {
       await IotaCatSDKObj.waitOutput(muteGroupMemberRes.outputId);
     }
   }
 
   async unMuteGroupMember(groupId: string, memberAddress: string) {
+    this._ensureWalletConnected();
     const unmuteGroupMemberRes = (await IotaSDK.request({
       method: 'iota_im_unmuteGroupMember',
       params: {
@@ -462,6 +470,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    console.log('****unmuteGroupMember res', unmuteGroupMemberRes);
     if (unmuteGroupMemberRes !== undefined) {
       await IotaCatSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
     }
@@ -477,6 +486,7 @@ class GroupFiSDKFacade {
     marked: boolean;
     muted: boolean;
   }> {
+    this._ensureWalletConnected();
     console.log('isGroupPublic start calling');
     const isGroupPublic = await this.isGroupPublic(groupId);
     console.log('isGroupPublic end calling', isGroupPublic);
@@ -500,6 +510,28 @@ class GroupFiSDKFacade {
 
   groupIdToGroupName(groupId: string) {
     return IotaCatSDKObj.groupIdToGroupName(groupId);
+  }
+
+  sha256Hash(address: string) {
+    return IotaCatSDKObj._sha256Hash(address);
+  }
+
+  // Get muted members of a group
+  async getGroupMuteMembers(groupId: string) {
+    this._ensureWalletConnected();
+    const AllUserMuteGroupMembers = (await IotaSDK.request({
+      method: 'iota_im_getAllUserMuteGroupMembers',
+      params: {
+        content: {
+          addr: this._address!,
+          addrHash: IotaCatSDKObj._sha256Hash(this._address!),
+        },
+      },
+    })) as IMUserMuteGroupMember[];
+
+    return AllUserMuteGroupMembers.filter(
+      (muteGroupMember) => muteGroupMember.groupId === groupId
+    ).map((muteGroupMember) => muteGroupMember.addrSha256Hash);
   }
 }
 
