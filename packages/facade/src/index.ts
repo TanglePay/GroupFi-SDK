@@ -254,6 +254,7 @@ class GroupFiSDKFacade {
   async waitWalletReadyAndConnectWallet() {
     return new Promise((resolve, reject) => {
       const listener = async () => {
+        if (!IotaSDK.isTanglePay) return; // skip if not ready
         IotaSDK._events.off('iota-ready', listener);
         console.log('****iota ready');
         try {
