@@ -254,21 +254,22 @@ class GroupFiSDKFacade {
   async waitWalletReadyAndConnectWallet() {
     return new Promise((resolve, reject) => {
       const listener = async () => {
-        if (!IotaSDK.isTanglePay) return; // skip if not ready
-        IotaSDK._events.off('iota-ready', listener);
-        console.log('****iota ready');
-        try {
-          const res = (await IotaSDK.request({
-            method: 'iota_connect',
-            params: {
-              // expires: 3000000
-            },
-          })) as { address: string; nodeId: string };
-          console.log('****iota connect', res);
-          this._address = res.address;
-          resolve(res);
-        } catch (error) {
-          reject(null);
+        if (IotaSDK.isTanglePay) {
+          IotaSDK._events.off('iota-ready', listener);
+          console.log('****iota ready');
+          try {
+            const res = (await IotaSDK.request({
+              method: 'iota_connect',
+              params: {
+                // expires: 3000000
+              },
+            })) as { address: string; nodeId: string };
+            console.log('****iota connect', res);
+            this._address = res.address;
+            resolve(res);
+          } catch (error) {
+            reject(null);
+          }
         }
       };
       IotaSDK._events.on('iota-ready', listener);
