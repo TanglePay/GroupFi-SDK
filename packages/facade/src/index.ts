@@ -298,9 +298,10 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
-    if (res !== undefined) {
-      await IotaCatSDKObj.waitOutput(res.outputId);
-    }
+    return res
+    // if (res !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(res.outputId);
+    // }
   }
 
   async unvoteGroup(groupId: string) {
@@ -314,9 +315,10 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
-    if (res !== undefined) {
-      await IotaCatSDKObj.waitOutput(res.outputId);
-    }
+    return res
+    // if (res !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(res.outputId);
+    // }
   }
   // get user group
   async getUserGroupReputation(groupId: string): Promise<IGroupUserReputation> {
@@ -354,9 +356,10 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
-    if (res !== undefined) {
-      await IotaCatSDKObj.waitOutput(res.outputId);
-    }
+    return res
+    // if (res !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(res.outputId);
+    // }
   }
 
   async leaveGroup(groupId: string) {
@@ -370,9 +373,10 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
-    if (res !== undefined) {
-      await IotaCatSDKObj.waitOutput(res.outputId);
-    }
+    return res
+    // if (res !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(res.outputId);
+    // }
   }
 
   async isQualified(groupId: string) {
@@ -411,9 +415,7 @@ class GroupFiSDKFacade {
 
   async loadAddressMemberGroups(address: string) {
     this._ensureWalletConnected();
-    const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
-      address
-    );
+    const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(address);
     const groups = groupIds.map((groupId) => ({
       groupId,
       groupName: this.groupIdToGroupName(groupId) ?? 'unknown',
@@ -455,9 +457,10 @@ class GroupFiSDKFacade {
       },
     })) as TransactionRes | undefined;
     console.log('****muteGroupMember res', muteGroupMemberRes);
-    if (muteGroupMemberRes !== undefined) {
-      await IotaCatSDKObj.waitOutput(muteGroupMemberRes.outputId);
-    }
+    return muteGroupMemberRes
+    // if (muteGroupMemberRes !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(muteGroupMemberRes.outputId);
+    // }
   }
 
   async unMuteGroupMember(groupId: string, memberAddress: string) {
@@ -473,9 +476,10 @@ class GroupFiSDKFacade {
       },
     })) as TransactionRes | undefined;
     console.log('****unmuteGroupMember res', unmuteGroupMemberRes);
-    if (unmuteGroupMemberRes !== undefined) {
-      await IotaCatSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
-    }
+    return unmuteGroupMemberRes
+    // if (unmuteGroupMemberRes !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
+    // }
   }
 
   setupIotaMqttConnection(mqttClient: any) {
