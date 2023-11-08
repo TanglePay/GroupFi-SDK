@@ -182,6 +182,12 @@
                 </div>
             </div>
             <div class="block">
+                <h4>selected group shared output id</h4>
+                <div class="vList">
+                    <div id="group_shared_output_id"></div>
+                </div>
+            </div>
+            <div class="block">
                 <h4>selected group members</h4>
                 <div id="group_members" class="vList">
                     
@@ -300,7 +306,10 @@ function hideLoadingMask() {
             hideLoadingMask()
         }
     }
-    
+    window.loadGroupSharedOutputId = async (groupId) => {
+        const {outputId} = await iotacatsdk.IotaCatSDKObj.fetchSharedOutputId(groupId)
+        document.getElementById("group_shared_output_id").innerHTML = outputId
+    }
     window.handleGroupChange = async (value) => {
         if (!value) {
             return
@@ -308,7 +317,8 @@ function hideLoadingMask() {
         selectedGroupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(value)
         await Promise.all([
             window.loadGroupMembersAndMute(selectedGroupId),
-            window.loadGroupVotes(selectedGroupId)
+            window.loadGroupVotes(selectedGroupId),
+            window.loadGroupSharedOutputId(selectedGroupId)
         ])
     }
     window.loadSelectedGroupId = async () => {

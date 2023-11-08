@@ -248,10 +248,10 @@ class GroupFiSDKFacade {
   }
 
   async bootstrap() {
-    await this.waitWalletReadyAndConnectWallet();
+    return await this.waitWalletReadyAndConnectWallet();
   }
 
-  async waitWalletReadyAndConnectWallet() {
+  async waitWalletReadyAndConnectWallet():Promise<{address:string}> {
     return new Promise((resolve, reject) => {
       const listener = async () => {
         if (IotaSDK.isTanglePay) {

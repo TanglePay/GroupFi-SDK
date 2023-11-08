@@ -126,6 +126,12 @@ class IotaCatSDK {
     }
     _mqttClient?:MqttClient
     setupMqttConnection(connect:(url:string)=>MqttClient){
+        // log enter setupMqttConnection
+        console.log('setupMqttConnection enter')
+        if (this._mqttClient) {
+            // log setupMqttConnection already setup then return
+            console.log('setupMqttConnection already setup then return')
+        }
         const client = connect(`wss://${INX_GROUPFI_DOMAIN}/api/groupfi/mqtt/v1`)
         // log connect close disconnect
         client.on('connect', function () {
@@ -134,6 +140,9 @@ class IotaCatSDK {
         client.on('close', function () {
             console.log('mqtt closed')
         })
+        client.on('reconnect', function () {
+            console.log('Reconnecting');
+        });
         client.on('disconnect', function () {
             console.log('mqtt disconnected')
         })
@@ -321,6 +330,18 @@ class IotaCatSDK {
                 console.log('error',error)
                 return false
             }
+    }
+    // get shared output id for a group
+    async fetchSharedOutputId(groupId:string):Promise<{outputId:string}>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
+        try {
+            const res = await fetch(url)
+            const json = await res.json() as {outputId:string}
+            return json
+        } catch (error) {
+            console.log('error',error)
+            return {outputId:''}
+        }
     }
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         // check if message.recipients is null

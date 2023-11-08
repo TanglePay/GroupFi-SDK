@@ -353,6 +353,7 @@ class IotaCatClient {
                 throw error
             }
         }
+        return {message:'ok'}
     }
     async _getSaltForGroup(groupId:string, address:string):Promise<{salt:string, outputId:string}>{
         console.log(`_getSaltForGroup groupId:${groupId}, address:${address}`);
@@ -552,7 +553,11 @@ class IotaCatClient {
         console.log('outputIds', outputIds);
         if (outputIds.length === 0) return
         const res = await this._consolidateOutputIdsFromApiResult(outputIds)
-        return res
+        return {
+            message:'ok',
+            outputIds,
+            ...res
+        }
     }
 
     // get outputids from message consolidation shared api
@@ -577,7 +582,11 @@ class IotaCatClient {
         console.log('outputIds', outputIds);
         if (outputIds.length === 0) return
         const res = await this._consolidateOutputIdsFromApiResult(outputIds)
-        return res
+        return {
+            message:'ok',
+            outputIds,
+            ...res
+        }
     }
     // consolidate outputids from api result
     async _consolidateOutputIdsFromApiResult(outputIds:string[]){
@@ -622,7 +631,7 @@ class IotaCatClient {
     _filterOutputsCannotBeConsolidated(outputs:BasicOutputWrapper){
         // filter out output that have tag feature or metadata feature or native tokens
         const features = outputs.output.features
-        if (!features) return false
+        if (!features) return true
         const tagFeature = features.find(feature=>feature.type === 3)
         if (tagFeature) return false
         const metadataFeature = features.find(feature=>feature.type === 2)
