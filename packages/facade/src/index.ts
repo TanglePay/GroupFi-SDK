@@ -468,7 +468,7 @@ class GroupFiSDKFacade {
       method: 'iota_im_muteGroupMember',
       params: {
         content: {
-          addr: memberAddress,
+          addr: this._address!,
           groupId: groupId,
           addrHash: IotaCatSDKObj._sha256Hash(memberAddress),
         },
@@ -487,7 +487,7 @@ class GroupFiSDKFacade {
       method: 'iota_im_unmuteGroupMember',
       params: {
         content: {
-          addr: memberAddress,
+          addr: this._address!,
           groupId: groupId,
           addrHash: IotaCatSDKObj._sha256Hash(memberAddress),
         },
