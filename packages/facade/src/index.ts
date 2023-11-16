@@ -16,7 +16,7 @@ export { SimpleDataExtended };
 
 import { MessageBody } from 'iotacat-sdk-client';
 
-interface TransactionRes {
+export interface TransactionRes {
   blockId: string;
   outputId: string;
 }
