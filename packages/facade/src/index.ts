@@ -250,7 +250,7 @@ class GroupFiSDKFacade {
     );
     console.log('filteredMessageList', filteredMessageList, filteredRes);
 
-    return { messageList: fulfilledMessageList, nextToken: token };
+    return { messageList: filteredMessageList, nextToken: token };
   }
   async ensureGroupHaveSharedOutput(groupId: string) {
     try {
