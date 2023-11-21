@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, beforeAll, jest } from '@jest/globals';
 import { NodePowProvider } from "@iota/pow-node.js";
 import IotaCatClient from '../src';
+import { Bech32Helper } from '@iota/iota.js'
 import type { MqttClient } from 'mqtt';
 type MockedMqttClient = {
     subscribe: (topic: string | string[], callback?: () => void) => void;
@@ -24,5 +25,6 @@ describe('seed related test', () => {
             console.log('set hex seed success')
         })
     })
+    
 })
 
