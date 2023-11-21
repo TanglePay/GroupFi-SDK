@@ -226,7 +226,6 @@ class GroupFiSDKFacade {
     console.log('***iota_im_groupinboxmessagelist success', res);
     const messageList = res.messageList;
     const token = res.token;
-    // make fake message id
     // log
     console.log('messageList', messageList);
     const fulfilledMessageList =
@@ -284,12 +283,11 @@ class GroupFiSDKFacade {
     }
   }
   async enteringGroupByGroupId(groupId: string) {
-    const [ensureRes, consolidateRes] = await Promise.all([
+    const [ensureRes] = await Promise.all([
       this.ensureGroupHaveSharedOutput(groupId),
-      this.consolidateGroupMessages(groupId),
+      //this.consolidateGroupMessages(groupId),
     ]);
     console.log('enteringGroupByGroupId ensureRes', ensureRes);
-    console.log('enteringGroupByGroupId consolidateRes', consolidateRes);
   }
   async sendMessage(groupId: string, messageText: string) {
     const address: Address = {
