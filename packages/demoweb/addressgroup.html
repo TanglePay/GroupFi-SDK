@@ -232,6 +232,7 @@ function hideLoadingMask() {
                         }
                     })
             document.getElementById('cur_addr').value = res.address
+            await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({address:res.address})
             await loadIpfsOrigins()
             await loadQualifiedGroups()
         } catch (error) {

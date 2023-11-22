@@ -423,8 +423,12 @@
             return `<option value="${groupName}">${groupName}</option>`
         }
         window.loadQualifiedGroupConfigs = async (address) => {
-            const configs = await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroupConfigs(address)
-            const groupNames = configs.map(o=>o.groupName)
+            
+            const [configs,addressMemberGroups] = await Promise.all([ 
+                iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({address}),
+                iotacatsdk.IotaCatSDKObj.fetchAddressMemberGroups(address)
+            ])
+            const groupNames = addressMemberGroups.map(o=>iotacatsdk.IotaCatSDKObj.groupIdToGroupName(o))
             const groupOptions = '<option value=""></option>' + groupNames.map(makeOption).join('')
             document.getElementById('group_select').innerHTML = groupOptions
         }

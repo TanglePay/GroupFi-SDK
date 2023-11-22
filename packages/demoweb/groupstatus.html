@@ -158,14 +158,14 @@
                 <div class="address-input">
                     <select id="group_select" class="w100" onchange="handleGroupChange(this.value)">
                         <option value=""></option>
-                        <option value="iceberg-collection-1">iceberg-collection-1</option>
-                        <option value="iceberg-collection-2">iceberg-collection-2</option>
-                        <option value="iceberg-collection-3">iceberg-collection-3</option>
-                        <option value="iceberg-collection-4">iceberg-collection-4</option>
-                        <option value="iceberg-collection-5">iceberg-collection-5</option>
-                        <option value="iceberg-collection-6">iceberg-collection-6</option>
-                        <option value="iceberg-collection-7">iceberg-collection-7</option>
-                        <option value="iceberg-collection-8">iceberg-collection-8</option>                       
+                        <option value="iceberg-1">iceberg-1</option>
+                        <option value="iceberg-2">iceberg-2</option>
+                        <option value="iceberg-3">iceberg-3</option>
+                        <option value="iceberg-4">iceberg-4</option>
+                        <option value="iceberg-5">iceberg-5</option>
+                        <option value="iceberg-6">iceberg-6</option>
+                        <option value="iceberg-7">iceberg-7</option>
+                        <option value="iceberg-8">iceberg-8</option>                       
                     </select>
                 </div>
             </div>
@@ -297,6 +297,7 @@ function hideLoadingMask() {
         showLoadingMask()
         const address = document.getElementById("cur_addr").value
         try {
+
             const groupIds = await iotacatsdk.IotaCatSDKObj.fetchAddressMemberGroups(address)
             const optionsHtml = makeSelect(groupIds)
             document.getElementById("group_select").innerHTML = optionsHtml
@@ -307,8 +308,10 @@ function hideLoadingMask() {
         }
     }
     window.loadGroupSharedOutputId = async (groupId) => {
-        const {outputId} = await iotacatsdk.IotaCatSDKObj.fetchSharedOutputId(groupId)
-        document.getElementById("group_shared_output_id").innerHTML = outputId
+        const res = await iotacatsdk.IotaCatSDKObj.fetchSharedOutputId(groupId)
+        if (res) {
+            document.getElementById("group_shared_output_id").innerHTML = res.outputId
+        }
     }
     window.handleGroupChange = async (value) => {
         if (!value) {
@@ -387,5 +390,47 @@ function hideLoadingMask() {
         document.getElementById("memberCount").innerHTML = makekv("member count",memberCount)
         document.getElementById("isPublic").innerHTML = makekv("is public",isPublic)
     }
+    const lintObj = (obj) => {
+        const neo = {}
+        for (const [key, value] of Object.entries(obj)) {
+            if (value) {
+                neo[key] = value
+            }
+        }
+        return neo
+    }
+    window.addEventListener('iota-ready',async ()=>{
+            const jsonStr = `[
+        {"groupName":"iceberg-1","schemaVersion":1,"messageType":1,"authScheme":2, "qualifyType":"nft", "chainName":"smr","collectionIds":["0x064d0eaefb86a94eb326ff633c22cdf744decca954bb93b1572b449d324ae717"]},
+        {"groupName":"iceberg-2","schemaVersion":1,"messageType":1,"authScheme":2, "qualifyType":"nft", "chainName":"smr","collectionIds":["0x451ac5e96cea2ddf399924ce22f0e56a4b485ca417aba1430e9e5ce582d605f2"]},
+        {"groupName":"iceberg-3","schemaVersion":1,"messageType":1,"authScheme":2, "qualifyType":"nft", "chainName":"smr","collectionIds":["0x4136c04d4bc25011f5b03dc9d31f4082bc7c19233cfeb2803aef241b1bb29c92"]},
+        {"groupName":"iceberg-4","schemaVersion":1,"messageType":1,"authScheme":2, "qualifyType":"nft", "chainName":"smr","collectionIds":["0x6ba06fb2371ec3615ff45667a152f729e2c9a24643f4e26e06b297def1e9c4bf"]},
+        {"groupName":"iceberg-5","schemaVersion":1,"messageType":1,"authScheme":2, "qualifyType":"nft", "chainName":"smr","collectionIds":["0x3ba971dbb7bfd6d466835a0c8463169e2b41ad7da26ec7dfcfd77140d0eff4c9"]},
+        {"groupName":"iceberg-6","schemaVersion":1,"messageType":1,"authScheme":2, "qualifyType":"nft", "chainName":"smr","collectionIds":["0x576dcc9c3199650187c981b21b045ef09f56515d7a1c46e9456fa994334f2740"]},
+        {"groupName":"iceberg-7","schemaVersion":1,"messageType":1,"authScheme":2, "qualifyType":"nft", "chainName":"smr","collectionIds":["0xcf0f598ff3ee378b03906af4de48030bc6082831dfcf67730be780a317d98265"]},
+        {"groupName":"iceberg-8","schemaVersion":1,"messageType":1,"authScheme":2, "qualifyType":"nft", "chainName":"smr","collectionIds":["0x592b20d610ee4618949dd4f969db7ffc81d93486bfe1ab63b9201618b6be3a48"]}]`
+        let json = JSON.parse(jsonStr,true)
+        json = json.map(o=>{return{...o,tokenThres:""}})    
+        console.log('json',json)
+        iotacatsdk.IotaCatSDKObj._groupConfigMap = json.reduce((acc,group)=>{
+                acc[group.groupName] = group
+                return acc
+            },{})
+        
+        console.log(iotacatsdk.IotaCatSDKObj._groupConfigMap)
+        console.log(iotacatsdk.IotaCatSDKObj._groupToGroupId('iceberg-3'))
+        const res = await iota.request({
+                        method: 'iota_connect',
+                        params: {
+                            // expires: 3000000
+                        }
+                    })
+        await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({address:res.address})
+        console.log(iotacatsdk.IotaCatSDKObj._groupConfigMap)
+        console.log(iotacatsdk.IotaCatSDKObj._groupToGroupId('iceberg-3'))
+
+    })
+
+
 </script>    
 </html>

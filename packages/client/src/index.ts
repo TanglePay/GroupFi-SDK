@@ -38,7 +38,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG
 
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams} from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds} from 'iotacat-sdk-utils';
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -124,7 +124,7 @@ const shimmerTestNet = {
 const shimmerMainNet = {
     id: 102,
     isFaucetAvailable: false,
-    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://mogulbuster.dlt.builders",//"https://mainnet.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "shimmer",
     networkId: "14364762045254553490",
@@ -437,7 +437,7 @@ class IotaCatClient {
                 },
                 {
                     type: TIMELOCK_UNLOCK_CONDITION_TYPE,
-                    unixTime: (Date.now() / 1000) + 60 * 60 * 24 * 6
+                    unixTime: getCurrentEpochInSeconds() + 60 * 60 * 24 * 6
                 }
             ],
             features: [
@@ -1128,6 +1128,7 @@ class IotaCatClient {
             return
         }
         list.push({groupId,timestamp:Date.now()})
+        console.log('new list', list)
         return await this._persistMarkedGroupIds(list,outputWrapper)
     }
     async unmarkGroup(groupId:string){
@@ -1144,6 +1145,7 @@ class IotaCatClient {
         const data = serializeUserMarkedGroupIds(list)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
+        console.log('created and consumed', basicOutput, toBeConsumed);
         return await this._sendBasicOutput(basicOutput,toBeConsumed);
     }
     async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
