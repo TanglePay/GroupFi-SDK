@@ -287,7 +287,7 @@ class IotaCatSDK {
         }
     }
     // addressqualifiedgroupconfigs
-    async fetchAddressQualifiedGroupConfigs(address:string):Promise<MessageGroupMeta[]>{
+    async fetchAddressQualifiedGroupConfigs({address,includes,excludes}:{address:string,includes?:string[],excludes?:[]}):Promise<MessageGroupMeta[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`
         const res = await fetch(url)
         const json = await res.json() as MessageGroupMeta[]

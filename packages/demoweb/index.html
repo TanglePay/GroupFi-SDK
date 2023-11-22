@@ -149,16 +149,8 @@
                 </div>
                 <h4>current group name</h4>
                 <div class="address-input">
-                    <select class="w100" onchange="handleGroupChange(this.value)">
+                    <select id="group_select" class="w100" onchange="handleGroupChange(this.value)">
                         <option value=""></option>
-                        <option value="iceberg-collection-1">iceberg-collection-1</option>
-                        <option value="iceberg-collection-2">iceberg-collection-2</option>
-                        <option value="iceberg-collection-3">iceberg-collection-3</option>
-                        <option value="iceberg-collection-4">iceberg-collection-4</option>
-                        <option value="iceberg-collection-5">iceberg-collection-5</option>
-                        <option value="iceberg-collection-6">iceberg-collection-6</option>
-                        <option value="iceberg-collection-7">iceberg-collection-7</option>
-                        <option value="iceberg-collection-8">iceberg-collection-8</option>
                     </select>
                 </div>
             </div>
@@ -241,8 +233,6 @@
     }
     const writeFn = async () => {
         await window.ensureGroupShared()
-        await iotacatsdk.IotaCatSDKObj.sleep(1500)
-        await window.consolidateMessages()
     }
     var fromToken
     var untilToken
@@ -429,7 +419,15 @@
                 console.log('error',error)
             }
         }
-        
+        const makeOption = (groupName) => {
+            return `<option value="${groupName}">${groupName}</option>`
+        }
+        window.loadQualifiedGroupConfigs = async (address) => {
+            const configs = await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroupConfigs(address)
+            const groupNames = configs.map(o=>o.groupName)
+            const groupOptions = '<option value=""></option>' + groupNames.map(makeOption).join('')
+            document.getElementById('group_select').innerHTML = groupOptions
+        }
         iota.redirectAppStoreIfNotInstalled = false;
         try {
             const res = await iota.request({
@@ -440,6 +438,7 @@
                     })
             console.log('res',res)
             document.getElementById('cur_addr').value = res.address
+            await window.loadQualifiedGroupConfigs(res.address)
             iotacatsdk.IotaCatSDKObj.setupMqttConnection(window.mqtt.connect)
             iotacatsdk.IotaCatSDKObj.switchMqttAddress(res.address)
             iotacatsdk.IotaCatSDKObj.on('inbox',(pushed)=>{
