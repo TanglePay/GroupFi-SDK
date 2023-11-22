@@ -25,7 +25,8 @@ import {
     IAddressUnlockCondition,
     IEd25519Address,
     IOutputResponse,
-    REFERENCE_UNLOCK_TYPE
+    REFERENCE_UNLOCK_TYPE,
+    TIMELOCK_UNLOCK_CONDITION_TYPE
 } from "@iota/iota.js";
 import { Converter, WriteStream,  } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
@@ -433,6 +434,10 @@ class IotaCatClient {
                         type: ED25519_ADDRESS_TYPE,
                         pubKeyHash: this._accountHexAddress!
                     }
+                },
+                {
+                    type: TIMELOCK_UNLOCK_CONDITION_TYPE,
+                    unixTime: (Date.now() / 1000) + 60 * 60 * 24 * 6
                 }
             ],
             features: [
@@ -782,6 +787,10 @@ class IotaCatClient {
                             type: ED25519_ADDRESS_TYPE,
                             pubKeyHash: this._accountHexAddress!
                         }
+                    },
+                    {
+                        type: TIMELOCK_UNLOCK_CONDITION_TYPE,
+                        unixTime: message.timestamp + 60 * 60 * 24 * 3
                     }
                 ],
                 features: [
