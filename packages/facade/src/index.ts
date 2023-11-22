@@ -24,6 +24,8 @@ export interface TransactionRes {
 class GroupFiSDKFacade {
   private _address: string | undefined;
 
+  private _groupMetaList: MessageGroupMeta[] = [];
+
   private _mqttConnected: boolean = false;
 
   getUserAddress() {
@@ -322,8 +324,33 @@ class GroupFiSDKFacade {
     }
   }
 
+  async fetchAddressQualifiedGroupConfigs() {
+    this._ensureWalletConnected();
+    await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
+      address: this._address!,
+    });
+  }
+
+  async getRecommendGroupIds(): Promise<string[]> {
+    this._ensureWalletConnected();
+    const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
+      address: this._address!,
+    });
+    return res
+      .map(({ groupName }) => {
+        return IotaCatSDKObj._groupToGroupId(groupName);
+      })
+      .filter(Boolean) as string[]
+  }
+
+  getGroupMetaList() {
+    return this._groupMetaList;
+  }
+
   async bootstrap() {
-    return await this.waitWalletReadyAndConnectWallet();
+    const res = await this.waitWalletReadyAndConnectWallet();
+    await this.fetchAddressQualifiedGroupConfigs();
+    return res;
   }
 
   async waitWalletReadyAndConnectWallet(): Promise<{ address: string }> {
