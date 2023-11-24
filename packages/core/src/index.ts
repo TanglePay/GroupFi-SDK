@@ -287,16 +287,26 @@ class IotaCatSDK {
         }
     }
     // addressqualifiedgroupconfigs
-    async fetchAddressQualifiedGroupConfigs({address,includes,excludes}:{address:string,includes?:string[],excludes?:[]}):Promise<MessageGroupMeta[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`
-        const res = await fetch(url)
-        const json = await res.json() as MessageGroupMeta[]
-        this._groupConfigMap = json.reduce((acc,group)=>{
-            acc[group.groupName] = group
-            return acc
-        },{} as Record<string,MessageGroupMeta>)
-        return json
-    }
+    async fetchAddressQualifiedGroupConfigs({address, includes, excludes}: {address: string, includes?: {groupName: string}[], excludes?: []}): Promise<MessageGroupMeta[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;
+        const body = {
+            includes,
+            excludes
+        };
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const json = await res.json() as MessageGroupMeta[];
+        this._groupConfigMap = json.reduce((acc, group) => {
+            acc[group.groupName] = group;
+            return acc;
+        }, {} as Record<string, MessageGroupMeta>);
+        return json;
+    }    
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         // check if message.recipients is null
         if (message.recipients == undefined) {
