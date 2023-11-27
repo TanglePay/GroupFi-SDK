@@ -124,7 +124,7 @@ const shimmerTestNet = {
 const shimmerMainNet = {
     id: 102,
     isFaucetAvailable: false,
-    apiUrl: "https://mogulbuster.dlt.builders",//"https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "shimmer",
     networkId: "14364762045254553490",
