@@ -21,15 +21,25 @@ export interface TransactionRes {
   outputId: string;
 }
 
+export interface RecommendGroup {
+  groupId: string;
+  groupName: string;
+  qualifyType: string;
+}
+
 class GroupFiSDKFacade {
   private _address: string | undefined;
 
-  private _groupMetaList: MessageGroupMeta[] = [];
+  private _recommendGroups: RecommendGroup[] = [];
 
   private _mqttConnected: boolean = false;
 
   getUserAddress() {
     return this._address;
+  }
+
+  getRecommendGroups() {
+    return this._recommendGroups
   }
 
   private _currentGroup:
@@ -326,25 +336,16 @@ class GroupFiSDKFacade {
 
   async fetchAddressQualifiedGroupConfigs() {
     this._ensureWalletConnected();
-    await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
-      address: this._address!,
-    });
-  }
-
-  async getRecommendGroupIds(): Promise<string[]> {
-    this._ensureWalletConnected();
     const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
       address: this._address!,
     });
-    return res
-      .map(({ groupName }) => {
-        return IotaCatSDKObj._groupToGroupId(groupName);
-      })
-      .filter(Boolean) as string[]
-  }
-
-  getGroupMetaList() {
-    return this._groupMetaList;
+    this._recommendGroups = res
+      .map(({ groupName, qualifyType }) => ({
+        groupName,
+        groupId: IotaCatSDKObj._groupToGroupId(groupName),
+        qualifyType: qualifyType,
+      }))
+      .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
   }
 
   async bootstrap() {
@@ -500,6 +501,23 @@ class GroupFiSDKFacade {
     );
   }
 
+  async getAllMarkedGroups() {
+    this._ensureWalletConnected();
+    const markedGroupIds = (await IotaSDK.request({
+      method: 'iota_im_getMarkedGroupIds',
+      params: {
+        content: {
+          addr: this._address,
+        },
+      },
+    })) as Array<{ groupId: string }>;
+
+    return markedGroupIds.map(g => ({
+      groupId: g.groupId,
+      groupName: IotaCatSDKObj.groupIdToGroupName(g.groupId) ?? 'unknown'
+    }))
+  }
+
   async marked(groupId: string) {
     this._ensureWalletConnected();
     const markedGroupIds = (await IotaSDK.request({
@@ -521,9 +539,9 @@ class GroupFiSDKFacade {
     return await IotaCatSDKObj.checkIsGroupPublicFromSharedApiCall(groupId!);
   }
 
-  async loadAddressMemberGroups(address: string) {
+  async loadAddressMemberGroups(address?: string) {
     this._ensureWalletConnected();
-    const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(address);
+    const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(address ?? this._address!);
     const groups = groupIds.map((groupId) => ({
       groupId,
       groupName: this.groupIdToGroupName(groupId) ?? 'unknown',
