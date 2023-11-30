@@ -35,16 +35,10 @@ export interface RecommendGroup {
 class GroupFiSDKFacade {
   private _address: string | undefined;
 
-  private _recommendGroups: RecommendGroup[] = [];
-
   private _mqttConnected: boolean = false;
 
   getUserAddress() {
     return this._address;
-  }
-
-  getRecommendGroups() {
-    return this._recommendGroups
   }
 
   private _currentGroup:
@@ -353,12 +347,21 @@ class GroupFiSDKFacade {
     }
   }
 
-  async fetchAddressQualifiedGroupConfigs() {
+  async fetchAddressQualifiedGroupConfigs({
+    includes,
+    excludes,
+  }: {
+    includes?: string[];
+    excludes?: string[];
+  }) {
     this._ensureWalletConnected();
+   
     const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
       address: this._address!,
+      includes: includes?.map(g => ({groupName: g})),
+      excludes: excludes?.map(g => ({groupName: g})),
     });
-    this._recommendGroups = res
+    return res
       .map(({ groupName, qualifyType }) => ({
         groupName,
         groupId: IotaCatSDKObj._groupToGroupId(groupName),
@@ -369,7 +372,7 @@ class GroupFiSDKFacade {
 
   async bootstrap() {
     const res = await this.waitWalletReadyAndConnectWallet();
-    await this.fetchAddressQualifiedGroupConfigs();
+    await this.fetchAddressQualifiedGroupConfigs({});
     return res;
   }
 
@@ -531,10 +534,10 @@ class GroupFiSDKFacade {
       },
     })) as Array<{ groupId: string }>;
 
-    return markedGroupIds.map(g => ({
+    return markedGroupIds.map((g) => ({
       groupId: g.groupId,
-      groupName: IotaCatSDKObj.groupIdToGroupName(g.groupId) ?? 'unknown'
-    }))
+      groupName: IotaCatSDKObj.groupIdToGroupName(g.groupId) ?? 'unknown',
+    }));
   }
 
   async marked(groupId: string) {
@@ -560,7 +563,9 @@ class GroupFiSDKFacade {
 
   async loadAddressMemberGroups(address?: string) {
     this._ensureWalletConnected();
-    const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(address ?? this._address!);
+    const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
+      address ?? this._address!
+    );
     const groups = groupIds.map((groupId) => ({
       groupId,
       groupName: this.groupIdToGroupName(groupId) ?? 'unknown',
