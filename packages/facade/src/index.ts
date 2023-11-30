@@ -8,6 +8,7 @@ import {
   IMMessage,
   IGroupUserReputation,
   IMUserMuteGroupMember,
+  EventGroupMemberChanged,
 } from 'iotacat-sdk-core';
 
 import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
@@ -15,6 +16,10 @@ import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
 export { SimpleDataExtended };
 
 import { MessageBody } from 'iotacat-sdk-client';
+import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
+import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
+import { EventItemFullfilled } from 'iotacat-sdk-client';
+import { EventItemFromFacade } from 'iotacat-sdk-core';
 
 export interface TransactionRes {
   blockId: string;
@@ -142,6 +147,7 @@ class GroupFiSDKFacade {
         sender: string;
       };
       const message: IMessage = {
+        type: ImInboxEventTypeNewMessage,
         messageId: resUnwrapped.messageId,
         groupId: resUnwrapped.message.groupId,
         sender: resUnwrapped.sender,
@@ -212,13 +218,13 @@ class GroupFiSDKFacade {
   }
 
   // getInboxMessage
-  async getInboxMessages(
+  async getInboxItems(
     continuationToken?: string,
     limit = 3
-  ): Promise<{ messageList: IMessage[]; nextToken?: string }> {
+  ): Promise<{ itemList: EventItemFromFacade[]; nextToken?: string }> {
     this._ensureWalletConnected();
     const resstr = (await IotaSDK.request({
-      method: 'iota_im_groupinboxmessagelist',
+      method: 'iota_im_groupinboxitemlist',
       params: {
         content: {
           addr: this._address!,
@@ -228,23 +234,30 @@ class GroupFiSDKFacade {
       },
     })) as string | undefined;
     if (!resstr) {
-      return { messageList: [] };
+      return { itemList: [] };
     }
     console.log('***iota_im_groupinboxmessagelist success', resstr);
     const res = JSON.parse(resstr) as {
-      messageList: MessageBody[];
+      itemList: (MessageBody|EventGroupMemberChanged)[];
       token?: string;
     };
     console.log('***iota_im_groupinboxmessagelist success', res);
-    const messageList = res.messageList;
+    const itemList = res.itemList;
     const token = res.token;
     // log
-    console.log('messageList', messageList);
-    const fulfilledMessageList =
-      messageList != undefined
-        ? messageList.map((msgBody) => {
-            const msg: IMessage = msgBody;
-            return msg;
+    console.log('itemList', itemList);
+    const fulfilledMessageList:EventItemFromFacade[] =
+    itemList != undefined
+        ? itemList.map((item) => {
+            if (item.type === ImInboxEventTypeNewMessage) {
+              const msg: IMessage = item;
+              return msg;
+            } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
+              const msg: EventGroupMemberChanged = item;
+              return msg;
+            } else {
+              throw new Error('unknown message type');
+            }
           })
         : [];
     // log fulfilledMessageList
@@ -252,16 +265,22 @@ class GroupFiSDKFacade {
 
     // log filteredMessage
     const filteredRes = await Promise.all(
-      fulfilledMessageList.map(({ groupId, sender }) =>
-        this.filterMutedMessage(groupId, sender)
-      )
+      fulfilledMessageList.map((item) => {
+        if (item.type === ImInboxEventTypeNewMessage) {
+          const msg = item as IMessage;
+          return this.filterMutedMessage(msg.groupId, msg.sender)
+        } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
+          const fn = async () => false;
+          return fn();
+        }
+      })
     );
     const filteredMessageList = fulfilledMessageList.filter(
       (_, index) => !filteredRes[index]
     );
     console.log('filteredMessageList', filteredMessageList, filteredRes);
 
-    return { messageList: filteredMessageList, nextToken: token };
+    return { itemList: filteredMessageList, nextToken: token };
   }
   async ensureGroupHaveSharedOutput(groupId: string) {
     try {

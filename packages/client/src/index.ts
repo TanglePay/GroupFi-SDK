@@ -55,6 +55,9 @@ import { EventEmitter } from 'events';
 import { GroupMemberTooManyToPublicThreshold } from "iotacat-sdk-core";
 import { MessageTypePublic } from "iotacat-sdk-core";
 import { IMessage } from 'iotacat-sdk-core';
+import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
+import { EventGroupMemberChanged } from 'iotacat-sdk-core';
+import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -76,25 +79,30 @@ type BasicOutputWrapper = {
     outputId: string;
 }
 type MessageResponseItem = {
+    type: typeof ImInboxEventTypeNewMessage
     outputId: string;
     timestamp: number;
 }
+type EventItem = MessageResponseItem | EventGroupMemberChanged
+
 type MessageResponse = {
     messages:MessageResponseItem[]
     headToken:string
     tailToken:string
 }
-type InboxMessageResponse = {
-    messages:MessageResponseItem[]
+type InboxItemResponse = {
+    items:EventItem[]
     token:string
 }
 export type MessageBody = {
+    type: typeof ImInboxEventTypeNewMessage,
     sender:string,
     message:string,
     messageId:string,
     groupId:string,
     timestamp:number
 }
+export type EventItemFullfilled = EventGroupMemberChanged | MessageBody
 type NftItemReponse = {
     ownerAddress: string;
     publicKey: string;
@@ -421,7 +429,6 @@ class IotaCatClient {
             type: 2,
             data: Converter.bytesToHex(pl, true)
         };
-
         // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
         const basicOutput: IBasicOutput = {
             type: BASIC_OUTPUT_TYPE,
@@ -476,7 +483,7 @@ class IotaCatClient {
     _ensureStorageInited(){
         if (!this._storage) throw new Error('Storage not initialized')
     }
-    async getMessageFromOutputId(outputId:string,address:string){
+    async getMessageFromOutputId({outputId,address,type}:{outputId:string,address:string,type:number}){
         this._ensureClientInited()
         try {
             const outputsResponse = await this._client!.output(outputId)
@@ -491,7 +498,7 @@ class IotaCatClient {
             if (!metadataFeature) throw new Error('No metadata feature')
             const data = Converter.hexToBytes(metadataFeature.data)
             const {sender, message, messageId} = await this.getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address})
-            return { sender, message, messageId }
+            return { type, sender, message, messageId }
         } catch(e) {
             console.log(`getMessageFromOutputId:${outputId}`);
         }
@@ -769,6 +776,7 @@ class IotaCatClient {
             const messageId = IotaCatSDKObj.getMessageId(pl, Converter.hexToBytes(this._accountHexAddress!))
             // IMessage = {messageId:string, groupId:string, sender:string, message:string, timestamp:number}
             const messageSent: IMessage = {
+                type: ImInboxEventTypeNewMessage,
                 messageId,
                 groupId,
                 sender: senderAddr,
@@ -1049,45 +1057,57 @@ class IotaCatClient {
             console.log('error',error)
         }
     }
-    // fetch inbox message list
-    async fetchInboxMessageList(address:string, coninuationToken?:string, limit:number=10) {
+    // fetch inbox item list
+    async fetchInboxItemList(address:string, coninuationToken?:string, limit:number=10) {
         try {
             const params = {address:`${address}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/inboxmessage${paramStr}`
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/inboxitems${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
                 headers:{
                 'Content-Type':'application/json',
                 }})
-            const data = await res.json() as InboxMessageResponse
-            const {messages,token} = data
-            const messageList = await this._messagesToMessageBodies(messages,address)
-            return {messageList,token}
+            const data = await res.json() as InboxItemResponse
+            const {items,token} = data
+            const itemList = await this._messagesToMessageBodies(items,address)
+            return {itemList,token}
         } catch (error) {
             console.log('error',error)
         }
     }
-    async _messageResponseToMesssageListAndTokens(response:MessageResponse, address:string):Promise<{messageList:MessageBody[],headToken?:string,  tailToken?:string}>{
+    async _messageResponseToMesssageListAndTokens(response:MessageResponse, address:string):Promise<{messageList:EventItemFullfilled[],headToken?:string,  tailToken?:string}>{
         const messages = response.messages
         const messageList = await this._messagesToMessageBodies(messages,address)
         return {messageList,headToken:response.headToken, tailToken:response.tailToken}
     }
     // messagesToMessageBodies
-    async _messagesToMessageBodies(messages:MessageResponseItem[],address:string):Promise<MessageBody[]>{
-        const messagePayloads = await Promise.all(messages.map(msg => this.getMessageFromOutputId(msg.outputId,address)))
-        const messageBodyArr:(MessageBody|undefined)[] = messagePayloads.map((payload,index)=>{
+    async _messagesToMessageBodies(items:EventItem[],address:string):Promise<(EventItemFullfilled)[]>{
+        const messagePayloads = await Promise.all(items.map((item:EventItem) => {
+            if (item.type == ImInboxEventTypeNewMessage) {
+                return this.getMessageFromOutputId({outputId:item.outputId,address,type:item.type})
+            } else if (item.type == ImInboxEventTypeGroupMemberChanged) {
+                const fn = async () => item
+                return fn()
+            }
+        }))
+        const messageBodyArr:(EventItemFullfilled|undefined)[] = messagePayloads.map((payload,index)=>{
             if (!payload) return undefined;
-            return {
-            timestamp:messages[index].timestamp,
-            groupId:payload.message.groupId,
-            message:payload.message.data??'',
-            messageId:payload.messageId,
-            sender:payload.sender
+            if (payload.type == ImInboxEventTypeGroupMemberChanged) {
+                return payload as EventGroupMemberChanged;
+            } else if (payload.type == ImInboxEventTypeNewMessage){
+                return {
+                    type:payload.type,
+                    timestamp:items[index].timestamp,
+                    groupId:payload.message.groupId,
+                    message:payload.message.data??'',
+                    messageId:payload.messageId,
+                    sender:payload.sender
+                }
             }
         })
-        const filterdMessageBodyArr = messageBodyArr.filter(msg=>msg!=undefined) as MessageBody[]
+        const filterdMessageBodyArr = messageBodyArr.filter(msg=>msg!=undefined) as (EventItemFullfilled)[]
         return filterdMessageBodyArr
     }
 

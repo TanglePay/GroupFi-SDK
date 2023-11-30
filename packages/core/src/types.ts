@@ -85,7 +85,9 @@ export interface MessageGroupMeta {
     tokenThres: string,
     collectionIds: string[],
 }
-export type PushedValue = {type:1,groupId:string,outputId:string}| {type:2, groupId:string, sender:string, meta:string}
+export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
+export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number}
+export type PushedValue = PushedNewMessage | EventGroupMemberChanged
 export type MessageGroupMetaKey = keyof MessageGroupMeta
 export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain
 
@@ -107,7 +109,8 @@ export class GroupMemberTooManyError extends Error {
          }
     }
 }
-export type IMessage = {messageId:string, groupId:string, sender:string, message:string, timestamp:number}
+export type IMessage = {type:typeof ImInboxEventTypeNewMessage,messageId:string, groupId:string, sender:string, message:string, timestamp:number}
+export type EventItemFromFacade = EventGroupMemberChanged | IMessage
 export interface IGroupFiSDK {
     bootstrap(): Promise<void>;
     getGroups(): Promise<{groupId:string,groupName:string}[]>;
@@ -136,3 +139,13 @@ export interface IGroupUserReputation {
     addressSha256Hash:string
     reputation:number
 }
+
+/*
+const (
+	// plain text, new message
+	ImInboxEventTypeNewMessage         byte = 1
+	ImInboxEventTypeGroupMemberChanged byte = 2
+)
+*/
+export const ImInboxEventTypeNewMessage = 1
+export const ImInboxEventTypeGroupMemberChanged = 2

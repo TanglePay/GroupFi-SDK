@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -586,17 +586,16 @@ class IotaCatSDK {
         // type to number
         console.log('parsePushedValue',value.toString('hex'))
         const type = value[0]
-        if (type === 1) {
-            const groupId = value.slice(1,33).toString('hex')
-            const outputId = value.slice(33,67).toString('hex')
-            console.log('parsePushedValue',value,type,groupId,outputId)
-            return {type,groupId,outputId}
-        } else if (type === 2) {
+        if (type === ImInboxEventTypeNewMessage) {
             const sender = value.slice(2,34).toString('hex')
             const meta = value.slice(34).toString('hex')
             const groupId = value.slice(35,67).toString('hex')
             console.log('parsePushedValue',value,type,groupId)
             return {type, groupId, sender, meta}
+        } else if (type === ImInboxEventTypeGroupMemberChanged) {
+            const groupId = value.slice(1,33).toString('hex')
+            const milestoneTimestamp = value.slice(37,41).readUInt32BE(0)
+            return {type, groupId, timestamp:milestoneTimestamp}
         }
         
     }
