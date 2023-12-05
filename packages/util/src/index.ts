@@ -2,6 +2,7 @@ import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { Blake2b } from "@iota/crypto.js"
 export * from './runbatch'
 export * from './objectId'
+export * from './consolidate'
 export const concatBytes = (...args: Uint8Array[]) => {
     let totalLength = 0;
     args.forEach((bytes) => {
@@ -110,4 +111,8 @@ export const bytesToUnixSeconds = (bytes: Uint8Array): number => {
 
 export function getCurrentEpochInSeconds() {
     return Math.floor(Date.now() / 1000);
+}
+
+export function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }

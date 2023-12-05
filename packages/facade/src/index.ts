@@ -20,6 +20,8 @@ import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
 import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
 import { EventItemFullfilled } from 'iotacat-sdk-client';
 import { EventItemFromFacade } from 'iotacat-sdk-core';
+import { PushedValue } from 'iotacat-sdk-core';
+import { PushedNewMessage } from 'iotacat-sdk-core';
 
 export interface TransactionRes {
   blockId: string;
@@ -112,12 +114,10 @@ class GroupFiSDKFacade {
     return false;
   }
 
-  async handlePushedMessage(pushed: any): Promise<IMessage | undefined> {
+  async handlePushedMessage(pushed: PushedNewMessage): Promise<IMessage | undefined> {
     const { type, groupId } = pushed;
 
-    if (type === 1) {
-      throw new Error('type 1 not supported for pushed message');
-    } else if (type === 2) {
+    if (type === ImInboxEventTypeNewMessage) {
       const { sender, meta } = pushed;
 
       const res = await IotaSDK.request({
@@ -163,21 +163,30 @@ class GroupFiSDKFacade {
       }
 
       return message;
+    } else {
+      throw new Error('unknown message type: ' + type);
     }
 
     return undefined;
   }
 
-  listenningNewMessage(callback: (message: IMessage) => void): () => void {
+  listenningNewEventItem(callback: (message: EventItemFromFacade) => void): () => void {
     this._ensureWalletConnected();
     if (!this._mqttConnected) {
       throw new Error('MQTT not connected');
     }
-    const listener = async (pushed: any) => {
+    // log listenningNewEventItem
+    console.log('***Enter listenningNewEventItem');
+    const listener = async (pushed: PushedValue) => {
       console.log('pushed', pushed);
-      const pushedMessage = await this.handlePushedMessage(pushed);
-      if (pushedMessage) {
-        callback(pushedMessage);
+      let item: EventItemFromFacade | undefined = undefined;
+      if (pushed.type == ImInboxEventTypeNewMessage) {
+        item = await this.handlePushedMessage(pushed);
+      } else if (pushed.type == ImInboxEventTypeGroupMemberChanged) {
+        item = pushed;
+      }
+      if (item) {
+        callback(item);
       }
     };
     IotaCatSDKObj.on('inbox', listener);
@@ -476,14 +485,18 @@ class GroupFiSDKFacade {
       ?.vote;
   }
 
-  async joinGroup(groupId: string) {
+  async joinGroup({groupId,memberList,publicKey}:{groupId: string,publicKey:string,memberList:{addr:string,publicKey:string}[]}) {
     this._ensureWalletConnected();
+    const isAlreadyInMemberList = memberList.find(o=>o.addr === this._address!);
+    if (isAlreadyInMemberList) return true;
+    memberList.push({addr:this._address!,publicKey});
     const res = (await IotaSDK.request({
       method: 'iota_im_mark_group',
       params: {
         content: {
           addr: this._address!,
           groupId,
+          memberList,
         },
       },
     })) as TransactionRes | undefined;
@@ -509,7 +522,11 @@ class GroupFiSDKFacade {
     //   await IotaCatSDKObj.waitOutput(res.outputId);
     // }
   }
-
+ // get current address
+  getCurrentAddress() {
+    this._ensureWalletConnected();
+    return this._address!;
+  }
   async isQualified(groupId: string) {
     this._ensureWalletConnected();
     const ipfsOrigins = await IotaCatSDKObj.fetchIpfsOrigins(this._address!);
@@ -522,7 +539,10 @@ class GroupFiSDKFacade {
         qualifiedGroup.groupId === IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     );
   }
-
+ // _addHexPrefixIfAbsent
+  addHexPrefixIfAbsent(str: string) {
+    return IotaCatSDKObj._addHexPrefixIfAbsent(str);
+  }
   async getAllMarkedGroups() {
     this._ensureWalletConnected();
     const markedGroupIds = (await IotaSDK.request({
@@ -582,6 +602,32 @@ class GroupFiSDKFacade {
     return await IotaCatSDKObj.fetchGroupMemberAddresses(groupId);
   }
 
+  async loadAddressPublicKey() {
+    this._ensureWalletConnected();
+    return await IotaCatSDKObj.fetchAddressPublicKey(this._address!);
+  }
+  // call sdk iota_im_send_anyone_toself
+  async sendAnyOneToSelf() {
+    // log
+    console.log('***Enter sendAnyOneToSelf, address', this._address!);
+    try {
+      const res = await IotaSDK.request({
+        method: 'iota_im_send_anyone_toself',
+        params: {
+          content: {
+            addr: this._address!,
+          },
+        },
+      });
+    
+      // log
+      console.log('***sendAnyOneToSelf res', res);
+      return res;
+    } catch (error) {
+      console.log('***sendAnyOneToSelf error', error);
+    }
+    
+  }
   async isBlackListed(groupId: string) {
     this._ensureWalletConnected();
     const blackListedAddresseHashs = await IotaCatSDKObj.fetchGroupBlacklist(

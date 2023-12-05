@@ -198,8 +198,15 @@ class IotaCatSDK {
         return json
     }
     // fetch member addresses for a group, /groupmemberaddresses
-    async fetchGroupMemberAddresses(groupId:string):Promise<string[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmemberaddresses?groupId=0x${groupId}`
+    async fetchGroupMemberAddresses(groupId:string):Promise<{ownerAddress:string,publicKey:string}[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmemberaddresses?groupId=${this._addHexPrefixIfAbsent(groupId)}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // fetch public key of a address, /getaddresspublickey
+    async fetchAddressPublicKey(address:string):Promise<string|undefined>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/getaddresspublickey?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -319,7 +326,7 @@ class IotaCatSDK {
     }
 
     _generateRandomStr(len:number){
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+'
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
         let result = []
         for (let i = 0; i < len; i++) {
             result.push(chars.charAt(Math.floor(Math.random() * chars.length)))
@@ -595,7 +602,9 @@ class IotaCatSDK {
         } else if (type === ImInboxEventTypeGroupMemberChanged) {
             const groupId = value.slice(1,33).toString('hex')
             const milestoneTimestamp = value.slice(37,41).readUInt32BE(0)
-            return {type, groupId, timestamp:milestoneTimestamp}
+            const isNewMember = value[41] === 1
+            const addressSha256Hash = value.slice(42,74).toString('hex')
+            return {type, groupId, timestamp:milestoneTimestamp, isNewMember, addressSha256Hash}
         }
         
     }
@@ -608,6 +617,7 @@ export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
 export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
+export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const IotaCatSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

@@ -68,7 +68,7 @@ export type Address = {
     type: typeof ShimmerBech32Addr | typeof ShimmerEvmAddr
     addr: string
 }
-export const INX_GROUPFI_DOMAIN = "test2.api.iotacat.com"
+export const INX_GROUPFI_DOMAIN = process.env.INX_GROUPFI_DOMAIN
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
 export const MessageTypePrivate = 1
@@ -86,7 +86,7 @@ export interface MessageGroupMeta {
     collectionIds: string[],
 }
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
-export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number}
+export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, addressSha256Hash:string}
 export type PushedValue = PushedNewMessage | EventGroupMemberChanged
 export type MessageGroupMetaKey = keyof MessageGroupMeta
 export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain

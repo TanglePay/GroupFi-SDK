@@ -12,6 +12,9 @@
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
+    "build:staging": "cross-env NODE_ENV=staging pnpm run build",
+    "build:prerelease": "cross-env NODE_ENV=prerelease pnpm run build",
+    "build:production": "cross-env NODE_ENV=production pnpm run build",
     "lint": "eslint src --fix --ext .ts,.js",
     "test": "jest"
   },
@@ -33,7 +36,9 @@
     "url": "https://github.com/TanglePay/TanglePay-SDK/issues"
   },
   "homepage": "https://github.com/TanglePay/TanglePay-SDK#readme",
-  "devDependencies": {},
+  "devDependencies": {
+    "@iota/iota.js": "2.0.0-rc.4"
+  },
   "dependencies": {
     "@iota/crypto.js": "^2.0.0-rc.2",
     "@iota/util.js": "^2.0.0-rc.2"

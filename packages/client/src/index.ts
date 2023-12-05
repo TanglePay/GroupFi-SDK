@@ -26,9 +26,11 @@ import {
     IEd25519Address,
     IOutputResponse,
     REFERENCE_UNLOCK_TYPE,
-    TIMELOCK_UNLOCK_CONDITION_TYPE
+    TIMELOCK_UNLOCK_CONDITION_TYPE,
+    INftOutput,
+    OutputTypes
 } from "@iota/iota.js";
-import { Converter, WriteStream,  } from "@iota/util.js";
+import { Converter, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
 import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
@@ -38,7 +40,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG
 
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds} from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllNftOutputs, getAllBasicOutputs} from 'iotacat-sdk-utils';
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -58,6 +60,7 @@ import { IMessage } from 'iotacat-sdk-core';
 import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
 import { EventGroupMemberChanged } from 'iotacat-sdk-core';
 import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
+import { GROUPFISELFPUBLICKEYTAG } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -76,6 +79,10 @@ type OutputResponseWrapper = {
 }
 type BasicOutputWrapper = {
     output: IBasicOutput;
+    outputId: string;
+}
+type OutputWrapper = {
+    output: OutputTypes;
     outputId: string;
 }
 type MessageResponseItem = {
@@ -122,11 +129,11 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://soon.dlt.builders/api/core/v2/info",
+    apiUrl: "https://test.api.iotacat.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
-    inxMqttEndpoint: "wss://test.api.iotacat.com/mqtt",
+    inxMqttEndpoint: "wss://test.shimmer.node.tanglepay.com/mqtt",
 }
 
 const shimmerMainNet = {
@@ -155,11 +162,14 @@ class IotaCatClient {
     _pubKeyCache?:LRUCache<string>;
     _storage?:StorageFacade;
     _hexSeed?:string;
+    _networkId?:string;
     _events:EventEmitter = new EventEmitter();
     //TODO simple cache
     _saltCache:Record<string,string> = {};
 
-    async setup(id:number, provider?:Constructor<IPowProvider>,...rest:any[]){
+    async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
+        // @ts-ignore
+        const id = parseInt(process.env.NODE_ID,10)
         const node = nodes.find(node=>node.id === id)
         if (!node) throw new Error('Node not found')
         this._curNode = node
@@ -168,6 +178,7 @@ class IotaCatClient {
         this._indexer = new IndexerPluginClient(this._client)
         this._nodeInfo = await this._client.info();
         this._protocolInfo = await this._client.protocolInfo();
+        this._networkId = TransactionHelper.networkIdFromNetworkName(this._protocolInfo!.networkName)
         this._pubKeyCache = makeLRUCache<string>(200)
         console.log('NodeInfo', this._nodeInfo);
         console.log('ProtocolInfo', this._protocolInfo);
@@ -344,7 +355,11 @@ class IotaCatClient {
             const outputsResponse = await this._client!.output(outputId)
             return {outputId,output:outputsResponse.output as IBasicOutput}
         } else {
-            return await this._makeSharedOutputForGroup(groupId)
+            const res = await this._makeSharedOutputForGroup({groupId})
+            if (!res) return
+            const {output} = res
+            const {blockId,outputId} = await this._sendBasicOutput([output]);
+            return {outputId,output};
         }
     }
     //ensure group have shared output, if not create one
@@ -353,7 +368,11 @@ class IotaCatClient {
         try {
             const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
             if (!res) {
-                await this._makeSharedOutputForGroup(groupId)
+                const res = await this._makeSharedOutputForGroup({groupId})
+                if (!res) return
+                const {output} = res
+                const {blockId,outputId} = await this._sendBasicOutput([output]);
+                return {outputId,output};
             }
         } catch (error) {
             if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
@@ -406,10 +425,14 @@ class IotaCatClient {
         const salt = await this._getSaltFromSharedOutput(output, address)
         return {salt}
     }
-    async _makeSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
-         const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)
-         
-         const recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
+    async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput}|undefined>{
+        let recipients
+        if (memberList) {
+            recipients = memberList.map((member)=>({addr:member.addr,mkey:member.publicKey}))
+        } else {
+            const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)         
+            recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
+        }
 
         console.log('_makeSharedOutputForGroup recipients', recipients);
         const salt = IotaCatSDKObj._generateRandomStr(32)
@@ -452,9 +475,7 @@ class IotaCatClient {
                 tagFeature
             ]
         };
-        const {blockId,outputId} = await this._sendBasicOutput(basicOutput);
-
-        return {outputId,output:basicOutput};
+       return {output:basicOutput}
     } 
     _getPair(baseSeed:Ed25519Seed){
         const addressGeneratorAccountState = {
@@ -809,7 +830,7 @@ class IotaCatClient {
             console.log("Basic Output: ", basicOutput);
 
             
-            const {blockId,outputId} = await this._sendBasicOutput(basicOutput);
+            const {blockId,outputId} = await this._sendBasicOutput([basicOutput]);
             return {blockId,outputId,messageSent}
         } catch (e) {
             console.log("Error submitting block: ", e);
@@ -875,11 +896,16 @@ class IotaCatClient {
         };
         return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs, [consolidatedBasicOutput])
     }
-    async _sendBasicOutput(basicOutput:IBasicOutput,extraOutputsToBeConsumed:BasicOutputWrapper[] = []){
-        const amountToSend = this._getAmount(basicOutput)
-        console.log('AmountToSend', amountToSend);
-        basicOutput.amount = amountToSend.toString()
-        const createdOutputs:IBasicOutput[] = [basicOutput]
+    async _sendBasicOutput(basicOutputs:IBasicOutput[],extraOutputsToBeConsumed:BasicOutputWrapper[] = []){
+        const createdOutputs:IBasicOutput[] = []
+        let amountToSend = bigInt('0')
+        for (const basicOutput of basicOutputs) {
+            const amountToSend_ = this._getAmount(basicOutput)
+            basicOutput.amount = amountToSend_.toString()
+            createdOutputs.push(basicOutput)
+            amountToSend = amountToSend.add(amountToSend_)
+        }
+        
         // get first output with amount > amountToSend
         let depositFromExtraOutputs = bigInt('0')
 
@@ -890,7 +916,8 @@ class IotaCatClient {
         const cashNeeded = amountToSend.subtract(depositFromExtraOutputs)
         console.log('cashNeeded', cashNeeded);
         if (cashNeeded.lesser(bigInt('0'))) {
-            basicOutput.amount = depositFromExtraOutputs.toString()
+            // add diff to first created output, diff is -1 * cashNeeded
+            createdOutputs[0].amount = bigInt(createdOutputs[0].amount).subtract(cashNeeded).toString()
         } else {
             const threshold = cashNeeded.multiply(2)
             const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
@@ -924,11 +951,11 @@ class IotaCatClient {
         return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(extraOutputsToBeConsumed, createdOutputs)
     }
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
-    async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:BasicOutputWrapper[],createdOutputs:IBasicOutput[]){
+    async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:OutputWrapper[],createdOutputs:OutputTypes[]){
         this._ensureClientInited()
         this._ensureWalletInited()
         const inputArray:IUTXOInput[] = []
-        const consumedOutputArray:IBasicOutput[] = []
+        const consumedOutputArray:OutputTypes[] = []
         for (const basicOutputWrapper of consumedOutputs) {
             const {outputId,output} = basicOutputWrapper
             const input: IUTXOInput = TransactionHelper.inputFromOutputId(outputId); 
@@ -944,7 +971,7 @@ class IotaCatClient {
         // 1856588631910923207 is the networkId of the testnet
         const transactionEssence: ITransactionEssence = {
             type: TRANSACTION_ESSENCE_TYPE,
-            networkId: this._curNode!.networkId, //this._protocolInfo!.networkName,
+            networkId: this._networkId!,
             inputs: inputArray, 
             inputsCommitment,
             outputs: createdOutputs,
@@ -1008,6 +1035,91 @@ class IotaCatClient {
             console.log("Error submitting block: ", e);
             throw e
         }
+    }
+    // sendAnyOneOutputToSelf
+    async sendAnyOneOutputToSelf(){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const tagFeature: ITagFeature = {
+            type: 3,
+            tag: `0x${Converter.utf8ToHex(GROUPFISELFPUBLICKEYTAG)}`
+        };
+
+        // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
+        const basicOutput: IBasicOutput = {
+            type: BASIC_OUTPUT_TYPE,
+            amount: '',
+            nativeTokens: [],
+            unlockConditions: [
+                {
+                    type: ADDRESS_UNLOCK_CONDITION_TYPE,
+                    address: {
+                        type: ED25519_ADDRESS_TYPE,
+                        pubKeyHash: this._accountHexAddress!
+                    }
+                }
+            ],
+            features: [
+                tagFeature
+            ]
+        };
+        return await this._sendBasicOutput([basicOutput])
+    }
+    /*helperContext:{SingleNodeClient:SingleNodeClient,IndexerPluginClient:IndexerPluginClient, bech32Address:string }*/
+    // _getHelperContext
+    _getHelperContext(){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const helperContext = {SingleNodeClient:this._client!,IndexerPluginClient:this._indexer!, bech32Address:this._accountBech32Address! }
+        return helperContext
+    }
+    
+// _trySendAnyOneBasicOutputToSelf
+    async _trySendAnyOneBasicOutputToSelf(){
+        /*
+        const helperContext = this._getHelperContext()
+        const drainContextForBasicOutputs = await getAllBasicOutputs(helperContext)
+        let cd = drainContextForBasicOutputs.inChannel.numPushed;
+        let isSent = false
+        let outputWrapper:OutputWrapper|undefined
+        for(;;) {
+            cd--;
+            if (cd < 0) {
+                break;
+            }
+            const basicOutput = await drainContextForBasicOutputs.outChannel.poll();
+            if (basicOutput) {
+                outputWrapper = basicOutput
+                break;
+            }
+        }
+        drainContextForBasicOutputs.isStop = true;
+        if (outputWrapper) {
+            const res = await this._sentOneOutputToSelf(outputWrapper)
+            isSent = true
+        }
+        return isSent
+        */
+
+    }
+    // _sentOneOutputToSelf
+    async _sentOneOutputToSelf(outputWrapper:OutputWrapper){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const output = outputWrapper.output as IBasicOutput | INftOutput
+        let features = output.features??[]
+        // filter tag feature out
+        features = features.filter(feature=>feature.type!=3)
+        // add tag feature, with tag GROUPFISELFPUBLICKEYTAG
+        const tagFeature: ITagFeature = {
+            type: 3,
+            tag: `0x${Converter.utf8ToHex(GROUPFISELFPUBLICKEYTAG)}`
+        };
+        features.push(tagFeature)
+        output.features = features
+        const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs([outputWrapper],[outputWrapper.output])
+        console.log('res', res);
+        return res
     }
     async fetchMessageListFrom(groupId:string, address:string, coninuationToken?:string, limit:number=10) {
         try {
@@ -1083,7 +1195,7 @@ class IotaCatClient {
         return {messageList,headToken:response.headToken, tailToken:response.tailToken}
     }
     // messagesToMessageBodies
-    async _messagesToMessageBodies(items:EventItem[],address:string):Promise<(EventItemFullfilled)[]>{
+    async _messagesToMessageBodies(items:EventItem[],address:string):Promise<(EventGroupMemberChanged|MessageBody)[]>{
         const messagePayloads = await Promise.all(items.map((item:EventItem) => {
             if (item.type == ImInboxEventTypeNewMessage) {
                 return this.getMessageFromOutputId({outputId:item.outputId,address,type:item.type})
@@ -1092,7 +1204,7 @@ class IotaCatClient {
                 return fn()
             }
         }))
-        const messageBodyArr:(EventItemFullfilled|undefined)[] = messagePayloads.map((payload,index)=>{
+        const messageBodyArr:(EventGroupMemberChanged|MessageBody|undefined)[] = messagePayloads.map((payload,index)=>{
             if (!payload) return undefined;
             if (payload.type == ImInboxEventTypeGroupMemberChanged) {
                 return payload as EventGroupMemberChanged;
@@ -1107,7 +1219,7 @@ class IotaCatClient {
                 }
             }
         })
-        const filterdMessageBodyArr = messageBodyArr.filter(msg=>msg!=undefined) as (EventItemFullfilled)[]
+        const filterdMessageBodyArr = messageBodyArr.filter(msg=>msg!=undefined) as EventItemFullfilled[]
         return filterdMessageBodyArr
     }
 
@@ -1136,10 +1248,18 @@ class IotaCatClient {
         const {list} = await this._getMarkedGroupIds()
         return list
     }
-    async markGroup(groupId:string){
+    // memberList should contain self if already qualified
+    async markGroup({groupId,memberList}:{groupId:string,memberList:{addr:string,publicKey:string}[]}){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const {outputWrapper,list} = await this._getMarkedGroupIds()
+        const [{outputWrapper,list},sharedOutputRes] = await Promise.all([
+            this._getMarkedGroupIds(),
+            this._makeSharedOutputForGroup({groupId,memberList})
+        ])
+        let sharedOutput
+        if (sharedOutputRes) {
+            sharedOutput = sharedOutputRes.output
+        }
         // log existing list
         console.log('existing list', list, outputWrapper);
         if (list.find(id=>id.groupId === groupId)) {
@@ -1149,7 +1269,7 @@ class IotaCatClient {
         }
         list.push({groupId,timestamp:Date.now()})
         console.log('new list', list)
-        return await this._persistMarkedGroupIds(list,outputWrapper)
+        return await this._persistMarkedGroupIds({list,outputWrapper,sharedOutput})
     }
     async unmarkGroup(groupId:string){
         this._ensureClientInited()
@@ -1158,15 +1278,20 @@ class IotaCatClient {
         const idx = list.findIndex(id=>id.groupId === groupId)
         if (idx === -1) return
         list.splice(idx,1)
-        return await this._persistMarkedGroupIds(list,outputWrapper)
+        return await this._persistMarkedGroupIds({list,outputWrapper})
     }
-    async _persistMarkedGroupIds(list:IMUserMarkedGroupId[],outputWrapper?:BasicOutputWrapper){
+    async _persistMarkedGroupIds({
+        list,
+        outputWrapper,
+        sharedOutput
+    }:{list:IMUserMarkedGroupId[],sharedOutput?:IBasicOutput,outputWrapper?:BasicOutputWrapper}){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMARKTAG)}`
         const data = serializeUserMarkedGroupIds(list)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         console.log('created and consumed', basicOutput, toBeConsumed);
-        return await this._sendBasicOutput(basicOutput,toBeConsumed);
+        const createdOutputs = sharedOutput ? [basicOutput, sharedOutput] : [basicOutput]
+        return await this._sendBasicOutput(createdOutputs,toBeConsumed);
     }
     async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
@@ -1232,7 +1357,7 @@ class IotaCatClient {
         const data = serializeUserMuteGroupMembers(list)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
-        return await this._sendBasicOutput(basicOutput,toBeConsumed);
+        return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
 
     async _getUserMuteGroupMembers():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
@@ -1287,7 +1412,7 @@ class IotaCatClient {
         const data = serializeUserVoteGroups(list)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
-        return await this._sendBasicOutput(basicOutput,toBeConsumed);
+        return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
     async _getUserVoteGroups():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserVoteGroup[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIVOTETAG)

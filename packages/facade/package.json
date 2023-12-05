@@ -25,6 +25,9 @@
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
+    "build:staging": "cross-env NODE_ENV=staging pnpm run build",
+    "build:prerelease": "cross-env NODE_ENV=prerelease pnpm run build",
+    "build:production": "cross-env NODE_ENV=production pnpm run build",
     "lint": "eslint src --fix --ext .ts,.js",
     "test": "jest"
   },
