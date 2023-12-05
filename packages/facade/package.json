@@ -38,6 +38,6 @@
     "iotacat-sdk-client": "workspace:^",
     "iotacat-sdk-core": "workspace:^",
     "iotacat-sdk-utils": "workspace:^",
-    "tanglepaysdk-client": "^0.1.7"
+    "tanglepaysdk-client": "^0.1.10"
   }
 }

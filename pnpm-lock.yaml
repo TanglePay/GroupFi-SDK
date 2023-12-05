@@ -208,8 +208,8 @@ importers:
         specifier: workspace:^
         version: link:../util
       tanglepaysdk-client:
-        specifier: ^0.1.7
-        version: 0.1.7
+        specifier: ^0.1.10
+        version: 0.1.10
 
   packages/util:
     dependencies:
@@ -7893,10 +7893,10 @@ packages:
       - utf-8-validate
     dev: false
 
-  /tanglepaysdk-client@0.1.7:
-    resolution: {integrity: sha512-/cEKot/zkm11csbTxZl/dHGf32Is7vkvVU+2miD4z4l3zGWMsGnf2XN/cmoOF2YB+oO0em0u6YnqZoEoxeC/Hg==}
+  /tanglepaysdk-client@0.1.10:
+    resolution: {integrity: sha512-GMMT+thfC4GpdQsARLvgvvwbxsTm7iy71u2PhtCLKOA8ICsvvISTxJMryRbhogsAmRHrqdtxnCqGjOfK2jjsvA==}
     dependencies:
-      tanglepaysdk-common: 0.1.7
+      tanglepaysdk-common: 0.1.10
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -7904,8 +7904,8 @@ packages:
       - utf-8-validate
     dev: false
 
-  /tanglepaysdk-common@0.1.7:
-    resolution: {integrity: sha512-1Emu+wSHGBNfeal49cEWT2Fsv6A5PeQFg2XXa9WM3vI9olqXduy2MtWzqr3BKBqiBLBYcSZ0YLkQ/7YH5qOULQ==}
+  /tanglepaysdk-common@0.1.10:
+    resolution: {integrity: sha512-owQJp0h9nYjiyMoxLdIkGJNb4iNjFPKbOZ2RDZWz49O0BTtAfdqcr2JCRHhakEEBPDrZU+3yPdEx8sbSgGWdag==}
     dependencies:
       web3: 1.10.2
     transitivePeerDependencies:
