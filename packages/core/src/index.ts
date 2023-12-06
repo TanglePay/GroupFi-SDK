@@ -195,14 +195,18 @@ class IotaCatSDK {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmarkedaddresses?groupId=0x${groupId}`
         const res = await fetch(url)
         const json = await res.json()
-        return json
+        return this._ensureList(json)
     }
     // fetch member addresses for a group, /groupmemberaddresses
     async fetchGroupMemberAddresses(groupId:string):Promise<{ownerAddress:string,publicKey:string}[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmemberaddresses?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()
-        return json
+        return this._ensureList(json)
+    }
+    _ensureList(list:any[]|undefined){
+        if (!list) return []
+        return list
     }
     // fetch public key of a address, /getaddresspublickey
     async fetchAddressPublicKey(address:string):Promise<string|undefined>{
@@ -235,14 +239,14 @@ class IotaCatSDK {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupblacklist?groupId=0x${groupId}`
         const res = await fetch(url)
         const json = await res.json()
-        return json
+        return this._ensureList(json)
     }
     // fetch address member groups for an address, /addressmembergroups
     async fetchAddressMemberGroups(address:string):Promise<string[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmembergroups?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
-        return json
+        return this._ensureList(json)
     }
 
     // RouteGroupUserReputation = "/groupuserreputation"
@@ -250,7 +254,7 @@ class IotaCatSDK {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupuserreputation?groupId=0x${groupId}`
         const res = await fetch(url)
         const json = await res.json()
-        return json
+        return this._ensureList(json)
     }
 
     // RouteUserGroupReputation = "/usergroupreputation"
@@ -312,7 +316,7 @@ class IotaCatSDK {
             acc[group.groupName] = group;
             return acc;
         }, {} as Record<string, MessageGroupMeta>);
-        return json;
+        return this._ensureList(json);
     }    
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         // check if message.recipients is null
