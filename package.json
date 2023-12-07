@@ -4,7 +4,7 @@
   "scripts": {
     "clean": "pnpm run -r clean",
     "build:staging": "pnpm run -r build:staging && pnpm run syncdist",
-    "build:prerelease": "pnpm run -r build:prerelease",
+    "build:prerelease": "pnpm run -r build:prerelease && pnpm run syncdist",
     "test": "pnpm run -r test",
     "syncdist": "node syncdist.js"
   },
