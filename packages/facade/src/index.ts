@@ -316,6 +316,18 @@ class GroupFiSDKFacade {
       console.log('consolidateMessages error', error);
     }
   }
+  // get smr balance
+  async getSMRBalance() {
+    this._ensureWalletConnected();
+    const res = await IotaSDK.request({
+      method: 'iota_getBalance',
+      params: {
+        addressList: [this._address!],
+        assetsList: ['smr'],
+      },
+    });
+    return res as {amount:number};
+  }
   async enteringGroupByGroupId(groupId: string) {
     const [ensureRes] = await Promise.all([
       this.ensureGroupHaveSharedOutput(groupId),

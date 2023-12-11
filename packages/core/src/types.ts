@@ -109,6 +109,18 @@ export class GroupMemberTooManyError extends Error {
          }
     }
 }
+export class UserDoesNotHasEnoughTokenError extends Error {
+    constructor() {
+        super(`user does not has enough token`)
+         // Set the name for the custom error
+         this.name = this.constructor.name;
+    
+         // This ensures that CustomError instances have a proper stack trace.
+         if (Error.captureStackTrace) {
+             Error.captureStackTrace(this, this.constructor);
+         }
+    }
+}
 export type IMessage = {type:typeof ImInboxEventTypeNewMessage,messageId:string, groupId:string, sender:string, message:string, timestamp:number}
 export type EventItemFromFacade = EventGroupMemberChanged | IMessage
 export interface IGroupFiSDK {
