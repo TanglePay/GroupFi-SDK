@@ -923,6 +923,7 @@ class IotaCatClient {
             const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
             const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
             console.log('unspent Outputs', outputs);
+            if (!outputs || outputs.length === 0) throw IotaCatSDKObj.makeErrorForUserDoesNotHasEnoughToken()
             
             const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
             
