@@ -1,6 +1,6 @@
 
 import CryptoJS from 'crypto-js';
-import { hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash } from 'iotacat-sdk-utils';
+import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash } from 'iotacat-sdk-utils';
 import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
@@ -8,7 +8,6 @@ import EventEmitter from 'events';
 import { serializeRecipientList, deserializeRecipientList, serializeIMMessage, deserializeIMMessage } from './codec';
 import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
-import { concatBytes } from 'iotacat-sdk-utils';
 export * from './types';
 export * from './codec_mark';
 export * from './codec_mute';
@@ -344,11 +343,12 @@ class IotaCatSDK {
         return json
     }
     _compressMessageText(message:IMMessage){
-        const compressed = LZString.compress(message.data)
-        message.data = compressed
+        const compressed = LZString.compressToUint8Array(message.data)
+        message.data = bytesToHex(compressed)
     }
     _decompressMessageText(message:IMMessage){
-        const decompressed = LZString.decompress(message.data)
+        const bytes = hexToBytes(message.data)
+        const decompressed = LZString.decompressFromUint8Array(bytes)
         message.data = decompressed
     }
     async serializeMessage(message:IMMessage, extra:{encryptUsingPublicKey?:(key:string,data:string)=>Promise<Uint8Array>, groupSaltResolver?:(groupId:string)=>Promise<string>}):Promise<Uint8Array>{
@@ -560,16 +560,14 @@ class IotaCatSDK {
     verifyErrorForGroupMemberTooMany(err:any){
         return err.name === 'GroupMemberTooManyError'
     }
-    verifyErrorForUserDoesNotHasEnoughToken(err:any){
-        return err.name === 'UserDoesNotHasEnoughTokenError'
-    }
+
     validateMsgWithSalt(msg:IMMessage, salt:string){
         const firstMsgDecrypted = this._decrypt(msg.data,salt)
         if (!firstMsgDecrypted) return false
         return true
     }
     _encrypt(content:string,salt:string){
-        const contentWord = CryptoJS.enc.Utf8.parse(content)
+        const contentWord = CryptoJS.enc.Hex.parse(content)
         const [key,iv] = this._getKdf(salt)
         const encrypted = CryptoJS.AES.encrypt(
             contentWord,
@@ -584,7 +582,7 @@ class IotaCatSDK {
         const encryptedParam = CryptoJS.lib.CipherParams.create({
             ciphertext: encryptedWord
         })
-        const decrypted = CryptoJS.AES.decrypt(encryptedParam, kdf, this._decorateAesCfg({iv})).toString(CryptoJS.enc.Utf8)
+        const decrypted = CryptoJS.AES.decrypt(encryptedParam, kdf, this._decorateAesCfg({iv})).toString(CryptoJS.enc.Hex)
         return decrypted
     }
     _decorateAesCfg(cfg:Record<string,any>):Record<string,any>{

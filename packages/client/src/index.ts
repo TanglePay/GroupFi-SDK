@@ -413,6 +413,7 @@ class IotaCatClient {
         }
         const decrypted = await decryptOneOfList({receiverSecret:this._walletKeyPair!.privateKey,
             payloadList:recipientsWithPayload,tag,idx})
+        console.log('decrypted', decrypted);
         if(decrypted) {
             salt = decrypted.payload
         }
