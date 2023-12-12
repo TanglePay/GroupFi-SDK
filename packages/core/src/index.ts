@@ -561,6 +561,9 @@ class IotaCatSDK {
         return err.name === 'GroupMemberTooManyError'
     }
 
+    verifyErrorForUserDoesNotHasEnoughToken(err:any){
+        return err.name === 'UserDoesNotHasEnoughTokenError'
+    }
     validateMsgWithSalt(msg:IMMessage, salt:string){
         const firstMsgDecrypted = this._decrypt(msg.data,salt)
         if (!firstMsgDecrypted) return false
