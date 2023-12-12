@@ -557,6 +557,9 @@ class GroupFiSDKFacade {
   }
   async getAllMarkedGroups() {
     this._ensureWalletConnected();
+
+    console.log('iota_im_getMarkedGroupIds start', this._address)
+
     const markedGroupIds = (await IotaSDK.request({
       method: 'iota_im_getMarkedGroupIds',
       params: {
@@ -566,6 +569,8 @@ class GroupFiSDKFacade {
       },
     })) as Array<{ groupId: string }>;
 
+    console.log('iota_im_getMarkedGroupIds end', markedGroupIds)
+    
     return markedGroupIds.map((g) => ({
       groupId: g.groupId,
       groupName: IotaCatSDKObj.groupIdToGroupName(g.groupId) ?? 'unknown',
@@ -574,14 +579,7 @@ class GroupFiSDKFacade {
 
   async marked(groupId: string) {
     this._ensureWalletConnected();
-    const markedGroupIds = (await IotaSDK.request({
-      method: 'iota_im_getMarkedGroupIds',
-      params: {
-        content: {
-          addr: this._address,
-        },
-      },
-    })) as Array<{ groupId: string }>;
+    const markedGroupIds = await this.getAllMarkedGroups()
 
     return !!(markedGroupIds ?? []).find(
       (markedGroup) => markedGroup.groupId === groupId
