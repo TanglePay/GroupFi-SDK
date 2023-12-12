@@ -560,7 +560,6 @@ class IotaCatSDK {
     verifyErrorForGroupMemberTooMany(err:any){
         return err.name === 'GroupMemberTooManyError'
     }
-
     verifyErrorForUserDoesNotHasEnoughToken(err:any){
         return err.name === 'UserDoesNotHasEnoughTokenError'
     }
