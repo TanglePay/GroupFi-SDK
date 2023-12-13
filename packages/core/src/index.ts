@@ -172,7 +172,7 @@ class IotaCatSDK {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressgroupdetails?address=${address}`
         const res = await fetch(url)
         const json = await res.json() as IGroupQualify[]
-        const ipfsPolyfilled = json.map((group:IGroupQualify)=>{
+        const ipfsPolyfilled = (json ?? []).map((group:IGroupQualify)=>{
             const ipfsOrigin = ipfsOrigins[Math.floor(Math.random() * ipfsOrigins.length)]
             // check group.ipfsLink is contains ipfs://, if so, replace it with ipfsOrigin/ipfs/{ipfsLink replace ipfs:// with empty string}
             if (group.ipfsLink.indexOf('ipfs://') === 0) {
