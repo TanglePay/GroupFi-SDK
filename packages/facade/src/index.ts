@@ -361,7 +361,11 @@ class GroupFiSDKFacade {
     console.log('send message res', res);
     return res;
   }
-
+  async fetchAddressBalance() {
+    this._ensureWalletConnected();
+    const balance = await IotaCatSDKObj.fetchAddressBalance(this._address!);
+    return balance ?? 0;
+  }
   _ensureWalletConnected() {
     if (!this._address) {
       throw new Error('Wallet not connected.');
