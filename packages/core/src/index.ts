@@ -172,7 +172,7 @@ class IotaCatSDK {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressgroupdetails?address=${address}`
         const res = await fetch(url)
         const json = await res.json() as IGroupQualify[]
-        const ipfsPolyfilled = json.map((group:IGroupQualify)=>{
+        const ipfsPolyfilled = (json ?? []).map((group:IGroupQualify)=>{
             const ipfsOrigin = ipfsOrigins[Math.floor(Math.random() * ipfsOrigins.length)]
             // check group.ipfsLink is contains ipfs://, if so, replace it with ipfsOrigin/ipfs/{ipfsLink replace ipfs:// with empty string}
             if (group.ipfsLink.indexOf('ipfs://') === 0) {
@@ -316,6 +316,13 @@ class IotaCatSDK {
             return acc;
         }, {} as Record<string, MessageGroupMeta>);
         return this._ensureList(json);
+    }
+    // addressbalance
+    async fetchAddressBalance(address:string):Promise<number>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressbalance?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
     }    
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         // check if message.recipients is null
@@ -624,12 +631,12 @@ class IotaCatSDK {
 
 const instance = new IotaCatSDK
 
-export const IOTACATTAG = 'GROUPFIV3'
+export const IOTACATTAG = 'GROUPFIV4'
 export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
 export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const IotaCatSDKObj = instance
-export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFISHAREDV1','GROUPFIMARKV1']
+export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'
