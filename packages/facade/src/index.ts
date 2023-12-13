@@ -202,11 +202,27 @@ class GroupFiSDKFacade {
   }
 
   listenningAccountChanged(callback: (address: string) => void) {
-    const listener = (accountChangeEvent: {
+    const listener = async (accountChangeEvent: {
       address: string;
       nodeId: number;
     }) => {
       const { address } = accountChangeEvent;
+      // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
+      if(address === this._address) {
+        return
+      }
+      console.log('accountsChanged', address)
+
+      // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
+      await IotaSDK.request({
+        method: 'iota_connect',
+        params: {
+          // expires: 3000000
+        },
+      })
+
+      console.log('accountsChanged and connect wallet using new address successfully', address)
+
       this._onAccountChanged(address);
       callback(address);
     };
