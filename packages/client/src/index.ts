@@ -1250,15 +1250,19 @@ class IotaCatClient {
         return list
     }
     // memberList should contain self if already qualified
-    async markGroup({groupId,memberList}:{groupId:string,memberList:{addr:string,publicKey:string}[]}){
+    async markGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const [{outputWrapper,list},sharedOutputRes] = await Promise.all([
-            this._getMarkedGroupIds(),
-            this._makeSharedOutputForGroup({groupId,memberList})
-        ])
+        const tasks:Promise<any>[] = [this._getMarkedGroupIds()]
+        const isMakeSharedOutput = memberList && memberList.length > 0
+        if (isMakeSharedOutput) {
+            tasks.push(this._makeSharedOutputForGroup({groupId,memberList}))
+        }
+        const tasksRes = await Promise.all(tasks)
+        const {outputWrapper,list} = tasksRes.shift() as {outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}
         let sharedOutput
-        if (sharedOutputRes) {
+        if (isMakeSharedOutput) {
+            const sharedOutputRes = tasksRes.shift() as {output:IBasicOutput}
             sharedOutput = sharedOutputRes.output
         }
         // log existing list
