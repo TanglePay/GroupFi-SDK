@@ -9,19 +9,20 @@ import {
   IGroupUserReputation,
   IMUserMuteGroupMember,
   EventGroupMemberChanged,
+  PushedNewMessage,
+  PushedValue,
+  EventItemFromFacade,
+  ImInboxEventTypeNewMessage,
+  ImInboxEventTypeGroupMemberChanged,
+  InboxItemResponse
 } from 'iotacat-sdk-core';
+
 
 import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
 
 export { SimpleDataExtended };
 
-import { MessageBody } from 'iotacat-sdk-client';
-import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
-import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
-import { EventItemFullfilled } from 'iotacat-sdk-client';
-import { EventItemFromFacade } from 'iotacat-sdk-core';
-import { PushedValue } from 'iotacat-sdk-core';
-import { PushedNewMessage } from 'iotacat-sdk-core';
+import { MessageBody, EventItemFullfilled } from 'iotacat-sdk-client'
 
 export interface TransactionRes {
   blockId: string;
@@ -236,6 +237,10 @@ class GroupFiSDKFacade {
     IotaCatSDKObj.switchMqttAddress(newAddress);
   }
 
+  async fetchMessageOutputList(continuationToken?: string, limit = 3) {
+    const {items,token} = await IotaCatSDKObj.fetchMessageOutputList(this._address!,continuationToken, limit) as InboxItemResponse
+  }
+
   // getInboxMessage
   async getInboxItems(
     continuationToken?: string,
@@ -283,23 +288,23 @@ class GroupFiSDKFacade {
     console.log('fulfilledMessageList', fulfilledMessageList);
 
     // log filteredMessage
-    const filteredRes = await Promise.all(
-      fulfilledMessageList.map((item) => {
-        if (item.type === ImInboxEventTypeNewMessage) {
-          const msg = item as IMessage;
-          return this.filterMutedMessage(msg.groupId, msg.sender)
-        } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
-          const fn = async () => false;
-          return fn();
-        }
-      })
-    );
-    const filteredMessageList = fulfilledMessageList.filter(
-      (_, index) => !filteredRes[index]
-    );
-    console.log('filteredMessageList', filteredMessageList, filteredRes);
+    // const filteredRes = await Promise.all(
+    //   fulfilledMessageList.map((item) => {
+    //     if (item.type === ImInboxEventTypeNewMessage) {
+    //       const msg = item as IMessage;
+    //       return this.filterMutedMessage(msg.groupId, msg.sender)
+    //     } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
+    //       const fn = async () => false;
+    //       return fn();
+    //     }
+    //   })
+    // );
+    // const filteredMessageList = fulfilledMessageList.filter(
+    //   (_, index) => !filteredRes[index]
+    // );
+    // console.log('filteredMessageList', filteredMessageList, filteredRes);
 
-    return { itemList: filteredMessageList, nextToken: token };
+    return { itemList: fulfilledMessageList, nextToken: token };
   }
   async ensureGroupHaveSharedOutput(groupId: string) {
     try {
@@ -344,6 +349,7 @@ class GroupFiSDKFacade {
     });
     return res as {amount:number};
   }
+
   async enteringGroupByGroupId(groupId: string) {
     const [ensureRes] = await Promise.all([
       this.ensureGroupHaveSharedOutput(groupId),
