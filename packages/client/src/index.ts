@@ -504,6 +504,12 @@ class IotaCatClient {
     _ensureStorageInited(){
         if (!this._storage) throw new Error('Storage not initialized')
     }
+    // getMessagesFromOutputIds
+    async getMessagesFromOutputIds({outputIds,address,type}:{outputIds:string[],address:string,type:number}){
+        const tasks = outputIds.map(outputId=>this.getMessageFromOutputId({outputId,address,type}))
+        const res = await Promise.all(tasks)
+        return res
+    }
     async getMessageFromOutputId({outputId,address,type}:{outputId:string,address:string,type:number}){
         this._ensureClientInited()
         try {
