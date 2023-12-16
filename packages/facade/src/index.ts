@@ -14,7 +14,8 @@ import {
   EventItemFromFacade,
   ImInboxEventTypeNewMessage,
   ImInboxEventTypeGroupMemberChanged,
-  InboxItemResponse
+  InboxItemResponse,
+  MessageResponseItem
 } from 'iotacat-sdk-core';
 
 
@@ -237,10 +238,32 @@ class GroupFiSDKFacade {
     IotaCatSDKObj.switchMqttAddress(newAddress);
   }
 
-  async fetchMessageOutputList(continuationToken?: string, limit = 3) {
-    const {items,token} = await IotaCatSDKObj.fetchMessageOutputList(this._address!,continuationToken, limit) as InboxItemResponse
+  async fetchMessageOutputList(continuationToken?: string, limit = 3):Promise<InboxItemResponse> {
+    return await IotaCatSDKObj.fetchMessageOutputList(this._address!,continuationToken, limit) as InboxItemResponse
   }
 
+  async fullfillMessageLiteList(list:MessageResponseItem[]):Promise<IMessage[]> {
+      const outputIds = list.map(o=>o.outputId)
+      // call sdk request iota_im_readmany
+      const res = await IotaSDK.request({
+        method: 'iota_im_readmany',
+        params: {
+          content: {
+            addr: this._address!,
+            outputIds,
+          },
+        },
+      }) as { type:typeof ImInboxEventTypeNewMessage, sender:string, message:IMMessage, messageId:string }[] | undefined;
+      const messageList  = (res ?? []).map(o=>({
+        type:ImInboxEventTypeNewMessage,
+        sender:o.sender,
+        message:o.message.data,
+        messageId:o.messageId,
+        timestamp:o.message.timestamp,
+        groupId:o.message.groupId,
+      })) as IMessage[]
+      return messageList
+  }
   // getInboxMessage
   async getInboxItems(
     continuationToken?: string,
