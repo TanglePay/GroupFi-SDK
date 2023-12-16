@@ -517,6 +517,23 @@ class GroupFiSDKFacade {
       ?.vote;
   }
 
+  async markGroup(groupId: string) {
+    this._ensureWalletConnected();
+    const res = (await IotaSDK.request({
+      method: 'iota_im_mark_group',
+      params: {
+        content: {
+          addr: this._address!,
+          groupId,
+        },
+      },
+    })) as TransactionRes | undefined;
+    return res;
+    // if (res !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(res.outputId);
+    // }
+  }
+
   async joinGroup({groupId,memberList,publicKey}:{groupId: string,publicKey:string,memberList:{addr:string,publicKey:string}[]}) {
     this._ensureWalletConnected();
     const isAlreadyInMemberList = memberList.find(o=>o.addr === this._address!);
