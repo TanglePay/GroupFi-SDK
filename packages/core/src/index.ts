@@ -218,7 +218,7 @@ class IotaCatSDK {
         return this._ensureList(json)
     }
     // fetch member addresses for a group, /groupmemberaddresses
-    async fetchGroupMemberAddresses(groupId:string):Promise<{ownerAddress:string,publicKey:string}[]>{
+    async fetchGroupMemberAddresses(groupId:string):Promise<{ownerAddress:string,publicKey:string, timestamp: number}[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmemberaddresses?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()

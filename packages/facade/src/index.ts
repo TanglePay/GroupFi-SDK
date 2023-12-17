@@ -20,10 +20,9 @@ import {
 
 
 import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
+import { MessageBody, EventItemFullfilled } from 'iotacat-sdk-client';
 
 export { SimpleDataExtended };
-
-import { MessageBody, EventItemFullfilled } from 'iotacat-sdk-client'
 
 export interface TransactionRes {
   blockId: string;
@@ -565,6 +564,23 @@ class GroupFiSDKFacade {
 
     return allGroupVotes.find((groupVote) => groupVote.groupId === groupId)
       ?.vote;
+  }
+
+  async markGroup(groupId: string) {
+    this._ensureWalletConnected();
+    const res = (await IotaSDK.request({
+      method: 'iota_im_mark_group',
+      params: {
+        content: {
+          addr: this._address!,
+          groupId,
+        },
+      },
+    })) as TransactionRes | undefined;
+    return res;
+    // if (res !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(res.outputId);
+    // }
   }
 
   async joinGroup({groupId,memberList,publicKey}:{groupId: string,publicKey:string,memberList:{addr:string,publicKey:string}[]}) {
