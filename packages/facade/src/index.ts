@@ -242,6 +242,27 @@ class GroupFiSDKFacade {
     return await IotaCatSDKObj.fetchMessageOutputList(this._address!,continuationToken, limit) as InboxItemResponse
   }
 
+  // fullfillOneMessageLite
+  async fullfillOneMessageLite(item:MessageResponseItem):Promise<IMessage> {
+    const res = await IotaSDK.request({
+      method: 'iota_im_readone',
+      params: {
+        content: {
+          addr: this._address!,
+          outputId:item.outputId,
+        },
+      },
+    }) as { type:typeof ImInboxEventTypeNewMessage, sender:string, message:IMMessage, messageId:string } | undefined;
+    const message  = res ? {
+      type:ImInboxEventTypeNewMessage,
+      sender:res.sender,
+      message:res.message.data,
+      messageId:res.messageId,
+      timestamp:res.message.timestamp,
+      groupId:res.message.groupId,
+    } : undefined
+    return message! as IMessage
+  }
   async fullfillMessageLiteList(list:MessageResponseItem[]):Promise<IMessage[]> {
       const outputIds = list.map(o=>o.outputId)
       // call sdk request iota_im_readmany
