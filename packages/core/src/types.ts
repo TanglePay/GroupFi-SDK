@@ -161,3 +161,16 @@ const (
 */
 export const ImInboxEventTypeNewMessage = 1
 export const ImInboxEventTypeGroupMemberChanged = 2
+
+export type InboxItemResponse = {
+    items:EventItem[]
+    token:string
+}
+
+export type EventItem = MessageResponseItem | EventGroupMemberChanged
+
+export type MessageResponseItem = {
+    type: typeof ImInboxEventTypeNewMessage
+    outputId: string;
+    timestamp: number;
+}
