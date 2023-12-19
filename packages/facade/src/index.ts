@@ -641,6 +641,13 @@ class GroupFiSDKFacade {
   addHexPrefixIfAbsent(str: string) {
     return IotaCatSDKObj._addHexPrefixIfAbsent(str);
   }
+  async fetchAddressMarkedGroups() {
+    // call sdkobj fetchAddressMarkGroups
+    const markedGroups = await IotaCatSDKObj.fetchAddressMarkGroups(
+      this._address!
+    );
+    return markedGroups;
+  }
   async getAllMarkedGroups() {
     this._ensureWalletConnected();
 
@@ -665,11 +672,15 @@ class GroupFiSDKFacade {
 
   async marked(groupId: string) {
     this._ensureWalletConnected();
-    const markedGroupIds = await this.getAllMarkedGroups()
-
-    return !!(markedGroupIds ?? []).find(
-      (markedGroup) => markedGroup.groupId === groupId
-    );
+    const markedGroupIds = await this.fetchAddressMarkedGroups()
+    // log markedGroupIds
+    console.log('markedGroupIds', markedGroupIds, groupId)
+    for (const markedGroupId of markedGroupIds) {
+      if (IotaCatSDKObj._addHexPrefixIfAbsent(markedGroupId) == IotaCatSDKObj._addHexPrefixIfAbsent(groupId)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   async isGroupPublic(groupId: string) {
@@ -789,6 +800,7 @@ class GroupFiSDKFacade {
     muted: boolean;
   }> {
     this._ensureWalletConnected();
+    /*
     console.log('isGroupPublic start calling');
     const isGroupPublic = await this.isGroupPublic(groupId);
     console.log('isGroupPublic end calling', isGroupPublic);
@@ -801,6 +813,15 @@ class GroupFiSDKFacade {
     console.log('muted start calling');
     const muted = await this.isBlackListed(groupId);
     console.log('muted end calling', muted);
+    */
+    const [isGroupPublic, isQualified, marked, muted] = await Promise.all([
+      this.isGroupPublic(groupId),
+      this.isQualified(groupId),
+      this.marked(groupId),
+      this.isBlackListed(groupId),
+    ]);
+    // log is group public qualified marked muted
+    console.log('isGroupPublic', isGroupPublic, 'isQualified', isQualified, 'marked', marked, 'muted', muted);
 
     return {
       isGroupPublic,
