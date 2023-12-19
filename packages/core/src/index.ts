@@ -247,7 +247,13 @@ class IotaCatSDK {
         const json = await res.json()
         return this._ensureList(json)
     }
-
+    // fetch address mark groups for an address, /addressmarkgroups
+    async fetchAddressMarkGroups(address:string):Promise<string[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmarkgroups?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return this._ensureList(json)
+    }
     // RouteGroupUserReputation = "/groupuserreputation"
     async fetchGroupUserReputation(groupId:string):Promise<IGroupUserReputation[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupuserreputation?groupId=0x${groupId}`
