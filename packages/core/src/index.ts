@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
-import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged } from './types';
+import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -161,6 +161,27 @@ class IotaCatSDK {
             data: message
         }
     }
+
+
+    async fetchMessageOutputList(address:string, coninuationToken?:string, limit:number=10) {
+        try {
+            const params = {address:`${address}`,size:limit, token:coninuationToken}
+            const paramStr = formatUrlParams(params)
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/inboxitems${paramStr}`
+            // @ts-ignore
+            const res = await fetch(url,{
+                method:'GET',
+                headers:{
+                'Content-Type':'application/json',
+                }})
+            const data = await res.json() as InboxItemResponse
+            const {items,token} = data
+            return {items,token}
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+
     async fetchIpfsOrigins(address:string):Promise<string[]>{
         const url = `${NFT_CONFIG_URL}/nft.json?v=${new Date().getTime()}`
         const res = await fetch(url)
@@ -197,7 +218,7 @@ class IotaCatSDK {
         return this._ensureList(json)
     }
     // fetch member addresses for a group, /groupmemberaddresses
-    async fetchGroupMemberAddresses(groupId:string):Promise<{ownerAddress:string,publicKey:string}[]>{
+    async fetchGroupMemberAddresses(groupId:string):Promise<{ownerAddress:string,publicKey:string, timestamp: number}[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmemberaddresses?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()
@@ -317,7 +338,7 @@ class IotaCatSDK {
             body: JSON.stringify(body)
         });
         const json = await res.json() as MessageGroupMeta[];
-        this._groupConfigMap = json.reduce((acc, group) => {
+        this._groupConfigMap = (json ?? []).reduce((acc, group) => {
             acc[group.groupName] = group;
             return acc;
         }, {} as Record<string, MessageGroupMeta>);

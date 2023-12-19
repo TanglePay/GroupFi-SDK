@@ -9,19 +9,20 @@ import {
   IGroupUserReputation,
   IMUserMuteGroupMember,
   EventGroupMemberChanged,
+  PushedNewMessage,
+  PushedValue,
+  EventItemFromFacade,
+  ImInboxEventTypeNewMessage,
+  ImInboxEventTypeGroupMemberChanged,
+  InboxItemResponse,
+  MessageResponseItem
 } from 'iotacat-sdk-core';
 
+
 import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
+import { MessageBody, EventItemFullfilled } from 'iotacat-sdk-client';
 
 export { SimpleDataExtended };
-
-import { MessageBody } from 'iotacat-sdk-client';
-import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
-import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
-import { EventItemFullfilled } from 'iotacat-sdk-client';
-import { EventItemFromFacade } from 'iotacat-sdk-core';
-import { PushedValue } from 'iotacat-sdk-core';
-import { PushedNewMessage } from 'iotacat-sdk-core';
 
 export interface TransactionRes {
   blockId: string;
@@ -236,6 +237,53 @@ class GroupFiSDKFacade {
     IotaCatSDKObj.switchMqttAddress(newAddress);
   }
 
+  async fetchMessageOutputList(continuationToken?: string, limit = 3):Promise<InboxItemResponse> {
+    return await IotaCatSDKObj.fetchMessageOutputList(this._address!,continuationToken, limit) as InboxItemResponse
+  }
+
+  // fullfillOneMessageLite
+  async fullfillOneMessageLite(item:MessageResponseItem):Promise<IMessage> {
+    const res = await IotaSDK.request({
+      method: 'iota_im_readone',
+      params: {
+        content: {
+          addr: this._address!,
+          outputId:item.outputId,
+        },
+      },
+    }) as { type:typeof ImInboxEventTypeNewMessage, sender:string, message:IMMessage, messageId:string } | undefined;
+    const message  = res ? {
+      type:ImInboxEventTypeNewMessage,
+      sender:res.sender,
+      message:res.message.data,
+      messageId:res.messageId,
+      timestamp:res.message.timestamp,
+      groupId:res.message.groupId,
+    } : undefined
+    return message! as IMessage
+  }
+  async fullfillMessageLiteList(list:MessageResponseItem[]):Promise<IMessage[]> {
+      const outputIds = list.map(o=>o.outputId)
+      // call sdk request iota_im_readmany
+      const res = await IotaSDK.request({
+        method: 'iota_im_readmany',
+        params: {
+          content: {
+            addr: this._address!,
+            outputIds,
+          },
+        },
+      }) as { type:typeof ImInboxEventTypeNewMessage, sender:string, message:IMMessage, messageId:string }[] | undefined;
+      const messageList  = (res ?? []).map(o=>({
+        type:ImInboxEventTypeNewMessage,
+        sender:o.sender,
+        message:o.message.data,
+        messageId:o.messageId,
+        timestamp:o.message.timestamp,
+        groupId:o.message.groupId,
+      })) as IMessage[]
+      return messageList
+  }
   // getInboxMessage
   async getInboxItems(
     continuationToken?: string,
@@ -283,23 +331,23 @@ class GroupFiSDKFacade {
     console.log('fulfilledMessageList', fulfilledMessageList);
 
     // log filteredMessage
-    const filteredRes = await Promise.all(
-      fulfilledMessageList.map((item) => {
-        if (item.type === ImInboxEventTypeNewMessage) {
-          const msg = item as IMessage;
-          return this.filterMutedMessage(msg.groupId, msg.sender)
-        } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
-          const fn = async () => false;
-          return fn();
-        }
-      })
-    );
-    const filteredMessageList = fulfilledMessageList.filter(
-      (_, index) => !filteredRes[index]
-    );
-    console.log('filteredMessageList', filteredMessageList, filteredRes);
+    // const filteredRes = await Promise.all(
+    //   fulfilledMessageList.map((item) => {
+    //     if (item.type === ImInboxEventTypeNewMessage) {
+    //       const msg = item as IMessage;
+    //       return this.filterMutedMessage(msg.groupId, msg.sender)
+    //     } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
+    //       const fn = async () => false;
+    //       return fn();
+    //     }
+    //   })
+    // );
+    // const filteredMessageList = fulfilledMessageList.filter(
+    //   (_, index) => !filteredRes[index]
+    // );
+    // console.log('filteredMessageList', filteredMessageList, filteredRes);
 
-    return { itemList: filteredMessageList, nextToken: token };
+    return { itemList: fulfilledMessageList, nextToken: token };
   }
   async ensureGroupHaveSharedOutput(groupId: string) {
     try {
@@ -344,6 +392,7 @@ class GroupFiSDKFacade {
     });
     return res as {amount:number};
   }
+
   async enteringGroupByGroupId(groupId: string) {
     const [ensureRes] = await Promise.all([
       this.ensureGroupHaveSharedOutput(groupId),
@@ -515,6 +564,23 @@ class GroupFiSDKFacade {
 
     return allGroupVotes.find((groupVote) => groupVote.groupId === groupId)
       ?.vote;
+  }
+
+  async markGroup(groupId: string) {
+    this._ensureWalletConnected();
+    const res = (await IotaSDK.request({
+      method: 'iota_im_mark_group',
+      params: {
+        content: {
+          addr: this._address!,
+          groupId,
+        },
+      },
+    })) as TransactionRes | undefined;
+    return res;
+    // if (res !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(res.outputId);
+    // }
   }
 
   async joinGroup({groupId,memberList,publicKey}:{groupId: string,publicKey:string,memberList:{addr:string,publicKey:string}[]}) {
