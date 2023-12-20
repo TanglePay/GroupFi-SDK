@@ -40,6 +40,8 @@ class GroupFiSDKFacade {
 
   private _mqttConnected: boolean = false;
 
+  private _lastTimeSdkRequestResultSent: number = 0;
+  private _lastTimeSdkRequestResultReceived: number = 0;
   getUserAddress() {
     return this._address;
   }
@@ -120,7 +122,7 @@ class GroupFiSDKFacade {
 
     if (type === ImInboxEventTypeNewMessage) {
       const { sender, meta } = pushed;
-
+      this._lastTimeSdkRequestResultSent = Date.now();
       const res = await IotaSDK.request({
         method: 'iota_im_p2p_pushed',
         params: {
@@ -133,6 +135,7 @@ class GroupFiSDKFacade {
           },
         },
       });
+      this._lastTimeSdkRequestResultReceived = Date.now();
       if (res === undefined) {
         return undefined;
       }
@@ -201,7 +204,22 @@ class GroupFiSDKFacade {
     console.log('switchMqttAddress', this._address);
     this._mqttConnected = true;
   }
-
+  async tryPing() {
+    const diff = Math.min(Date.now()-this._lastTimeSdkRequestResultReceived,Date.now()-this._lastTimeSdkRequestResultSent)
+    console.log('try ping', this._lastTimeSdkRequestResultReceived, this._lastTimeSdkRequestResultSent, diff)
+    if (diff > 4000) {
+      console.log('actual ping')
+      this._lastTimeSdkRequestResultSent = Date.now();
+      // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
+      await IotaSDK.request({
+        method: 'iota_connect',
+        params: {
+          // expires: 3000000
+        },
+      })
+      this._lastTimeSdkRequestResultReceived = Date.now()
+    }
+  }
   listenningAccountChanged(callback: (address: string) => void) {
     const listener = async (accountChangeEvent: {
       address: string;
@@ -213,7 +231,7 @@ class GroupFiSDKFacade {
         return
       }
       console.log('accountsChanged', address)
-
+      this._lastTimeSdkRequestResultSent = Date.now();
       // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
       await IotaSDK.request({
         method: 'iota_connect',
@@ -221,7 +239,7 @@ class GroupFiSDKFacade {
           // expires: 3000000
         },
       })
-
+      this._lastTimeSdkRequestResultReceived = Date.now();
       console.log('accountsChanged and connect wallet using new address successfully', address)
 
       this._onAccountChanged(address);
@@ -243,6 +261,7 @@ class GroupFiSDKFacade {
 
   // fullfillOneMessageLite
   async fullfillOneMessageLite(item:MessageResponseItem):Promise<IMessage> {
+    this._lastTimeSdkRequestResultSent = Date.now();
     const res = await IotaSDK.request({
       method: 'iota_im_readone',
       params: {
@@ -252,6 +271,7 @@ class GroupFiSDKFacade {
         },
       },
     }) as { type:typeof ImInboxEventTypeNewMessage, sender:string, message:IMMessage, messageId:string } | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now();
     const message  = res ? {
       type:ImInboxEventTypeNewMessage,
       sender:res.sender,
@@ -264,6 +284,7 @@ class GroupFiSDKFacade {
   }
   async fullfillMessageLiteList(list:MessageResponseItem[]):Promise<IMessage[]> {
       const outputIds = list.map(o=>o.outputId)
+      this._lastTimeSdkRequestResultSent = Date.now();
       // call sdk request iota_im_readmany
       const res = await IotaSDK.request({
         method: 'iota_im_readmany',
@@ -274,6 +295,7 @@ class GroupFiSDKFacade {
           },
         },
       }) as { type:typeof ImInboxEventTypeNewMessage, sender:string, message:IMMessage, messageId:string }[] | undefined;
+      this._lastTimeSdkRequestResultReceived = Date.now();
       const messageList  = (res ?? []).map(o=>({
         type:ImInboxEventTypeNewMessage,
         sender:o.sender,
@@ -290,6 +312,7 @@ class GroupFiSDKFacade {
     limit = 3
   ): Promise<{ itemList: EventItemFromFacade[]; nextToken?: string }> {
     this._ensureWalletConnected();
+    this._lastTimeSdkRequestResultSent = Date.now();
     const resstr = (await IotaSDK.request({
       method: 'iota_im_groupinboxitemlist',
       params: {
@@ -300,6 +323,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as string | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now();
     if (!resstr) {
       return { itemList: [] };
     }
@@ -351,6 +375,7 @@ class GroupFiSDKFacade {
   }
   async ensureGroupHaveSharedOutput(groupId: string) {
     try {
+      this._lastTimeSdkRequestResultSent = Date.now();
       const res = await IotaSDK.request({
         method: 'iota_im_ensure_group_shared',
         params: {
@@ -360,6 +385,7 @@ class GroupFiSDKFacade {
           },
         },
       });
+      this._lastTimeSdkRequestResultReceived = Date.now();
       console.log('ensureGroupHasShared res', res);
     } catch (error) {
       console.log('ensureGroupHasShared error', error);
@@ -367,6 +393,7 @@ class GroupFiSDKFacade {
   }
   async consolidateGroupMessages(groupId: string) {
     try {
+      this._lastTimeSdkRequestResultSent = Date.now();
       const res = await IotaSDK.request({
         method: 'iota_im_check_and_consolidate_messages',
         params: {
@@ -379,10 +406,12 @@ class GroupFiSDKFacade {
     } catch (error) {
       console.log('consolidateMessages error', error);
     }
+    this._lastTimeSdkRequestResultReceived = Date.now();
   }
   // get smr balance
   async getSMRBalance() {
     this._ensureWalletConnected();
+    this._lastTimeSdkRequestResultSent = Date.now();
     const res = await IotaSDK.request({
       method: 'iota_getBalance',
       params: {
@@ -390,6 +419,7 @@ class GroupFiSDKFacade {
         assetsList: ['smr'],
       },
     });
+    this._lastTimeSdkRequestResultReceived = Date.now();
     return res as {amount:number};
   }
 
@@ -411,7 +441,7 @@ class GroupFiSDKFacade {
       groupName!,
       messageText
     );
-
+    this._lastTimeSdkRequestResultSent = Date.now();
     const res = await IotaSDK.request({
       method: 'iota_im',
       params: {
@@ -423,6 +453,7 @@ class GroupFiSDKFacade {
         },
       },
     });
+    this._lastTimeSdkRequestResultReceived = Date.now()
     console.log('send message res', res);
     return res;
   }
@@ -472,6 +503,7 @@ class GroupFiSDKFacade {
         if (IotaSDK.isTanglePay) {
           IotaSDK._events.off('iota-ready', listener);
           console.log('****iota ready');
+          this._lastTimeSdkRequestResultSent = Date.now();
           try {
             const res = (await IotaSDK.request({
               method: 'iota_connect',
@@ -480,6 +512,7 @@ class GroupFiSDKFacade {
               },
             })) as { address: string; nodeId: string };
             console.log('****iota connect', res);
+            this._lastTimeSdkRequestResultReceived = Date.now()
             this._address = res.address;
             resolve(res);
           } catch (error) {
@@ -503,6 +536,7 @@ class GroupFiSDKFacade {
 
   async voteGroup(groupId: string, vote: number) {
     this._ensureWalletConnected();
+    this._lastTimeSdkRequestResultSent = Date.now();
     const res = (await IotaSDK.request({
       method: 'iota_im_voteGroup',
       params: {
@@ -513,6 +547,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now()
     if (res === undefined) {
       throw new Error('voteGruop res');
     }
@@ -522,6 +557,7 @@ class GroupFiSDKFacade {
 
   async unvoteGroup(groupId: string) {
     this._ensureWalletConnected();
+    this._lastTimeSdkRequestResultSent = Date.now();
     const res = (await IotaSDK.request({
       method: 'iota_im_unvoteGroup',
       params: {
@@ -531,6 +567,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now()
     if (res === undefined) {
       throw new Error('unvote group error');
     }
@@ -550,6 +587,7 @@ class GroupFiSDKFacade {
     return allUserGroup;
   }
   async getGroupVoteRes(groupId: string) {
+    this._lastTimeSdkRequestResultSent = Date.now();
     const allGroupVotes = (await IotaSDK.request({
       method: 'iota_im_getAllGroupVotes',
       params: {
@@ -561,13 +599,14 @@ class GroupFiSDKFacade {
       groupId: string;
       vote: number;
     }>;
-
+    this._lastTimeSdkRequestResultReceived = Date.now()
     return allGroupVotes.find((groupVote) => groupVote.groupId === groupId)
       ?.vote;
   }
 
   async markGroup(groupId: string) {
     this._ensureWalletConnected();
+    this._lastTimeSdkRequestResultSent = Date.now();
     const res = (await IotaSDK.request({
       method: 'iota_im_mark_group',
       params: {
@@ -577,6 +616,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now()
     return res;
     // if (res !== undefined) {
     //   await IotaCatSDKObj.waitOutput(res.outputId);
@@ -588,6 +628,7 @@ class GroupFiSDKFacade {
     const isAlreadyInMemberList = memberList.find(o=>o.addr === this._address!);
     if (isAlreadyInMemberList) return true;
     memberList.push({addr:this._address!,publicKey});
+    this._lastTimeSdkRequestResultSent = Date.now();
     const res = (await IotaSDK.request({
       method: 'iota_im_mark_group',
       params: {
@@ -598,6 +639,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now()
     return res;
     // if (res !== undefined) {
     //   await IotaCatSDKObj.waitOutput(res.outputId);
@@ -606,6 +648,7 @@ class GroupFiSDKFacade {
 
   async leaveGroup(groupId: string) {
     this._ensureWalletConnected();
+    this._lastTimeSdkRequestResultSent = Date.now();
     const res = (await IotaSDK.request({
       method: 'iota_im_unmark_group',
       params: {
@@ -615,6 +658,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now()
     return res;
     // if (res !== undefined) {
     //   await IotaCatSDKObj.waitOutput(res.outputId);
@@ -652,7 +696,7 @@ class GroupFiSDKFacade {
     this._ensureWalletConnected();
 
     console.log('iota_im_getMarkedGroupIds start', this._address)
-
+    this._lastTimeSdkRequestResultSent = Date.now();
     const markedGroupIds = (await IotaSDK.request({
       method: 'iota_im_getMarkedGroupIds',
       params: {
@@ -661,7 +705,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as Array<{ groupId: string }>;
-
+    this._lastTimeSdkRequestResultReceived = Date.now()
     console.log('iota_im_getMarkedGroupIds end', markedGroupIds)
     
     return markedGroupIds.map((g) => ({
@@ -718,6 +762,7 @@ class GroupFiSDKFacade {
     // log
     console.log('***Enter sendAnyOneToSelf, address', this._address!);
     try {
+      this._lastTimeSdkRequestResultSent = Date.now();
       const res = await IotaSDK.request({
         method: 'iota_im_send_anyone_toself',
         params: {
@@ -726,7 +771,7 @@ class GroupFiSDKFacade {
           },
         },
       });
-    
+      this._lastTimeSdkRequestResultReceived = Date.now()
       // log
       console.log('***sendAnyOneToSelf res', res);
       return res;
@@ -750,6 +795,7 @@ class GroupFiSDKFacade {
     this._ensureWalletConnected();
     console.log('****muteGroupMember start');
     const memberAddrHash = IotaCatSDKObj._sha256Hash(memberAddress);
+    this._lastTimeSdkRequestResultSent = Date.now();
     const muteGroupMemberRes = (await IotaSDK.request({
       method: 'iota_im_muteGroupMember',
       params: {
@@ -760,6 +806,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now()
     console.log('****muteGroupMember res', muteGroupMemberRes);
     this._updateMuteMap(groupId, memberAddrHash);
     return muteGroupMemberRes;
@@ -771,6 +818,7 @@ class GroupFiSDKFacade {
   async unMuteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
     const memberAddrHash = IotaCatSDKObj._sha256Hash(memberAddress);
+    this._lastTimeSdkRequestResultSent = Date.now();
     const unmuteGroupMemberRes = (await IotaSDK.request({
       method: 'iota_im_unmuteGroupMember',
       params: {
@@ -781,6 +829,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as TransactionRes | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now()
     console.log('****unmuteGroupMember res', unmuteGroupMemberRes);
     this._updateMuteMap(groupId, memberAddrHash);
     return unmuteGroupMemberRes;
@@ -841,6 +890,7 @@ class GroupFiSDKFacade {
 
   async getAllUserMuteGroupMembers() {
     this._ensureWalletConnected();
+    this._lastTimeSdkRequestResultSent = Date.now();
     const AllUserMuteGroupMembers = (await IotaSDK.request({
       method: 'iota_im_getAllUserMuteGroupMembers',
       params: {
@@ -850,7 +900,7 @@ class GroupFiSDKFacade {
         },
       },
     })) as IMUserMuteGroupMember[];
-
+    this._lastTimeSdkRequestResultReceived = Date.now()
     return AllUserMuteGroupMembers;
   }
 }
