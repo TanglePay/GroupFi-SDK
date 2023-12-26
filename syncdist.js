@@ -15,5 +15,3 @@ const copyFiles = (relativeSrc,relativeDst) => {
 copyFiles('packages/client/dist/iife/index.js', '../TanglePay-Extension/public/js/iotacat/client.js');
 
 copyFiles('packages/core/dist/iife/index.js', '../TanglePay-Extension/public/js/iotacat/core.js');
-
-copyFiles('packages/core/dist/iife/index.js', 'packages/demoweb/js/core.js');
