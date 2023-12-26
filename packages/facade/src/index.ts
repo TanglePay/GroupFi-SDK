@@ -206,7 +206,6 @@ class GroupFiSDKFacade {
   }
   async tryPing() {
     const diff = Math.min(Date.now()-this._lastTimeSdkRequestResultReceived,Date.now()-this._lastTimeSdkRequestResultSent)
-    console.log('try ping', this._lastTimeSdkRequestResultReceived, this._lastTimeSdkRequestResultSent, diff)
     if (diff > 4000) {
       console.log('actual ping')
       this._lastTimeSdkRequestResultSent = Date.now();
