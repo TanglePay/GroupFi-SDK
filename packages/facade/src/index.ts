@@ -691,27 +691,39 @@ class GroupFiSDKFacade {
     );
     return markedGroups;
   }
-  async getAllMarkedGroups() {
-    this._ensureWalletConnected();
 
-    console.log('iota_im_getMarkedGroupIds start', this._address)
-    this._lastTimeSdkRequestResultSent = Date.now();
-    const markedGroupIds = (await IotaSDK.request({
-      method: 'iota_im_getMarkedGroupIds',
-      params: {
-        content: {
-          addr: this._address,
-        },
-      },
-    })) as Array<{ groupId: string }>;
-    this._lastTimeSdkRequestResultReceived = Date.now()
-    console.log('iota_im_getMarkedGroupIds end', markedGroupIds)
-    
-    return markedGroupIds.map((g) => ({
-      groupId: g.groupId,
-      groupName: IotaCatSDKObj.groupIdToGroupName(g.groupId) ?? 'unknown',
-    }));
+  async getAddressMarkedGroupsWithGroupName() {
+    const markedGroups = await this.fetchAddressMarkedGroups();
+    return markedGroups.map((groupId) => {
+      groupId = groupId.startsWith('0x') ? groupId.slice(2) : groupId;
+      return {
+        groupId,
+        groupName: IotaCatSDKObj.groupIdToGroupName(groupId) ?? 'unknown',
+      };
+    });
   }
+
+  // async getAllMarkedGroups() {
+  //   this._ensureWalletConnected();
+
+  //   console.log('iota_im_getMarkedGroupIds start', this._address)
+  //   this._lastTimeSdkRequestResultSent = Date.now();
+  //   const markedGroupIds = (await IotaSDK.request({
+  //     method: 'iota_im_getMarkedGroupIds',
+  //     params: {
+  //       content: {
+  //         addr: this._address,
+  //       },
+  //     },
+  //   })) as Array<{ groupId: string }>;
+  //   this._lastTimeSdkRequestResultReceived = Date.now()
+  //   console.log('iota_im_getMarkedGroupIds end', markedGroupIds)
+    
+  //   return markedGroupIds.map((g) => ({
+  //     groupId: g.groupId,
+  //     groupName: IotaCatSDKObj.groupIdToGroupName(g.groupId) ?? 'unknown',
+  //   }));
+  // }
 
   async marked(groupId: string) {
     this._ensureWalletConnected();
