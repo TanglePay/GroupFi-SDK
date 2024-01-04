@@ -528,7 +528,7 @@ class IotaCatClient {
             const {sender, message, messageId} = await this.getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address})
             return { type, sender, message, messageId }
         } catch(e) {
-            console.log(`getMessageFromOutputId:${outputId}`);
+            console.log(`getMessageFromOutputId:${outputId}`, e);
         }
     }
     // getMessageFromMetafeaturepayloadandsender
