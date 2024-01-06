@@ -265,6 +265,9 @@ class IotaCatSDK {
     async fetchAddressMemberGroups(address:string):Promise<string[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmembergroups?address=${address}`
         const res = await fetch(url)
+        if (!res.ok) {
+            throw new Error(`fetchAddressMemberGroups error ${res.status} ${res.statusText}`)
+        }
         const json = await res.json()
         return this._ensureList(json)
     }

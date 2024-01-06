@@ -329,22 +329,31 @@ class IotaCatClient {
                 if (!res.ok) {
                     if (res.status === 901) {
                         throw IotaCatSDKObj.makeErrorForGroupMemberTooMany()
+                    } else {
+                        // stop code logic if api for shared errors other than 901
+                        throw new Error(`_getSharedOutputIdForGroupFromInxApi res not ok, status:${res.status}`)
                     } 
                 }                    
                 const data = await res.json() as {outputId:string}
                 return data
             } catch (error) {
+                /*
                 if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                     throw error
                 }
-                console.log('error',error)
+                */
+                throw error
+                
             }
             
         } catch (error) {
+            /*
             if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                 throw error
             }
+            */
             console.log('error',error)
+            throw error
         }
         return undefined
     }
@@ -431,8 +440,8 @@ class IotaCatClient {
         if (memberList) {
             recipients = memberList.map((member)=>({addr:member.addr,mkey:member.publicKey}))
         } else {
-            const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)         
-            recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
+            const memberRes = await IotaCatSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
+            recipients = memberRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
         }
 
         console.log('_makeSharedOutputForGroup recipients', recipients);
@@ -765,10 +774,9 @@ class IotaCatClient {
             try {
                 
                 if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
-                    const nftsRes = await this._getAddressListForGroupFromInxApi(groupId)
-                    const recipients = nftsRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
-
-
+                    const memberRes = await IotaCatSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
+                    const recipients = memberRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
+         
                     message.recipients = recipients
                 } else {
                     // get shared output
