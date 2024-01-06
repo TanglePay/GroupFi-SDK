@@ -9,6 +9,6 @@ decorateIifeExternal(config[0],{
     'big-integer':'bigInt',
 })
 decoratePlugin(config, replace({
-    'process.env.INX_GROUPFI_DOMAIN': JSON.stringify(process.env.NODE_ENV == 'staging' ? "test.api.iotacat.com" : "prerelease2.api.iotacat.com"),
+    'process.env.INX_GROUPFI_DOMAIN': JSON.stringify(process.env.NODE_ENV == 'staging' ? "test.api.iotacat.com" : "prerelease.api.iotacat.com"),
 }),true)
 export default config
