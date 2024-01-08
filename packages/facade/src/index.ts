@@ -517,6 +517,10 @@ class GroupFiSDKFacade {
           } catch (error) {
             reject(null);
           }
+        }else {
+          reject({
+            name: 'TanglePayUnintalled'
+          })
         }
       };
       IotaSDK._events.on('iota-ready', listener);
