@@ -652,8 +652,12 @@ class IotaCatSDK {
             const groupId = value.slice(1,33).toString('hex')
             const milestoneTimestamp = value.slice(37,41).readUInt32BE(0)
             const isNewMember = value[41] === 1
-            const addressSha256Hash = value.slice(42,74).toString('hex')
-            return {type, groupId, timestamp:milestoneTimestamp, isNewMember, addressSha256Hash}
+            const addressLen = value.slice(42,44).readUInt16BE(0)
+            const buf = value.slice(44,44+addressLen)
+            // buf to number[]
+            // @ts-ignore
+            const address = String.fromCharCode.apply(null, buf)
+            return {type, groupId, timestamp:milestoneTimestamp, isNewMember, address}
         }
         
     }

@@ -86,7 +86,7 @@ export interface MessageGroupMeta {
     collectionIds: string[],
 }
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
-export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, addressSha256Hash:string}
+export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, address:string}
 export type PushedValue = PushedNewMessage | EventGroupMemberChanged
 export type MessageGroupMetaKey = keyof MessageGroupMeta
 export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain
