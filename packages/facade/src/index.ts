@@ -42,9 +42,6 @@ class GroupFiSDKFacade {
 
   private _lastTimeSdkRequestResultSent: number = 0;
   private _lastTimeSdkRequestResultReceived: number = 0;
-  getUserAddress() {
-    return this._address;
-  }
 
   private _currentGroup:
     | {
@@ -649,7 +646,7 @@ class GroupFiSDKFacade {
     // }
   }
 
-  async leaveGroup(groupId: string) {
+  async leaveOrUnMarkGroup(groupId: string) {
     this._ensureWalletConnected();
     this._lastTimeSdkRequestResultSent = Date.now();
     const res = (await IotaSDK.request({
@@ -667,6 +664,7 @@ class GroupFiSDKFacade {
     //   await IotaCatSDKObj.waitOutput(res.outputId);
     // }
   }
+
  // get current address
   getCurrentAddress() {
     this._ensureWalletConnected();
