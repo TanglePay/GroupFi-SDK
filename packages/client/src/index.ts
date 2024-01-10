@@ -360,7 +360,7 @@ class IotaCatClient {
     async _getSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
         this._ensureClientInited()
         const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
-        if (res) {
+        if (res && res.outputId) {
             const {outputId} = res
             const outputsResponse = await this._client!.output(outputId)
             return {outputId,output:outputsResponse.output as IBasicOutput}
