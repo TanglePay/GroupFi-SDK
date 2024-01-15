@@ -12,6 +12,5 @@ const copyFiles = (relativeSrc,relativeDst) => {
     console.log(`Copied ${source} to ${destination}`);
 };
 
-copyFiles('packages/client/dist/iife/index.js', '../TanglePay-Extension/public/js/iotacat/client.js');
-
-copyFiles('packages/core/dist/iife/index.js', '../TanglePay-Extension/public/js/iotacat/core.js');
+copyFiles('packages/walletembed/dist/iife/index.js', '../TanglePay-Extension/public/js/groupfi/walletembed.js');
+copyFiles('packages/core/dist/iife/index.js', '../TanglePay-Extension/public/js/groupfi/core.js');
