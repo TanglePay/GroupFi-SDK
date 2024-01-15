@@ -1,11 +1,12 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
 import { serializeRecipientList, deserializeRecipientList, serializeIMMessage, deserializeIMMessage } from './codec';
+import { EncryptedPayload } from 'ecies-ed25519-js';
 import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
 export * from './types';
@@ -594,11 +595,19 @@ class IotaCatSDK {
         err.name = 'UserDoesNotHasEnoughTokenError'
         return err
     }
+    makeErrorForSaltNotFound(){
+        const err = new Error('salt not found')
+        err.name = 'SaltNotFoundError'
+        return err
+    }
     verifyErrorForGroupMemberTooMany(err:any){
         return err.name === 'GroupMemberTooManyError'
     }
     verifyErrorForUserDoesNotHasEnoughToken(err:any){
         return err.name === 'UserDoesNotHasEnoughTokenError'
+    }
+    verifyErrorForSaltNotFound(err:any){
+        return err.name === 'SaltNotFoundError'
     }
     validateMsgWithSalt(msg:IMMessage, salt:string){
         const firstMsgDecrypted = this._decrypt(msg.data,salt)
@@ -660,6 +669,27 @@ class IotaCatSDK {
             return {type, groupId, timestamp:milestoneTimestamp, isNewMember, address}
         }
         
+    }
+    // EncryptedHexPayload to EncryptedPayload
+    encryptedHexPayloadToEncryptedPayload(encryptedHexPayload:EncryptedHexPayload):EncryptedPayload{
+        const {payload:hexPayload, ...rest} = encryptedHexPayload
+        const payload = hexToBytes(hexPayload)
+        return {
+            ...rest,
+            payload
+        }
+    }
+    // EncryptedPayload to EncryptedHexPayload
+    encryptedPayloadToEncryptedHexPayload(encryptedPayload:EncryptedPayload):EncryptedHexPayload{
+        // log encryptedPayload
+        console.log('encryptedPayloadToEncryptedHexPayload',encryptedPayload)
+        const {payload, ...rest} = encryptedPayload
+        console.log('encryptedPayloadToEncryptedHexPayload, payload',payload)
+        const hexPayload = bytesToHex(payload)
+        return {
+            ...rest,
+            payload:hexPayload
+        }
     }
 }
 
