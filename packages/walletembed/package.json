@@ -1,12 +1,13 @@
 {
-  "name": "groupfi-sdk-client",
+  "name": "groupfi-walletembed",
   "version": "0.0.1",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "moduleNameIife": "groupfisdkclient",
+  "moduleNameIife": "walletembed",
   "scripts": {
+    "bootstrap": "pnpm install -r",
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
@@ -46,11 +47,9 @@
     "iotacat-sdk-core": "workspace:^",
     "iotacat-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",
-    "p-limit": "^4.0.0",
     "tanglepaysdk-client": "^0.1.10"
   },
   "devDependencies": {
-    "@types/crypto-js": "^4.1.1",
-    "mqtt": "^5.0.1"
+    "@types/crypto-js": "^4.1.1"
   }
 }

@@ -146,6 +146,9 @@ importers:
       p-limit:
         specifier: ^4.0.0
         version: 4.0.0
+      tanglepaysdk-client:
+        specifier: ^0.1.10
+        version: 0.1.10
     devDependencies:
       '@types/crypto-js':
         specifier: ^4.1.1
@@ -198,7 +201,7 @@ importers:
 
   packages/facade:
     dependencies:
-      iotacat-sdk-client:
+      groupfi-sdk-client:
         specifier: workspace:^
         version: link:../client
       iotacat-sdk-core:
@@ -223,6 +226,46 @@ importers:
       '@iota/iota.js':
         specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4
+
+  packages/walletembed:
+    dependencies:
+      '@iota/crypto.js':
+        specifier: 2.0.0-rc.2
+        version: 2.0.0-rc.2
+      '@iota/iota.js':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4
+      '@iota/pow-browser.js':
+        specifier: 2.0.0-rc.3
+        version: 2.0.0-rc.3
+      '@iota/pow-node.js':
+        specifier: 2.0.0-rc.3
+        version: 2.0.0-rc.3
+      '@iota/util.js':
+        specifier: 2.0.0-rc.2
+        version: 2.0.0-rc.2
+      big-integer:
+        specifier: ^1.6.51
+        version: 1.6.51
+      crypto-js:
+        specifier: ^4.1.1
+        version: 4.1.1
+      iotacat-sdk-core:
+        specifier: workspace:^
+        version: link:../core
+      iotacat-sdk-utils:
+        specifier: workspace:^
+        version: link:../util
+      js-crypto-hkdf:
+        specifier: ^1.0.4
+        version: 1.0.6
+      tanglepaysdk-client:
+        specifier: ^0.1.10
+        version: 0.1.10
+    devDependencies:
+      '@types/crypto-js':
+        specifier: ^4.1.1
+        version: 4.1.2
 
 packages:
 

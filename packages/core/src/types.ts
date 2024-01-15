@@ -96,7 +96,9 @@ export const GroupIDLength = 32
 export const OutputIDLength = 34
 
 export const GroupMemberTooManyToPublicThreshold = 100
-
+export type EncryptedHexPayload = {
+    payload:string,
+} & any;
 export class GroupMemberTooManyError extends Error {
     constructor() {
         super(`members in group exceed ${GroupMemberTooManyToPublicThreshold}`)

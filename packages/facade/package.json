@@ -35,7 +35,7 @@
     "url": "https://github.com/TanglePay/GroupFi-SDK/issues"
   },
   "dependencies": {
-    "iotacat-sdk-client": "workspace:^",
+    "groupfi-sdk-client": "workspace:^",
     "iotacat-sdk-core": "workspace:^",
     "iotacat-sdk-utils": "workspace:^",
     "tanglepaysdk-client": "^0.1.10"
