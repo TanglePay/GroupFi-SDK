@@ -929,21 +929,22 @@ export class GroupfiSdkClient {
             createdOutputs[0].amount = bigInt(createdOutputs[0].amount).subtract(cashNeeded).toString()
         } else {
             const threshold = cashNeeded.multiply(2)
+            let consumedOutputWrapper:BasicOutputWrapper|undefined
             // first try get cash from remainder hint
-            const remainderBasicOutputFromHint = this._tryGetCashFromRemainderHint()
-            if (remainderBasicOutputFromHint) {
-                const amount = bigInt(remainderBasicOutputFromHint.amount)
+            const remainderBasicOutputWrapperFromHint = this._tryGetCashFromRemainderHint()
+            if (remainderBasicOutputWrapperFromHint) {
+                const amount = bigInt(remainderBasicOutputWrapperFromHint.output.amount)
                 if (amount.greaterOrEquals(threshold)) {
-                    remainderBasicOutput = remainderBasicOutputFromHint
+                    consumedOutputWrapper = remainderBasicOutputWrapperFromHint
                 }
+            } else {
+                const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
+                const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
+                console.log('unspent Outputs', outputs);
+                if (!outputs || outputs.length === 0) throw IotaCatSDKObj.makeErrorForUserDoesNotHasEnoughToken()
+                
+                consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
             }
-            const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
-            const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
-            console.log('unspent Outputs', outputs);
-            if (!outputs || outputs.length === 0) throw IotaCatSDKObj.makeErrorForUserDoesNotHasEnoughToken()
-            
-            const consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
-            
             if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
             extraOutputsToBeConsumed.push(consumedOutputWrapper)
             const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
@@ -967,23 +968,24 @@ export class GroupfiSdkClient {
             console.log("Remainder Basic Output: ", remainderBasicOutput);
         }
         const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(extraOutputsToBeConsumed, createdOutputs)
-        this._setRemainderHint(remainderBasicOutput)
+        const {blockId,outputId,transactionId,remainderOutputId} = res
+        this._setRemainderHint(remainderBasicOutput,remainderOutputId)
         return res
     }
-    _remainderHint:{output:IBasicOutput,timestamp:number}|undefined
-    _setRemainderHint(output?:IBasicOutput){
-        if (!output) {
+    _remainderHint:{output:IBasicOutput,outputId:string,timestamp:number}|undefined
+    _setRemainderHint(output?:IBasicOutput,outputId?:string){
+        if (!output || !outputId) {
             this._remainderHint = undefined
             return
         }
-        this._remainderHint = {output,timestamp:Date.now()}
+        this._remainderHint = {output, outputId:outputId, timestamp:Date.now()}
     }
-    _tryGetCashFromRemainderHint(){
+    _tryGetCashFromRemainderHint():BasicOutputWrapper|undefined{
         if (!this._remainderHint) return undefined
-        const {output,timestamp} = this._remainderHint
+        const {output,outputId,timestamp} = this._remainderHint
         const now = Date.now()
         if ((now - timestamp) > 15*1000) return undefined
-        return output
+        return {output,outputId}
     }
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
     async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:OutputWrapper[],createdOutputs:OutputTypes[]){
@@ -1409,7 +1411,7 @@ export class GroupfiSdkClient {
         return {outputWrapper:existing,list:groupIds}
     }
     
-    async _signAndSendTransactionEssence(transactionEssence:ITransactionEssence):Promise<{blockId:string,outputId:string}>{
+    async _signAndSendTransactionEssence(transactionEssence:ITransactionEssence):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         const res = await IotaSDK.request({
             method: 'iota_im_sign_and_send_transaction_to_self',
             params: {
@@ -1418,7 +1420,7 @@ export class GroupfiSdkClient {
                 transactionEssence,
               },
             },
-          }) as {blockId:string,outputId:string};
+          }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
         return res
     }
 
