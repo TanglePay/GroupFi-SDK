@@ -352,20 +352,23 @@ export class GroupfiSdkClient {
         }
         return undefined
     }
-    async _getSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
+    async _tryGetSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
         this._ensureClientInited()
-        const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
-        if (res && res.outputId) {
-            const {outputId} = res
+        const apiRes = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+        if (apiRes && apiRes.outputId) {
+            const {outputId} = apiRes
             const outputsResponse = await this._client!.output(outputId)
             return {outputId,output:outputsResponse.output as IBasicOutput}
-        } else {
+        } 
+/*
+
             const res = await this._makeSharedOutputForGroup({groupId})
             if (!res) return
             const {output} = res
             const {blockId,outputId} = await this._sendBasicOutput([output]);
             return {outputId,output};
-        }
+            */
+        
     }
     //ensure group have shared output, if not create one
     async ensureGroupHaveSharedOutput(groupId:string){
@@ -388,38 +391,58 @@ export class GroupfiSdkClient {
         }
         return {message:'ok'}
     }
-    async _getSaltForGroup(groupId:string, address:string):Promise<{salt:string, outputId:string}>{
+    async _getSaltForGroup(groupId:string, address:string,memberList?:{addr:string,publicKey:string}[]):Promise<{salt:string, outputId?:string,output?:IBasicOutput,isHA:boolean}>{
         console.log(`_getSaltForGroup groupId:${groupId}, address:${address}`);
-        const sharedOutputResp = await this._getSharedOutputForGroup(groupId)
-        if (!sharedOutputResp) throw new Error('Shared output not found')
-        const {output:sharedOutput,outputId} = sharedOutputResp
-        console.log('sharedOutput', sharedOutput, address);
-        const salt = await this._getSaltFromSharedOutput(sharedOutput, address)
-        return {salt, outputId}
+        const sharedOutputResp = await this._tryGetSharedOutputForGroup(groupId)
+        let outputId:string|undefined
+        let output:IBasicOutput|undefined
+        if (sharedOutputResp) {
+            const {output:outputUnwrapped,outputId:outputIdUnwrapped} = sharedOutputResp
+            outputId = outputIdUnwrapped
+            output = outputUnwrapped
+        }
+        
+        console.log('sharedOutput', output, address);
+        const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutput:output, address,isHA:true,groupId,memberList})
+        const isHA = !!outputUnwrapped
+        output = outputUnwrapped || output
+        return {salt, outputId,output,isHA}
     }
-    async _getSaltFromSharedOutput(sharedOutput:IBasicOutput, address:string):Promise<string>{
+    // get recipients from shared output
+    _getRecipientsFromSharedOutput(sharedOutput:IBasicOutput):IMRecipient[]{
         const metaFeature = sharedOutput.features?.find((feature)=>feature.type == 2) as IMetadataFeature
         if (!metaFeature) throw new Error('Metadata feature not found')
         const bytes = Converter.hexToBytes(metaFeature.data)
         const recipients = IotaCatSDKObj.deserializeRecipientList(bytes)
-        const recipientsWithPayload = recipients.map((recipient)=>({...recipient,payload:Converter.hexToBytes(recipient.mkey)}))
-
-        const addressHashValue = await IotaCatSDKObj.getAddressHashStr(address)
-        console.log('recipients', recipients, address, addressHashValue,recipientsWithPayload);
-        let salt = ''
+        return recipients
+    }
+    // check if address is in recipient
+    _checkIfAddressInRecipient(address:string,recipients:IMRecipient[]){
+        const addressHashValue = IotaCatSDKObj.getAddressHashStr(address)
+        const idx = recipients.findIndex((recipient)=>recipient.addr === addressHashValue)
+        return idx
+    }
+    async _getSaltFromSharedOutput({sharedOutput,address,isHA=false,groupId,memberList}:{sharedOutput?:IBasicOutput, address:string,isHA?:boolean,groupId?:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{salt:string,output?:IBasicOutput}>{
         let idx = -1
-        // find idx based on addr match
-        for (let i=0;i<recipientsWithPayload.length;i++) {
-            const recipient = recipientsWithPayload[i]
-            if (!recipient.mkey) continue
-            if (recipient.addr !== addressHashValue) continue
-            idx = i;
-            break
+        let recipients:IMRecipient[]|undefined
+        if (sharedOutput) {
+            recipients = this._getRecipientsFromSharedOutput(sharedOutput)
+            idx = this._checkIfAddressInRecipient(address,recipients)
+            console.log('recipients', recipients);        
         }
-        if (idx === -1) throw new Error('Address not found in recipients')
-        salt = await this._decryptAesKeyFromRecipientsWithPayload(idx,recipientsWithPayload)
-        if (!salt) throw new Error('Salt not found')
-        return salt
+        if (idx === -1) {
+            if (isHA && groupId) {
+                const {output,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
+                return {salt,output}
+            } else {
+                throw new Error('Address not found in shared output')
+            }
+        } else {
+            const recipientsWithPayload = recipients!.map((recipient)=>({...recipient,payload:Converter.hexToBytes(recipient.mkey)}))
+            const salt = await this._decryptAesKeyFromRecipientsWithPayload(idx,recipientsWithPayload)
+            if (!salt) throw new Error('Salt not found')
+            return {salt}
+        }
     }
     async _getSaltFromSharedOutputId(outputId:string, address:string):Promise<{salt:string}>{
         const outputsResponse = await this._client!.output(outputId)
@@ -427,7 +450,7 @@ export class GroupfiSdkClient {
         const salt = await this._getSaltFromSharedOutput(output, address)
         return {salt}
     }
-    async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput}|undefined>{
+    async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput,salt:string}>{
         let recipients
         if (memberList) {
             recipients = memberList.map((member)=>({addr:member.addr,mkey:member.publicKey}))
@@ -438,8 +461,6 @@ export class GroupfiSdkClient {
 
         console.log('_makeSharedOutputForGroup recipients', recipients);
         const salt = IotaCatSDKObj._generateRandomStr(32)
-        //TODO remove
-        console.log('shared salt', salt);
         const payloadList:EncryptingPayload[] = recipients.map((pair)=>({addr:pair.addr,publicKey:Converter.hexToBytes(pair.mkey), content:salt}))
 
         const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
@@ -477,7 +498,7 @@ export class GroupfiSdkClient {
                 tagFeature
             ]
         };
-       return {output:basicOutput}
+       return {output:basicOutput,salt}
     } 
     _getPair(baseSeed:Ed25519Seed){
         const addressGeneratorAccountState = {
@@ -755,7 +776,7 @@ export class GroupfiSdkClient {
         console.log(`_bech32AddrArrToRecipients  recipients total:${total}, withKey:${withKey}`);
         return recipients.filter(r=>r && r.mkey!=null && r.mkey!='noop')
     }
-    async sendMessage(senderAddr:string, groupId:string,message: IMMessage){
+    async sendMessage(senderAddr:string, groupId:string,message: IMMessage, memberList?:{addr:string,publicKey:string}[]){
         this._ensureClientInited()
         this._ensureWalletInited()
         const {data:rawText} = message
@@ -764,6 +785,8 @@ export class GroupfiSdkClient {
             console.log('ProtocolInfo', protocolInfo);
             const groupSaltMap:Record<string,string> = {}
             const groupSaltResolver = async (groupId:string)=>groupSaltMap[groupId]
+            let shouldSendSharedOutput = false
+            let sharedOutput:IBasicOutput|undefined
             try {
                 
                 if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
@@ -774,8 +797,13 @@ export class GroupfiSdkClient {
                 } else {
                     // get shared output
                     
-                    const {salt, outputId} = await this._getSaltForGroup(groupId,senderAddr)
-                    message.recipientOutputid = outputId
+                    const {salt, outputId,output,isHA} = await this._getSaltForGroup(groupId,senderAddr,memberList)
+                    if (isHA) {
+                        shouldSendSharedOutput = true
+                        sharedOutput = output
+                    } else {
+                        message.recipientOutputid = outputId
+                    }
                     groupSaltMap[groupId] = salt
                     
                 }
