@@ -373,6 +373,7 @@ class GroupfiWalletEmbedded {
     getOutputIdFromTransactionPayloadHashAndIndex(transactionPayloadHash:string,index:number){
         return TransactionHelper.outputIdFromTransactionData( transactionPayloadHash, index)
     }
+
     getMetadataFromTransactionPayload(transactionPayload:ITransactionPayload){
         const transactionId = TransactionHelper.transactionIdFromTransactionPayload(transactionPayload)
         const transactionPayloadHash = this.getTransactionPayloadHash(transactionPayload)

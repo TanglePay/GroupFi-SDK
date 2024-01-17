@@ -1014,7 +1014,6 @@ export class GroupfiSdkClient {
             outputs: createdOutputs,
             payload: undefined
         };
-        
         const res = await this._signAndSendTransactionEssence(transactionEssence)
         return res
     }
