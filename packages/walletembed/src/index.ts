@@ -28,7 +28,8 @@ import {
     REFERENCE_UNLOCK_TYPE,
     TIMELOCK_UNLOCK_CONDITION_TYPE,
     INftOutput,
-    OutputTypes
+    OutputTypes,
+    NFT_OUTPUT_TYPE
 } from "@iota/iota.js";
 import { Converter, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
@@ -252,9 +253,52 @@ class GroupfiWalletEmbedded {
         if (!salt) throw IotaCatSDKObj.makeErrorForSaltNotFound()
         return salt
     }
+    // check address unlock condition is to self
+    _isAddressUnlockConditionToSelf(addressUnlockCondition:IAddressUnlockCondition){
+        if (!addressUnlockCondition) return false
+        const address = addressUnlockCondition.address;
+        if (!address || address.type !== ED25519_ADDRESS_TYPE) return false
+        const ed25519Address = address as IEd25519Address;
+        if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._accountHexAddress) return true
+        return false
+    }
+    // check if transactionEssence is sending to self
+    _isTransactionEssenceSendingToSelf(transactionEssence:ITransactionEssence):boolean{
+        let isHasGroupfiTag = false
+        // loop through all outputs
+        for (const output of transactionEssence.outputs){
+            // output should be basic output or nft
+            if (output.type == BASIC_OUTPUT_TYPE) {
+                const basicOutput = output as IBasicOutput
+                // check if address is the same as self
+                const addressUnlockcondition = basicOutput.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
+                const isToSelf = this._isAddressUnlockConditionToSelf(addressUnlockcondition)
+                if (!isToSelf) return false;
+                const tagFeature = basicOutput.features?.find(feature=>feature.type === 3) as ITagFeature
+                if (tagFeature) {
+                    const tagUtf8 = Converter.hexToUtf8(tagFeature.tag)
+                    // if starts with GROUPFI
+                    if (tagUtf8.startsWith('GROUPFI')) {
+                        isHasGroupfiTag = true
+                    }
+                }
+            } else if (output.type == NFT_OUTPUT_TYPE) {
+                const nftOutput = output as INftOutput
+                // check if address is the same as self
+                const addressUnlockcondition = nftOutput.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
+                const isToSelf = this._isAddressUnlockConditionToSelf(addressUnlockcondition)
+                if (!isToSelf) return false;
+            } else {
+                return false
+            }
+        }
+        if (!isHasGroupfiTag) return false
+        return true;
+    }
     async signAndSendTransactionToSelf(transactionEssence: ITransactionEssence){
         this._ensureClientInited()
-
+        const isSendingToSelf = this._isTransactionEssenceSendingToSelf(transactionEssence)
+        if (!isSendingToSelf) throw new Error('Transaction not sending to self')
         const wsTsxEssence = new WriteStream();
         serializeTransactionEssence(wsTsxEssence, transactionEssence);
         const essenceFinal = wsTsxEssence.finalBytes();
@@ -291,7 +335,7 @@ class GroupfiWalletEmbedded {
             unlocks:unlockConditionArray
         };
         console.log("Transaction payload: ", transactionPayload);
-        const outputId = this.getFirstOutputIdFromTransactionPayload(transactionPayload)
+        const {outputId,transactionId,remainderOutputId} = this.getMetadataFromTransactionPayload(transactionPayload)
         // 8. Create Block
         const block: IBlock = {
             protocolVersion: DEFAULT_PROTOCOL_VERSION,
@@ -307,7 +351,7 @@ class GroupfiWalletEmbedded {
         try {
             const blockId = await this._client!.blockSubmit(block);
             console.log("Submitted blockId is: ", blockId);
-            return {blockId,outputId};
+            return {blockId,outputId,transactionId,remainderOutputId}
         } catch (e) {
             console.log("Error submitting block: ", e);
             throw e
@@ -329,9 +373,17 @@ class GroupfiWalletEmbedded {
     getOutputIdFromTransactionPayloadHashAndIndex(transactionPayloadHash:string,index:number){
         return TransactionHelper.outputIdFromTransactionData( transactionPayloadHash, index)
     }
-    getFirstOutputIdFromTransactionPayload(transactionPayload:ITransactionPayload){
+
+    getMetadataFromTransactionPayload(transactionPayload:ITransactionPayload){
+        const transactionId = TransactionHelper.transactionIdFromTransactionPayload(transactionPayload)
         const transactionPayloadHash = this.getTransactionPayloadHash(transactionPayload)
-        return this.getOutputIdFromTransactionPayloadHashAndIndex(transactionPayloadHash,0)
+        const messageOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionPayloadHash,0)
+        // if output size is > 1, then last output is remainder output, get outputId from last output
+        let remainderOutputId:string|undefined
+        if (transactionPayload.essence.outputs.length > 1) {
+            remainderOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionPayloadHash,transactionPayload.essence.outputs.length-1)
+        }
+        return {transactionId,outputId:messageOutputId,remainderOutputId}
     }
 
 
