@@ -222,6 +222,9 @@ importers:
       '@iota/util.js':
         specifier: ^2.0.0-rc.2
         version: 2.0.0-rc.2
+      big-integer:
+        specifier: ^1.6.51
+        version: 1.6.51
     devDependencies:
       '@iota/iota.js':
         specifier: 2.0.0-rc.4

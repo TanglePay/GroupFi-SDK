@@ -38,7 +38,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     EncryptedHexPayload
 
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllNftOutputs, getAllBasicOutputs} from 'iotacat-sdk-utils';
+import {addToMap, mapsEqual} from 'iotacat-sdk-utils';
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -50,15 +50,9 @@ setIotaCrypto({
 })
 
 import hkdf from 'js-crypto-hkdf';
-import { IMRecipient } from "iotacat-sdk-core";
 import { EventEmitter } from 'events';
-import { GroupMemberTooManyToPublicThreshold } from "iotacat-sdk-core";
-import { MessageTypePublic } from "iotacat-sdk-core";
-import { IMessage } from 'iotacat-sdk-core';
 import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
 import { EventGroupMemberChanged } from 'iotacat-sdk-core';
-import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
-import { GROUPFISELFPUBLICKEYTAG } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -295,10 +289,166 @@ class GroupfiWalletEmbedded {
         if (!isHasGroupfiTag) return false
         return true;
     }
-    async signAndSendTransactionToSelf(transactionEssence: ITransactionEssence){
+    /*
+    const checkInputsAndOutputsMatch = async ({inputsAndSignatureKeyPairs, outputs}) => {
+    const numOfTotalOutputs = outputs.length + inputsAndSignatureKeyPairs.length
+    if (numOfTotalOutputs >= ConsolidationThrowThresInputsNums) {
+        throw new Error('too many outputs')
+    }
+    const {nodeId} = helperContext
+    const inputsSMRBalance = inputsAndSignatureKeyPairs.reduce((acc, cur) => {
+        return acc.plus(new BigNumber(cur.consumingOutput.amount))
+    }, BigNumber(0))
+    const outputsSMRBalance = outputs.reduce((acc, cur) => {
+        return acc.plus(new BigNumber(cur.amount))
+    }, BigNumber(0))
+    // if inputsSmrBalance less than outputsSmrBalance
+    if (inputsSMRBalance.lt(outputsSMRBalance)) {
+        const isIotaStardust = IotaSDK.isIotaStardust(nodeId)
+        const cashSymbol = isIotaStardust ? 'IOTA' : 'SMR'
+        const errStr = I18n.t('assets.sendErrorInsufficientCash').replace(/{cash}/g, cashSymbol)
+        throw new Error(errStr)
+    }
+    if (!inputsSMRBalance.eq(outputsSMRBalance)) {
+        throw new Error('inputs and outputs not match, smr balance not match')
+    }
+    const inputsNFTSet = new Set()
+    for (const input of inputsAndSignatureKeyPairs) {
+        const output = input.consumingOutput
+        if (output.type === 6) {
+            const nftId = getNftIdFromOutput({output})
+            if (inputsNFTSet.has(nftId)) {
+                throw new Error('inputs and outputs not match, duplicate nft')
+            }
+            inputsNFTSet.add(nftId)
+        }
+    }
+    const outputsNFTSet = new Set()
+    for (const output of outputs) {
+        if (output.type === 6) {
+            const nftId = output.nftId
+            if (outputsNFTSet.has(nftId)) {
+                throw new Error('inputs and outputs not match, duplicate nft')
+            }
+            outputsNFTSet.add(nftId)
+        }
+    }
+    if (inputsNFTSet.size !== outputsNFTSet.size) {
+        throw new Error('inputs and outputs not match, nft not match')
+    }
+    for (const nftId of inputsNFTSet) {
+        if (!outputsNFTSet.has(nftId)) {
+            throw new Error('inputs and outputs not match, nft not match')
+        }
+    }
+    const inputsTokenMap = {}
+    for (const input of inputsAndSignatureKeyPairs) {
+        const output = input.consumingOutput
+        if (output.type === 3) {
+            for (const token of (output.nativeTokens??[])) {
+                const tokenId = token.id
+                const amount = new BigNumber(token.amount)
+                if (inputsTokenMap[tokenId]) {
+                    inputsTokenMap[tokenId] = inputsTokenMap[tokenId].plus(amount)
+                } else {
+                    inputsTokenMap[tokenId] = amount
+                }
+            }
+        }
+    }
+    const outputsTokenMap = {}
+    for (const output of outputs) {
+        if (output.type === 3) {
+            for (const token of (output.nativeTokens??[])) {
+                const tokenId = token.id
+                const amount = new BigNumber(token.amount)
+                if (outputsTokenMap[tokenId]) {
+                    outputsTokenMap[tokenId] = outputsTokenMap[tokenId].plus(amount)
+                } else {
+                    outputsTokenMap[tokenId] = amount
+                }
+            }
+        }
+    }
+    // check size first
+    if (Object.keys(inputsTokenMap).length !== Object.keys(outputsTokenMap).length) {
+        throw new Error('inputs and outputs not match, token not match')
+    }
+    for (const tokenId of Object.keys(inputsTokenMap)) {
+        if (!outputsTokenMap[tokenId]) {
+            throw new Error('inputs and outputs not match, token not match')
+        }
+        if (!outputsTokenMap[tokenId].eq(inputsTokenMap[tokenId])) {
+            throw new Error('inputs and outputs not match, token not match')
+        }
+    }
+    return true
+}
+    */
+    // check transaction essence, input, output asset match
+    _isTransactionEssenceInputOutputAssetMatch(inputsOutputMap:Record<string,OutputTypes>,transactionEssence:ITransactionEssence){
+        const cashKey = 'CASHKEY'
+        const inputsAssetMap:{[key:string]:bigInt.BigInteger} = {}
+        const outputsAssetMap:{[key:string]:bigInt.BigInteger} = {}
+        // loop through all inputs
+        for (const input of transactionEssence.inputs){
+            // input should be utxo input
+            if (input.type == 0) {
+                const utxoInput = input as IUTXOInput
+                // compute outputId from input
+                const outputId = TransactionHelper.outputIdFromTransactionData(utxoInput.transactionId, utxoInput.transactionOutputIndex)
+                const output = inputsOutputMap[outputId]
+                if (!output) throw new Error(`inputs output not found for outputId ${outputId}`)
+                // only handle basic output
+                if (output.type == BASIC_OUTPUT_TYPE) {
+                    const basicOutput = output as IBasicOutput
+                    // handle cash
+                    const cashAmount = basicOutput.amount
+                    addToMap(inputsAssetMap,cashKey,cashAmount)
+                    // handle token
+                    const tokens = basicOutput.nativeTokens ??[]
+                    for (const token of tokens) {
+                        const tokenId = token.id
+                        const amount = token.amount
+                        addToMap(inputsAssetMap,tokenId,amount)
+                    }
+                } else {
+                    throw new Error(`inputs output not basic output for outputId ${outputId}`)
+                }
+            } else {
+                throw new Error('inputs not utxo input')
+            }
+        }
+        // loop through all outputs
+        for (const output of transactionEssence.outputs){
+            // output should be basic output or nft
+            if (output.type == BASIC_OUTPUT_TYPE) {
+                const basicOutput = output as IBasicOutput
+                // handle cash
+                const cashAmount = basicOutput.amount
+                addToMap(outputsAssetMap,cashKey,cashAmount)
+                // handle token
+                const tokens = basicOutput.nativeTokens ??[]
+                for (const token of tokens) {
+                    const tokenId = token.id
+                    const amount = token.amount
+                    addToMap(outputsAssetMap,tokenId,amount)
+                }
+            } else {
+                throw new Error('outputs not basic output')
+            }
+        }
+        // check inputs and outputs asset match
+        if (!mapsEqual(inputsAssetMap,outputsAssetMap)) throw new Error('inputs and outputs not match, asset not match')
+        return true
+    }
+    async signAndSendTransactionToSelf({transactionEssence,inputsOutputMap}:{transactionEssence: ITransactionEssence,inputsOutputMap:Record<string,OutputTypes>}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         this._ensureClientInited()
         const isSendingToSelf = this._isTransactionEssenceSendingToSelf(transactionEssence)
         if (!isSendingToSelf) throw new Error('Transaction not sending to self')
+        // check inputs and outputs asset match
+        const isMatch = this._isTransactionEssenceInputOutputAssetMatch(inputsOutputMap,transactionEssence)
+        if (!isMatch) throw new Error('Transaction inputs and outputs not match')
         const wsTsxEssence = new WriteStream();
         serializeTransactionEssence(wsTsxEssence, transactionEssence);
         const essenceFinal = wsTsxEssence.finalBytes();
@@ -366,6 +516,8 @@ class GroupfiWalletEmbedded {
         return helperContext
     }
     
+    
+
     getTransactionPayloadHash(transactionPayload:ITransactionPayload){
 
         return Converter.bytesToHex(TransactionHelper.getTransactionPayloadHash(transactionPayload), true)

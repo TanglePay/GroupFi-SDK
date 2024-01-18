@@ -447,7 +447,7 @@ export class GroupfiSdkClient {
     async _getSaltFromSharedOutputId(outputId:string, address:string):Promise<{salt:string}>{
         const outputsResponse = await this._client!.output(outputId)
         const output = outputsResponse.output as IBasicOutput
-        const salt = await this._getSaltFromSharedOutput(output, address)
+        const {salt} = await this._getSaltFromSharedOutput({sharedOutput:output, address, isHA:false})
         return {salt}
     }
     async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput,salt:string}>{
@@ -785,8 +785,6 @@ export class GroupfiSdkClient {
             console.log('ProtocolInfo', protocolInfo);
             const groupSaltMap:Record<string,string> = {}
             const groupSaltResolver = async (groupId:string)=>groupSaltMap[groupId]
-            let shouldSendSharedOutput = false
-            let sharedOutput:IBasicOutput|undefined
             try {
                 
                 if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
@@ -799,8 +797,8 @@ export class GroupfiSdkClient {
                     
                     const {salt, outputId,output,isHA} = await this._getSaltForGroup(groupId,senderAddr,memberList)
                     if (isHA) {
-                        shouldSendSharedOutput = true
-                        sharedOutput = output
+                        const {outputId:outputIdFromHA} = await this._sendBasicOutput([output!]);
+                        message.recipientOutputid = outputIdFromHA
                     } else {
                         message.recipientOutputid = outputId
                     }
@@ -1042,7 +1040,13 @@ export class GroupfiSdkClient {
             outputs: createdOutputs,
             payload: undefined
         };
-        const res = await this._signAndSendTransactionEssence(transactionEssence)
+        // reduce consumed outputs to inputsOutputMap
+        const inputsOutputMap:{[key:string]:OutputTypes} = {}
+        for (const basicOutputWrapper of consumedOutputs) {
+            const {outputId,output} = basicOutputWrapper
+            inputsOutputMap[outputId] = output
+        }
+        const res = await this._signAndSendTransactionEssence({transactionEssence,inputsOutputMap})
         return res
     }
     // sendAnyOneOutputToSelf
@@ -1438,13 +1442,14 @@ export class GroupfiSdkClient {
         return {outputWrapper:existing,list:groupIds}
     }
     
-    async _signAndSendTransactionEssence(transactionEssence:ITransactionEssence):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
+    async _signAndSendTransactionEssence({transactionEssence, inputsOutputMap}:{transactionEssence:ITransactionEssence, inputsOutputMap:{[key:string]:OutputTypes}}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         const res = await IotaSDK.request({
             method: 'iota_im_sign_and_send_transaction_to_self',
             params: {
               content: {
                 addr: this._accountBech32Address,
                 transactionEssence,
+                inputsOutputMap,
               },
             },
           }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
