@@ -1,4 +1,4 @@
-name: SSH and Run Script
+name: Prerelease flow
 
 on:
   workflow_dispatch:
