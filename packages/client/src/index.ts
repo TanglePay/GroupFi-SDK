@@ -28,7 +28,8 @@ import {
     REFERENCE_UNLOCK_TYPE,
     TIMELOCK_UNLOCK_CONDITION_TYPE,
     INftOutput,
-    OutputTypes
+    OutputTypes,
+    ClientError
 } from "@iota/iota.js";
 import { Converter, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
@@ -62,6 +63,7 @@ import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
 import { EventGroupMemberChanged } from 'iotacat-sdk-core';
 import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
 import { GROUPFISELFPUBLICKEYTAG } from 'iotacat-sdk-core';
+import { SharedNotFoundError } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -150,6 +152,7 @@ const nodes = [
     shimmerTestNet,
     shimmerMainNet
 ]
+export const SharedNotFoundLaterRecoveredMessageKey = 'SharedNotFoundLaterRecovered'
 type Constructor<T> = new () => T;
 export class GroupfiSdkClient {
     _curNode?:Network;
@@ -166,6 +169,9 @@ export class GroupfiSdkClient {
     _events:EventEmitter = new EventEmitter();
     //TODO simple cache
     _saltCache:Record<string,string> = {};
+    _sharedNotFoundRecoveringMessageCheckInterval:NodeJS.Timeout|undefined;
+
+    _sharedNotFoundRecoveringMessage:Record<string,{payload:{data:Uint8Array,senderAddressBytes:Uint8Array,address:string}[],lastCheckTime:number,numOfChecks:number}> = {};
 
     switchAddress(bech32Address:string){
         this._accountBech32Address = bech32Address
@@ -189,6 +195,9 @@ export class GroupfiSdkClient {
         this._protocolInfo = await this._client.protocolInfo();
         this._networkId = TransactionHelper.networkIdFromNetworkName(this._protocolInfo!.networkName)
         this._pubKeyCache = makeLRUCache<string>(200)
+        this._sharedNotFoundRecoveringMessageCheckInterval = setInterval(()=>{
+            this._tryProcessSharedNotFoundRecoveringMessage()
+        }, 5000);
         console.log('NodeInfo', this._nodeInfo);
         console.log('ProtocolInfo', this._protocolInfo);
     }
@@ -422,6 +431,60 @@ export class GroupfiSdkClient {
         const idx = recipients.findIndex((recipient)=>recipient.addr === addressHashValue)
         return idx
     }
+    _isProcessingSharedNotFoundRecoveringMessage:boolean = false
+    async _tryProcessSharedNotFoundRecoveringMessage(){
+        if (this._isProcessingSharedNotFoundRecoveringMessage) return
+        try {
+            this._isProcessingSharedNotFoundRecoveringMessage = true
+            const sharedNotFoundRecoveringMessage = this._sharedNotFoundRecoveringMessage
+            const keys = Object.keys(sharedNotFoundRecoveringMessage)
+            console.log('keys', keys);
+            const existing = []
+            for (const outputId of keys) {
+                try {
+                    const res = await this._client!.output(outputId)
+                    if (res) {
+                        existing.push(outputId)
+                    }
+                } catch (error) {
+                }
+            }
+            if (existing.length === 0) return
+            const existingSet = new Set(existing)
+            const neoObject:Record<string,{payload:{data:Uint8Array,senderAddressBytes:Uint8Array,address:string}[],lastCheckTime:number,numOfChecks:number}> = {}
+            const payloadToBeProcessed:{data:Uint8Array,senderAddressBytes:Uint8Array,address:string}[] = []
+            for (const outputId of keys) {
+                const item = sharedNotFoundRecoveringMessage[outputId]
+                    
+                if (!existingSet.has(outputId)) {
+                    // if numOfChecks > 3, or timeelapsed > 30 seconds, bypass
+                    const timeElapsed = Date.now() - item.lastCheckTime
+                    if (item.numOfChecks > 3 || timeElapsed > 30 * 1000) {
+                        continue
+                    }
+                    // increase numOfChecks, update lastCheckTime
+                    item.numOfChecks += 1
+                    item.lastCheckTime = Date.now()
+                    neoObject[outputId] = item
+                } else {
+                    payloadToBeProcessed.push(...item.payload)
+                }
+            }
+            this._sharedNotFoundRecoveringMessage = neoObject
+            console.log('sharedNotFoundRecoveringMessagePayloadToBeProcessed', payloadToBeProcessed);
+            for (const payload of payloadToBeProcessed) {
+                const messageRes = await this.getMessageFromMetafeaturepayloadAndSender(payload)
+                if (messageRes) {
+                    // emit event
+                    this._events.emit(SharedNotFoundLaterRecoveredMessageKey,messageRes)
+                }
+            }
+        } catch (error) {
+            console.log('_tryProcessSharedNotFoundRecoveringMessage error', error);
+        } finally {
+            this._isProcessingSharedNotFoundRecoveringMessage = false
+        }
+    }
     async _getSaltFromSharedOutput({sharedOutput,address,isHA=false,groupId,memberList}:{sharedOutput?:IBasicOutput, address:string,isHA?:boolean,groupId?:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{salt:string,output?:IBasicOutput}>{
         let idx = -1
         let recipients:IMRecipient[]|undefined
@@ -445,10 +508,20 @@ export class GroupfiSdkClient {
         }
     }
     async _getSaltFromSharedOutputId(outputId:string, address:string):Promise<{salt:string}>{
-        const outputsResponse = await this._client!.output(outputId)
-        const output = outputsResponse.output as IBasicOutput
-        const {salt} = await this._getSaltFromSharedOutput({sharedOutput:output, address, isHA:false})
-        return {salt}
+        try {
+            const outputsResponse = await this._client!.output(outputId)
+            const output = outputsResponse.output as IBasicOutput
+            const {salt} = await this._getSaltFromSharedOutput({sharedOutput:output, address, isHA:false})
+            return {salt}
+        } catch (error) {
+            if (error instanceof ClientError) {
+                if (error.httpStatus === 404) {
+                    throw IotaCatSDKObj.makeErrorForSharedOutputNotFound(outputId)
+                }
+            }
+            throw error
+        }
+        
     }
     async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput,salt:string}>{
         let recipients
@@ -550,6 +623,7 @@ export class GroupfiSdkClient {
             const {sender, message, messageId} = await this.getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address})
             return { type, sender, message, messageId }
         } catch(e) {
+            
             console.log(`getMessageFromOutputId:${outputId}`, e);
         }
     }
@@ -559,15 +633,34 @@ export class GroupfiSdkClient {
         const senderAddressBytes_ = typeof senderAddressBytes === 'string' ? Converter.hexToBytes(senderAddressBytes) : senderAddressBytes
         const messageId = IotaCatSDKObj.getMessageId(data_, senderAddressBytes_)
         const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
-        const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
-            //const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
-            //return decrypted.payload
-            throw new Error('decryptUsingPrivateKey not supported')
-        },sharedOutputSaltResolver:async (sharedOutputId:string)=>{
-            const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
-            return salt
-        }})
-        return {sender,message,messageId}
+        try {
+            const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
+                //const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
+                //return decrypted.payload
+                throw new Error('decryptUsingPrivateKey not supported')
+            },sharedOutputSaltResolver:async (sharedOutputId:string)=>{
+                const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
+                return salt
+            }})
+            return {sender,message,messageId}
+        } catch (error) {
+            if (IotaCatSDKObj.verifyErrorForSharedOutputNotFound(error)) {
+                // log error
+                console.log('Shared output not found', error);
+                const sharedNotFoundError = error as SharedNotFoundError
+                const {sharedOutputId} = sharedNotFoundError
+                const pl = {data:data_,senderAddressBytes:senderAddressBytes_,address}
+                if (!this._sharedNotFoundRecoveringMessage[sharedOutputId]) this._sharedNotFoundRecoveringMessage[sharedOutputId] = {
+                    payload:[],
+                    lastCheckTime:0,
+                    numOfChecks:0
+                }
+                this._sharedNotFoundRecoveringMessage[sharedOutputId].payload.push(pl)
+            }
+
+            console.log('getMessageFromMetafeaturepayloadAndSender error', error);
+            throw error
+        }
     }
     async _getUnSpentOutputs({numbersWanted, amountLargerThan, idsForFiltering}:{numbersWanted:number,amountLargerThan?:bigInt.BigNumber, idsForFiltering?:Set<string>} = {numbersWanted : 100}) {
         this._ensureClientInited()
