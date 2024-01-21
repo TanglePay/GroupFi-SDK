@@ -1,11 +1,20 @@
 import { beforeEach, describe, expect, test, beforeAll, jest } from '@jest/globals';
 import { NodePowProvider } from "@iota/pow-node.js";
 import IotaCatClient from '../src';
-
+import { Bech32Helper } from '@iota/iota.js'
+import type { MqttClient } from 'mqtt';
+type MockedMqttClient = {
+    subscribe: (topic: string | string[], callback?: () => void) => void;
+    on: (event: string, callback: (...args: any[]) => void) => void;
+    // Add any other methods or properties as needed
+  };
+  
+  // Create the mocked client object
+  
 describe('seed related test', () => {
 
     beforeAll(async ()=>{
-        await IotaCatClient.setup(101,NodePowProvider)
+        await IotaCatClient.setup(102,NodePowProvider)
     })
     test('test client initialized', async () => {
         expect(IotaCatClient._nodeInfo).toBeDefined()
@@ -16,5 +25,6 @@ describe('seed related test', () => {
             console.log('set hex seed success')
         })
     })
+    
 })
 

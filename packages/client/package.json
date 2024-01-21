@@ -1,16 +1,19 @@
 {
-  "name": "iotacat-sdk-client",
+  "name": "groupfi-sdk-client",
   "version": "0.0.1",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "moduleNameIife": "iotacatclient",
+  "moduleNameIife": "groupfisdkclient",
   "scripts": {
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
-    "build": "yarn run clean && yarn run build:type && yarn run build:source",
+    "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
+    "build:staging": "cross-env NODE_ENV=staging pnpm run build",
+    "build:prerelease": "cross-env NODE_ENV=prerelease pnpm run build",
+    "build:production": "cross-env NODE_ENV=production pnpm run build",
     "lint": "eslint src --fix --ext .ts,.js",
     "test": "jest"
   },
@@ -33,14 +36,21 @@
   },
   "homepage": "https://github.com/TanglePay/TanglePay-SDK#readme",
   "dependencies": {
-    "@iota/crypto.js": "^2.0.0-rc.2",
-    "@iota/iota.js": "^2.0.0-rc.4",
-    "@iota/pow-browser.js": "^2.0.0-rc.3",
-    "@iota/pow-node.js": "^2.0.0-rc.3",
-    "@iota/util.js": "^2.0.0-rc.2",
+    "@iota/crypto.js": "2.0.0-rc.2",
+    "@iota/iota.js": "2.0.0-rc.4",
+    "@iota/pow-browser.js": "2.0.0-rc.3",
+    "@iota/pow-node.js": "2.0.0-rc.3",
+    "@iota/util.js": "2.0.0-rc.2",
+    "big-integer": "^1.6.51",
     "crypto-js": "^4.1.1",
-    "iotacat-sdk-core": "^0.0.1",
-    "js-crypto-hkdf": "^1.0.4"
+    "iotacat-sdk-core": "workspace:^",
+    "iotacat-sdk-utils": "workspace:^",
+    "js-crypto-hkdf": "^1.0.4",
+    "p-limit": "^4.0.0",
+    "tanglepaysdk-client": "^0.1.10"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/crypto-js": "^4.1.1",
+    "mqtt": "^5.0.1"
+  }
 }

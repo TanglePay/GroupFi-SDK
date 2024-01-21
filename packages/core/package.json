@@ -10,7 +10,10 @@
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
-    "build": "yarn run clean && yarn run build:type && yarn run build:source",
+    "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
+    "build:staging": "cross-env NODE_ENV=staging pnpm run build",
+    "build:prerelease": "cross-env NODE_ENV=prerelease pnpm run build",
+    "build:production": "cross-env NODE_ENV=production pnpm run build",
     "lint": "eslint src --fix --ext .ts,.js",
     "test": "jest"
   },
@@ -33,14 +36,19 @@
   },
   "homepage": "https://github.com/TanglePay/TanglePay-SDK#readme",
   "devDependencies": {
+    "@iota/crypto.js": "2.0.0-rc.2",
+    "@iota/iota.js": "2.0.0-rc.4",
+    "@iota/mqtt.js": "2.0.0-rc.3",
     "@types/crypto-js": "^4.1.1",
-    "@types/protobufjs": "^6.0.0",
-    "protobufjs-cli": "^1.1.1"
+    "js-crypto-hkdf": "^1.0.4",
+    "mqtt": "^5.0.5"
   },
   "dependencies": {
+    "@iota/util.js": "^2.0.0-rc.2",
     "const": "^1.0.0",
     "crypto-js": "^4.1.1",
-    "protobufjs": "^7.2.3",
-    "iotacat-sdk-utils": "^0.0.1"
+    "iotacat-sdk-utils": "workspace:*",
+    "lz-string": "^1.5.0",
+    "protobufjs": "^7.2.3"
   }
 }

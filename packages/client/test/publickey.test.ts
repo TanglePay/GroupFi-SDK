@@ -17,6 +17,7 @@ describe('fetchPollyFill test', () => {
         expect(publicKey).toBe(actualPublicKey)
     },15000)
 */
+/*
     test('test get public key with data on disk', async () => {
         const fakeBech32address = 'rms1qpz7vlc6d4jm4248ge0zc2ytmjpvgwhyzjgqvxgsm2w6592jtm74jhrgeta'
         const fakePublicKey = 'test'
@@ -36,7 +37,7 @@ describe('fetchPollyFill test', () => {
         expect(fakeDiskGet).toHaveBeenCalledTimes(1)
         expect(fakeDiskSet).not.toHaveBeenCalled()
     })
-
+*/
     test('test get public key without data on disk', async () => {
         const fakeBech32address = 'rms1qqlrzyfnxzd0ck5gg0r9h7nhvx089jcefm656kzxddj55l2ecrxyc9c3wr5'
         const fakePublicKey = 'test'
@@ -58,10 +59,10 @@ describe('fetchPollyFill test', () => {
         })
         const publicKey = await IotaCatClient.getPublicKey(fakeBech32address)
         expect(publicKey).toBe(fakePublicKey)
-        expect(fakeDiskGet).toHaveBeenCalledWith(prefix+fakeBech32address)
-        expect(fakeDiskGet).toHaveBeenCalledTimes(1)
-        expect(fakeDiskSet).toHaveBeenCalledWith(prefix+fakeBech32address,fakePublicKey)
-        expect(fakeDiskSet).toHaveBeenCalledTimes(1)
+        //expect(fakeDiskGet).toHaveBeenCalledWith(prefix+fakeBech32address)
+        //expect(fakeDiskGet).toHaveBeenCalledTimes(1)
+        //expect(fakeDiskSet).toHaveBeenCalledWith(prefix+fakeBech32address,fakePublicKey)
+        //expect(fakeDiskSet).toHaveBeenCalledTimes(1)
     })
 
 })

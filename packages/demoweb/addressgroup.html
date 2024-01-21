@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+        <link
+            rel="stylesheet"
+            href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+            integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+            crossorigin="anonymous"
+        />
+        <script
+            src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+            integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN"
+            crossorigin="anonymous"
+        ></script>
+        <script
+            src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"
+            integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl"
+            crossorigin="anonymous"
+        ></script>
+        <script
+            src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"
+            integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q"
+            crossorigin="anonymous"
+        ></script>
+        <style>
+            body {
+                padding: 20px;
+            }
+            #text {
+                word-break: break-all;
+            }
+            h2 {
+                padding-top: 30px;
+            }
+            .w100{
+                width: 100%;
+            }
+            .block{
+                background: #f5f5f5;
+                border-radius: 10px;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+            .hList{
+                display: flex;
+                flex-direction: row;
+                justify-content: start;
+                align-items: center;
+            }
+            .vList{
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+            }
+            .content {
+                display: flex;
+                align-items: flex-start;
+            }
+            .middle{
+                margin-left: 20px;
+                margin-top: 75px;
+            }
+            .right {
+                flex: 1;
+                padding: 0px 20px 20px 20px;
+                border-radius: 10px;
+                margin-top: 75px;
+                margin-left: 20px;
+                box-sizing: border-box;
+            }
+            .radio-con{
+                margin-bottom: 5px;
+            }
+            .radio-con span{
+                margin-right: 10px;
+            }
+            .address-input input{
+                width: 300px;
+                margin-bottom: 10px;
+                display: block;
+            }
+            .toast {
+                position: fixed;
+                bottom: 10%;
+                left: 50%;
+                transform: translateX(-50%);
+                background-color: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                display: none;
+                font-size: 16px;
+            }
+
+            body.toast-active .toast {
+                display: block;
+            }
+
+            @media screen and (max-width: 768px) {
+                .content {
+                    flex-direction: column;
+                }
+                .middle{
+                    margin-top: 0;
+                    margin-left: 0;
+                }
+                .right {
+                    flex: 1;
+                    padding: 10px;
+                    background: #f5f5f5;
+                    border-radius: 10px;
+                    margin-top: 20px;
+                    margin-left: 0;
+                    box-sizing: border-box;
+                }
+            }
+            .loading-mask {
+                display: none; /* Hidden by default */
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(255, 255, 255, 0.8);
+                z-index: 1000;
+                text-align: center;
+                font-size: 24px;
+                padding-top: 20%;
+            }
+        </style>
+    </head>
+
+<body>
+    enter address then click load to check qualified groups
+    <br />
+    <div class="content">
+        
+        <div class="left">
+            <h2>navigation</h2>
+            <div class="block">
+                <div class="hList">
+                    <div><a href="./index.html">send message</a></div>
+                    <div style="margin-left: 15px;"><a href="./addressgroup.html">qualified groups</a></div>
+                    <div style="margin-left: 15px;"><a href="./groupmanage.html">group manage</a></div>
+                    <div style="margin-left: 15px;"><a href="./groupstatus.html">group status</a></div>
+                </div>
+            </div>
+            <h2>message send</h2>
+            <div class="block">
+                <h4>wallet address</h4>
+                <div class="address-input">
+                    <input disabled id="cur_addr" type="text" placeholder="enter address in bech32">
+                </div>
+                
+            </div>
+            <div class="block">
+                <h4>load qualified groups</h4>                
+                <button onclick="loadQualifiedGroups()" class="btn btn-primary">load</button>
+            </div>
+            
+        </div>
+        <div class="middle">
+            <div class="block">
+                
+            </div>
+        </div>
+
+        <div class="right">
+            <div class="vList">
+                <div id="text" class="vList"></div>
+            </div>
+        </div>
+    </div>
+
+</body>
+<div class="loading-mask" id="loadingMask">
+    Loading...
+</div>
+<script src="./js/BigInteger.min.js"></script>
+<script src="https://unpkg.com/mqtt@4.2.8/dist/mqtt.min.js"></script>
+<script src="./js/crypto.js"></script>
+<script src="./js/util.js"></script>
+<script src="./js/iota.js"></script>
+<script src="./js/iota-mqtt.js"></script>
+<script src="./js/core.js"></script>
+<script src="./js/tanglepaycommon.js"></script>
+<script src="./js/tanglepaysdk.js"></script>
+<script>
+    // Get the loading mask element
+const loadingMask = document.getElementById('loadingMask');
+// Function to show the loading mask
+function showLoadingMask() {
+    loadingMask.style.display = 'block';
+}
+
+// Function to hide the loading mask
+function hideLoadingMask() {
+    loadingMask.style.display = 'none';
+}
+
+
+    var ipfsOrigins
+    const loadIpfsOrigins = async () => {
+        ipfsOrigins = await iotacatsdk.IotaCatSDKObj.fetchIpfsOrigins()
+        console.log(ipfsOrigins)
+    }
+
+    const waitThenRefresh = async ({outputId}) => {
+        try{
+            //await iotacatsdk.IotaCatSDKObj.waitOutput(outputId)
+            await window.loadQualifiedGroups()
+        }catch(e){
+            console.log('error',e)
+        }finally{
+            hideLoadingMask()
+        }
+    }
+    window.addEventListener('iota-ready',async ()=>{
+        console.log('tanglepaysdk',iota)
+        iotacatsdk.IotaCatSDKObj.setupIotaMqttConnection(window.IotaMqtt.MqttClient)
+        try {
+            const res = await iota.request({
+                        method: 'iota_connect',
+                        params: {
+                            // expires: 3000000
+                        }
+                    })
+            document.getElementById('cur_addr').value = res.address
+            await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({address:res.address})
+            await loadIpfsOrigins()
+            await loadQualifiedGroups()
+        } catch (error) {
+            console.log('error',error)
+        }
+
+    })
+    const makekv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div>${value}</div></div>`
+    // makeImgkv
+    const makeImgkv = (key,value) => `<div class="hList"><div>${key}</div>:&nbsp;&nbsp;<div><img src="${value}" width="100px" height="100px"></div></div>`
+    const makelist = (groupList) => groupList.map(groupItem => {
+
+        const {groupName,groupQualifyType,ipfsLink,tokenName,tokenThres,marked, vote} = groupItem
+        const groupQualifyTypeStr = groupQualifyType === 0 ? 'nft' : 'token'
+        // makekv for groupname and groupQualifyTypeStr, if groupQualifyType is nft, makekv for ipfsLink, if groupQualifyType is token, makekv for tokenName and tokenThres
+        let content = []
+        content.push(makekv('groupname',groupName))
+        content.push(makekv('groupQualifyType',groupQualifyTypeStr))
+        if(groupQualifyType === 0){
+            content.push(makeImgkv('ipfsLink',ipfsLink))
+        }else{
+            content.push(makekv('tokenName',tokenName))
+            content.push(makekv('tokenThres',tokenThres))
+        }
+        content.push(makekv('marked',marked?'joined':'not joined'))
+        // make button for joinGroup and leaveGroup
+        if(marked){
+            content.push(`<button onclick="leaveGroup('${groupName}')" class="btn btn-primary">leave</button>`)
+        }else{
+            content.push(`<button onclick="joinGroup('${groupName}')" class="btn btn-primary">join</button>`)
+        }
+        // handle vote only if joined
+        if(marked) {
+            // show current vote status
+            if(vote === 0){
+                content.push(`<div>voted public</div>`)
+            }else if(vote === 1){
+                content.push(`<div>voted private</div>`)
+            }else{
+                content.push(`<div>not voted</div>`)
+            }
+            // make button for vote, if vote is -1,  both vote public and vote private button should be shown, if vote is 0, only vote private button should be shown, if vote is 1, only vote public button should be shown
+            if(vote === -1 || vote === 1){
+                content.push(`<div style="margin-top: 10px;">
+                    <button onclick="voteGroup('${groupName}',0)" class="btn btn-primary">vote public</button>
+                    </div>`)
+            } 
+            if(vote === -1 || vote === 0){
+                content.push(`<div style="margin-top: 10px;">
+                    <button onclick="voteGroup('${groupName}',1)" class="btn btn-primary">vote private</button>
+                    </div>`)
+            }
+            // if vote is not -1, show unvote button
+            if(vote !== -1){
+                content.push(`<div style="margin-top: 10px;">
+                    <button onclick="unvoteGroup('${groupName}')" class="btn btn-primary">unvote</button>
+                    </div>`)
+            }
+        }
+
+        return `<div class="block">${content.join('')}</div>`
+    }).join('')
+    window.joinGroup = async (groupName) => {
+        showLoadingMask()
+        const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
+        try {
+            const addr = document.getElementById("cur_addr").value
+            const res = await iota.request({
+                        method: 'iota_im_mark_group',
+                        params: {
+                            content: {
+                                addr,
+                                groupId
+                            }
+                        }
+                    })
+            console.log('joinGroup',res)
+            const prefixedGroupId = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            markedGroupIdsMap[prefixedGroupId] = true
+            await waitThenRefresh(res)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.leaveGroup = async (groupName) => {
+        showLoadingMask()
+        const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
+        try {
+            const addr = document.getElementById("cur_addr").value
+            const res = await iota.request({
+                        method: 'iota_im_unmark_group',
+                        params: {
+                            content: {
+                                addr,
+                                groupId
+                            }
+                        }
+                    })
+            console.log('leaveGroup',res)
+            const prefixedGroupId = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            delete markedGroupIdsMap[prefixedGroupId]
+            await waitThenRefresh(res)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.voteGroup = async (groupName,vote) => {
+        showLoadingMask()
+        const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
+        try {
+            const addr = document.getElementById("cur_addr").value
+            const res = await iota.request({
+                        method: 'iota_im_voteGroup',
+                        params: {
+                            content: {
+                                addr,
+                                groupId,
+                                vote
+                            }
+                        }
+                    })       
+            console.log('voteGroup',res)
+            const prefixedGroupId = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            voteGroupIdsMap[prefixedGroupId] = vote
+            await waitThenRefresh(res)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.unvoteGroup = async (groupName) => {
+        showLoadingMask()
+        const groupId = iotacatsdk.IotaCatSDKObj._groupToGroupId(groupName)
+        try {
+            const addr = document.getElementById("cur_addr").value
+            const res = await iota.request({
+                        method: 'iota_im_unvoteGroup',
+                        params: {
+                            content: {
+                                addr,
+                                groupId
+                            }
+                        }
+                    })
+            console.log('unvoteGroup',res)
+            const prefixedGroupId = iotacatsdk.IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            delete voteGroupIdsMap[prefixedGroupId]
+            await waitThenRefresh(res)
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    let markedGroupIdsMap = {}
+    let voteGroupIdsMap = {}
+    let qualifiedGroups = []
+    window.loadMarkedIfEmpty = async () => {
+        if (Object.keys(markedGroupIdsMap).length > 0) return
+        const address = document.getElementById("cur_addr").value
+        try {
+            const res = await iota.request({
+                method: 'iota_im_getMarkedGroupIds',
+                params: {
+                content: {
+                    addr:address
+                }
+                }
+            })
+            console.log('loadMarkedIfEmpty',res)
+            // check each groupId in res, make sure it is prefixed with '0x'
+            const markedGroupIds = (res??[]).map(mark=>{
+                const {groupId} = mark
+                if(groupId.startsWith('0x')){
+                    return groupId
+                }else{
+                    return '0x'+groupId
+                }
+            })        
+            // res is string[], reduce to map[string]=true
+            markedGroupIdsMap = markedGroupIds.reduce((acc,cur)=>{
+                acc[cur] = true
+                return acc
+            },{})
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.loadVoteIfEmpty = async () => {
+        if (Object.keys(voteGroupIdsMap).length > 0) return
+        const address = document.getElementById("cur_addr").value
+        try {
+            const voteRes = await iota.request({
+                method: 'iota_im_getAllGroupVotes',
+                params: {
+                content: {
+                    addr:address
+                }
+                }
+            })
+            console.log('loadVoteIfEmpty',voteRes)
+            voteGroupIdsMap = (voteRes??[]).reduce((acc,cur)=>{
+            const {groupId,vote} = cur
+            if(groupId.startsWith('0x')){
+                acc[groupId] = vote
+            }else{
+                acc['0x'+groupId] = vote
+            }
+            return acc
+        },{})
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    // load qualified groups if empty
+    window.loadQualifedGroupsIfEmpty = async () => {
+        if (qualifiedGroups.length > 0) return
+        try {
+            const address = document.getElementById("cur_addr").value
+            const res = await iotacatsdk.IotaCatSDKObj.fetchAddressQualifiedGroups(address, ipfsOrigins)
+            console.log('loadQualifedGroupsIfEmpty',res)
+            qualifiedGroups = res
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
+    window.loadQualifiedGroups = async () => {
+        showLoadingMask()
+        const address = document.getElementById("cur_addr").value
+        try {
+            await Promise.all([
+                loadQualifedGroupsIfEmpty(),
+                loadMarkedIfEmpty(),
+                loadVoteIfEmpty(),
+            ])
+
+
+            // loop groups, if groupid in markedGroupIdsMap, add field marked=true, else add field marked=false
+            qualifiedGroups.forEach(groupItem=>{
+                const {groupId} = groupItem
+                if(markedGroupIdsMap[groupId]){
+                    groupItem.marked = true
+                }else{
+                    groupItem.marked = false
+                }
+                // if voteGroupIdsMap[groupId] is not undefined
+                if(voteGroupIdsMap[groupId] !== undefined){
+                    groupItem.vote = voteGroupIdsMap[groupId]
+                }else{
+                    groupItem.vote = -1
+                }
+            })
+            document.getElementById("text").innerHTML = makelist(qualifiedGroups)
+        } catch (error) {
+            console.log('error',error)
+        } finally {
+            hideLoadingMask()
+        }
+        
+    }
+</script>    
+</html>

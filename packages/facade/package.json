@@ -1,0 +1,43 @@
+{
+  "name": "groupfi-sdk-facade",
+  "version": "0.0.1",
+  "description": "GroupFi Facade",
+  "author": "",
+  "homepage": "https://github.com/TanglePay/GroupFi-SDK#readme",
+  "license": "ISC",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/index.d.ts",
+  "moduleNameIife": "iotacatsdkfacade",
+  "directories": {
+    "lib": "lib",
+    "test": "__tests__"
+  },
+  "files": [
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TanglePay/GroupFi-SDK.git"
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "build:type": "tsc",
+    "build:source": "rollup --config rollup.config.mjs",
+    "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
+    "build:staging": "cross-env NODE_ENV=staging pnpm run build",
+    "build:prerelease": "cross-env NODE_ENV=prerelease pnpm run build",
+    "build:production": "cross-env NODE_ENV=production pnpm run build",
+    "lint": "eslint src --fix --ext .ts,.js",
+    "test": "jest"
+  },
+  "bugs": {
+    "url": "https://github.com/TanglePay/GroupFi-SDK/issues"
+  },
+  "dependencies": {
+    "groupfi-sdk-client": "workspace:^",
+    "iotacat-sdk-core": "workspace:^",
+    "iotacat-sdk-utils": "workspace:^",
+    "tanglepaysdk-client": "^0.1.10"
+  }
+}
