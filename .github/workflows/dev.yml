@@ -1,0 +1,33 @@
+name: SSH and Run Script
+
+on:
+  push:
+    branches:
+      - prerelease  # or any other branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up SSH
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.GROUPFI_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -H ${{ secrets.GROUPFI_HOST_IP }} >> ~/.ssh/known_hosts
+
+    - name: Run SSH Command
+      env:
+        HOST: ${{ secrets.GROUPFI_HOST_IP }}
+        GITHUB_TOKEN: ${{ secrets.GROUPFI_GITHUB_TOKEN }}
+      run: |
+        ssh -i ~/.ssh/id_rsa ubuntu@$HOST << 'ENDSSH'
+          sudo su
+          export PATH="$PATH:/root/.nvm/versions/node/v16.20.2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+          echo $PATH
+          nvm use 16.20.2
+          cd /var/www/html/GroupFi-SDK
+          git pull 
+          pnpm install 
+          pnpm run build:staging
+        ENDSSH
