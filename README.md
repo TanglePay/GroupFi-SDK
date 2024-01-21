@@ -1,2 +1,2 @@
-# Iotacat-SDK
-SDK for Iotacat
+# Groupfi-SDK
+SDK for Groupfi
