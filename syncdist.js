@@ -28,15 +28,3 @@ const copyFolder = (relativeSrc,relativeDst) => {
 }
 copyFiles('packages/walletembed/dist/iife/index.js', '../TanglePay-Extension/public/js/groupfi/walletembed.js');
 copyFiles('packages/core/dist/iife/index.js', '../TanglePay-Extension/public/js/groupfi/core.js');
-
-// copy client folder to ../Groupfi-trollbox/node_modules/groupfi-sdk-client
-copyFolder('packages/client', '../groupfi_trollbox/node_modules/groupfi-sdk-client');
-
-// copy core folder to ../Groupfi-trollbox/node_modules/iotacat-sdk-core
-copyFolder('packages/core', '../Groupfi-trollbox/node_modules/iotacat-sdk-core');
-
-// copy util folder to ../Groupfi-trollbox/node_modules/iotacat-sdk-utils
-copyFolder('packages/util', '../Groupfi-trollbox/node_modules/iotacat-sdk-utils');
-
-// copy facade folder to ../Groupfi-trollbox/node_modules/groupfi-sdk-facade
-copyFolder('packages/facade', '../Groupfi-trollbox/node_modules/groupfi-sdk-facade');
