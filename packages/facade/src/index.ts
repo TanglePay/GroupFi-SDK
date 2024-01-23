@@ -344,7 +344,7 @@ class GroupFiSDKFacade {
   async enteringGroupByGroupId(groupId: string) {
     
   }
-  async sendMessage(groupId: string, messageText: string) {
+  async sendMessage(groupId: string, messageText: string, memberList?: {addr:string,publicKey:string}[]) {
     const address: Address = {
       type: ShimmerBech32Addr,
       addr: this._address!,
@@ -357,7 +357,7 @@ class GroupFiSDKFacade {
     );
     if (!message) throw new Error('prepareSendMessage error');
     // call client sendMessage(addr, groupId, message)
-    const res = await this._client!.sendMessage(this._address!, groupId, message!)
+    const res = await this._client!.sendMessage(this._address!, groupId, message!, memberList)
     this._lastTimeSdkRequestResultReceived = Date.now()
     console.log('send message res', res);
     return res;

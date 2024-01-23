@@ -99,6 +99,21 @@ export const GroupMemberTooManyToPublicThreshold = 100
 export type EncryptedHexPayload = {
     payload:string,
 } & any;
+export class SharedNotFoundError extends Error {
+    sharedOutputId: string;
+
+    constructor(message: string, sharedOutputId: string) {
+        super(message); // Pass the message to the base Error class
+        this.sharedOutputId = sharedOutputId;
+        this.name = this.constructor.name; // Set the error name to the class name
+
+        // Maintaining proper stack trace for where our error was thrown (only available on V8)
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, this.constructor);
+        }
+    }
+}
+
 export class GroupMemberTooManyError extends Error {
     constructor() {
         super(`members in group exceed ${GroupMemberTooManyToPublicThreshold}`)
