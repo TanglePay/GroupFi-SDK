@@ -38,7 +38,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     EncryptedHexPayload
 
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllNftOutputs, getAllBasicOutputs} from 'iotacat-sdk-utils';
+import {addToMap, mapsEqual} from 'iotacat-sdk-utils';
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -50,15 +50,9 @@ setIotaCrypto({
 })
 
 import hkdf from 'js-crypto-hkdf';
-import { IMRecipient } from "iotacat-sdk-core";
 import { EventEmitter } from 'events';
-import { GroupMemberTooManyToPublicThreshold } from "iotacat-sdk-core";
-import { MessageTypePublic } from "iotacat-sdk-core";
-import { IMessage } from 'iotacat-sdk-core';
 import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
 import { EventGroupMemberChanged } from 'iotacat-sdk-core';
-import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
-import { GROUPFISELFPUBLICKEYTAG } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -127,7 +121,7 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://test.api.iotacat.com",
+    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
@@ -147,9 +141,7 @@ const nodes = [
     shimmerTestNet,
     shimmerMainNet
 ]
-type Constructor<T> = new () => T;
 class GroupfiWalletEmbedded {
-    _curNode?:Network;
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
     _nodeInfo?: INodeInfo;
@@ -164,16 +156,16 @@ class GroupfiWalletEmbedded {
     _events:EventEmitter = new EventEmitter();
     //TODO simple cache
     _saltCache:Record<string,string> = {};
-
-    async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
-        if (this._curNode) return
-        // @ts-ignore
-        const id = parseInt(process.env.NODE_ID,10)
-        const node = nodes.find(node=>node.id === id)
-        if (!node) throw new Error('Node not found')
-        this._curNode = node
-        // @ts-ignore
-        this._client = provider ? new SingleNodeClient(node.apiUrl, {powProvider: new provider(...rest)}) : new SingleNodeClient(node.apiUrl)
+    _currentNodeUrl?:string;
+    async setup(nodeUrlHint?:string){
+        if (this._currentNodeUrl && (!nodeUrlHint || nodeUrlHint === this._currentNodeUrl)) return
+        if (!nodeUrlHint) {
+            const id = parseInt(process.env.NODE_ID??'0',10)
+            const node = nodes.find(node=>node.id === id)
+            if (!node) throw new Error('Node not found')
+            nodeUrlHint = node.apiUrl
+        }
+        this._client = new SingleNodeClient(nodeUrlHint)
         this._indexer = new IndexerPluginClient(this._client)
         this._nodeInfo = await this._client.info();
         this._protocolInfo = await this._client.protocolInfo();
@@ -295,10 +287,71 @@ class GroupfiWalletEmbedded {
         if (!isHasGroupfiTag) return false
         return true;
     }
-    async signAndSendTransactionToSelf(transactionEssence: ITransactionEssence){
+
+    // check transaction essence, input, output asset match
+    _isTransactionEssenceInputOutputAssetMatch(inputsOutputMap:Record<string,OutputTypes>,transactionEssence:ITransactionEssence){
+        const cashKey = 'CASHKEY'
+        const inputsAssetMap:{[key:string]:bigInt.BigInteger} = {}
+        const outputsAssetMap:{[key:string]:bigInt.BigInteger} = {}
+        // loop through all inputs
+        for (const input of transactionEssence.inputs){
+            // input should be utxo input
+            if (input.type == 0) {
+                const utxoInput = input as IUTXOInput
+                // compute outputId from input
+                const outputId = TransactionHelper.outputIdFromTransactionData(utxoInput.transactionId, utxoInput.transactionOutputIndex)
+                const output = inputsOutputMap[outputId]
+                if (!output) throw new Error(`inputs output not found for outputId ${outputId}`)
+                // only handle basic output
+                if (output.type == BASIC_OUTPUT_TYPE) {
+                    const basicOutput = output as IBasicOutput
+                    // handle cash
+                    const cashAmount = basicOutput.amount
+                    addToMap(inputsAssetMap,cashKey,cashAmount)
+                    // handle token
+                    const tokens = basicOutput.nativeTokens ??[]
+                    for (const token of tokens) {
+                        const tokenId = token.id
+                        const amount = token.amount
+                        addToMap(inputsAssetMap,tokenId,amount)
+                    }
+                } else {
+                    throw new Error(`inputs output not basic output for outputId ${outputId}`)
+                }
+            } else {
+                throw new Error('inputs not utxo input')
+            }
+        }
+        // loop through all outputs
+        for (const output of transactionEssence.outputs){
+            // output should be basic output or nft
+            if (output.type == BASIC_OUTPUT_TYPE) {
+                const basicOutput = output as IBasicOutput
+                // handle cash
+                const cashAmount = basicOutput.amount
+                addToMap(outputsAssetMap,cashKey,cashAmount)
+                // handle token
+                const tokens = basicOutput.nativeTokens ??[]
+                for (const token of tokens) {
+                    const tokenId = token.id
+                    const amount = token.amount
+                    addToMap(outputsAssetMap,tokenId,amount)
+                }
+            } else {
+                throw new Error('outputs not basic output')
+            }
+        }
+        // check inputs and outputs asset match
+        if (!mapsEqual(inputsAssetMap,outputsAssetMap)) throw new Error('inputs and outputs not match, asset not match')
+        return true
+    }
+    async signAndSendTransactionToSelf({transactionEssence,inputsOutputMap}:{transactionEssence: ITransactionEssence,inputsOutputMap:Record<string,OutputTypes>}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         this._ensureClientInited()
         const isSendingToSelf = this._isTransactionEssenceSendingToSelf(transactionEssence)
         if (!isSendingToSelf) throw new Error('Transaction not sending to self')
+        // check inputs and outputs asset match
+        const isMatch = this._isTransactionEssenceInputOutputAssetMatch(inputsOutputMap,transactionEssence)
+        if (!isMatch) throw new Error('Transaction inputs and outputs not match')
         const wsTsxEssence = new WriteStream();
         serializeTransactionEssence(wsTsxEssence, transactionEssence);
         const essenceFinal = wsTsxEssence.finalBytes();
@@ -366,6 +419,8 @@ class GroupfiWalletEmbedded {
         return helperContext
     }
     
+    
+
     getTransactionPayloadHash(transactionPayload:ITransactionPayload){
 
         return Converter.bytesToHex(TransactionHelper.getTransactionPayloadHash(transactionPayload), true)

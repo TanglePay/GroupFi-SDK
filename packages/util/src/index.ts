@@ -1,5 +1,6 @@
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { Blake2b } from "@iota/crypto.js"
+import bigInt from "big-integer"
 export * from './runbatch'
 export * from './objectId'
 export * from './consolidate'
@@ -42,6 +43,28 @@ export const serializeListOfBytes = (list: Uint8Array[]):Uint8Array => {
         stream.writeBytes('payload', len, bytes);
     }
     return stream.finalBytes();
+}
+// add amount to map with key
+export const addToMap = (map: {[key:string]:bigInt.BigInteger}, key: string, amount: string) => {
+    const amountBigInt = bigInt(amount);
+    if (map[key]) {
+        map[key] = map[key].add(amountBigInt);
+    } else {
+        map[key] = amountBigInt;
+    }
+}
+// check two maps are equal
+export const mapsEqual = (map1: {[key:string]:bigInt.BigInteger}, map2: {[key:string]:bigInt.BigInteger}) => {
+    const keys = Object.keys(map1);
+    if (keys.length !== Object.keys(map2).length) {
+        return false;
+    }
+    for (const key of keys) {
+        if (!map2[key] || map1[key].notEquals(map2[key])) {
+            return false;
+        }
+    }
+    return true;
 }
 export const blake256Hash = (bytes: Uint8Array):Uint8Array => {
     return Blake2b.sum256(bytes)

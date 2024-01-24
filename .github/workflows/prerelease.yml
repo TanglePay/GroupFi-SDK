@@ -1,9 +1,7 @@
-name: SSH and Run Script
+name: Prerelease flow
 
 on:
-  push:
-    branches:
-      - prerelease  # or any other branch
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -12,13 +10,13 @@ jobs:
     - name: Set up SSH
       run: |
         mkdir -p ~/.ssh
-        echo "${{ secrets.GROUPFI_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        echo "${{ secrets.GROUPFI_PRERELEASE_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
-        ssh-keyscan -H ${{ secrets.GROUPFI_HOST_IP }} >> ~/.ssh/known_hosts
+        ssh-keyscan -H ${{ secrets.GROUPFI_PRERELEASE_HOST_IP }} >> ~/.ssh/known_hosts
 
     - name: Run SSH Command
       env:
-        HOST: ${{ secrets.GROUPFI_HOST_IP }}
+        HOST: ${{ secrets.GROUPFI_PRERELEASE_HOST_IP }}
         GITHUB_TOKEN: ${{ secrets.GROUPFI_GITHUB_TOKEN }}
       run: |
         ssh -i ~/.ssh/id_rsa ubuntu@$HOST << 'ENDSSH'
