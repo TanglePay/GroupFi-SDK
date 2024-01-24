@@ -141,9 +141,7 @@ const nodes = [
     shimmerTestNet,
     shimmerMainNet
 ]
-type Constructor<T> = new () => T;
 class GroupfiWalletEmbedded {
-    _curNode?:Network;
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
     _nodeInfo?: INodeInfo;
@@ -158,16 +156,16 @@ class GroupfiWalletEmbedded {
     _events:EventEmitter = new EventEmitter();
     //TODO simple cache
     _saltCache:Record<string,string> = {};
-
-    async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
-        if (this._curNode) return
-        // @ts-ignore
-        const id = parseInt(process.env.NODE_ID,10)
-        const node = nodes.find(node=>node.id === id)
-        if (!node) throw new Error('Node not found')
-        this._curNode = node
-        // @ts-ignore
-        this._client = provider ? new SingleNodeClient(node.apiUrl, {powProvider: new provider(...rest)}) : new SingleNodeClient(node.apiUrl)
+    _currentNodeUrl?:string;
+    async setup(nodeUrlHint?:string){
+        if (this._currentNodeUrl && (!nodeUrlHint || nodeUrlHint === this._currentNodeUrl)) return
+        if (!nodeUrlHint) {
+            const id = parseInt(process.env.NODE_ID??'0',10)
+            const node = nodes.find(node=>node.id === id)
+            if (!node) throw new Error('Node not found')
+            nodeUrlHint = node.apiUrl
+        }
+        this._client = new SingleNodeClient(nodeUrlHint)
         this._indexer = new IndexerPluginClient(this._client)
         this._nodeInfo = await this._client.info();
         this._protocolInfo = await this._client.protocolInfo();
