@@ -1133,6 +1133,7 @@ export class GroupfiSdkClient {
             outputs: createdOutputs,
             payload: undefined
         };
+
         // reduce consumed outputs to inputsOutputMap
         const inputsOutputMap:{[key:string]:OutputTypes} = {}
         for (const basicOutputWrapper of consumedOutputs) {
