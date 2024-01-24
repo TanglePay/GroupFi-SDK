@@ -227,6 +227,7 @@ class GroupFiSDKFacade {
     this._address = newAddress;
     this._muteMap = undefined;
     IotaCatSDKObj.switchMqttAddress(newAddress);
+    this._client!.switchAddress(this._address!)
   }
 
   async fetchMessageOutputList(continuationToken?: string, limit = 3):Promise<InboxItemResponse> {
