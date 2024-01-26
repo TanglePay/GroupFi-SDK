@@ -546,12 +546,10 @@ class GroupFiSDKFacade {
       groupId = groupId.startsWith('0x') ? groupId.slice(2) : groupId;
       return {
         groupId,
-        groupName: IotaCatSDKObj.groupIdToGroupName(groupId) ?? 'unknown',
+        groupName: IotaCatSDKObj.groupIdToGroupName(groupId)
       };
-    });
+    }).filter(({groupName}) => groupName !== undefined)
   }
-
-  
 
   async marked(groupId: string) {
     this._ensureWalletConnected();
