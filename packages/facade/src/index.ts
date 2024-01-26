@@ -548,7 +548,7 @@ class GroupFiSDKFacade {
         groupId,
         groupName: IotaCatSDKObj.groupIdToGroupName(groupId)
       };
-    }).filter(({groupName}) => groupName !== undefined)
+    }).filter(({groupName}) => groupName !== undefined) as {groupId: string;groupName: string;}[]
   }
 
   async marked(groupId: string) {
