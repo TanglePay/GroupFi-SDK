@@ -546,11 +546,16 @@ class GroupFiSDKFacade {
     const markedGroups = await this.fetchAddressMarkedGroups();
     return markedGroups.map((groupId) => {
       groupId = groupId.startsWith('0x') ? groupId.slice(2) : groupId;
+      const groupMeta = IotaCatSDKObj._groupIdToGroupMeta(groupId)
+      if(groupMeta === undefined) {
+        return 
+      }
       return {
         groupId,
-        groupName: IotaCatSDKObj.groupIdToGroupName(groupId)
+        groupName: groupMeta.groupName,
+        qualifyType: groupMeta.qualifyType
       };
-    }).filter(({groupName}) => groupName !== undefined) as {groupId: string;groupName: string;}[]
+    }).filter(Boolean) as {groupId: string;groupName: string; qualifyType: string}[]
   }
 
   async marked(groupId: string) {
@@ -564,6 +569,10 @@ class GroupFiSDKFacade {
       }
     }
     return false;
+  }
+
+  getGroupMetaByGroupId(groupId: string) {
+    return IotaCatSDKObj._groupIdToGroupMeta(groupId)
   }
 
   async isGroupPublic(groupId: string) {
