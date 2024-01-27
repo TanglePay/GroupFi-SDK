@@ -196,17 +196,17 @@ class GroupFiSDKFacade {
     this._mqttConnected = true;
   }
 
-  listenningAccountChanged(callback: (address: string) => void) {
+  listenningAccountChanged(callback: (params: {address: string, nodeId: number}) => void) {
     const listener = async (accountChangeEvent: {
       address: string;
       nodeId: number;
     }) => {
-      const { address } = accountChangeEvent;
+      const { address, nodeId } = accountChangeEvent;
       // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
       if(address === this._address) {
         return
       }
-      console.log('accountsChanged', address)
+      console.log('accountsChanged', {address, nodeId})
       // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
       await IotaSDK.request({
         method: 'iota_connect',
@@ -216,14 +216,14 @@ class GroupFiSDKFacade {
       })
       console.log('accountsChanged and connect wallet using new address successfully', address)
 
-      this._onAccountChanged(address);
-      callback(address);
+      this._onAccountChanged({address, nodeId});
+      callback({address, nodeId});
     };
     IotaSDK.on('accountsChanged', listener);
     return () => IotaSDK.removeListener('accountsChanged', listener);
   }
 
-  _onAccountChanged(newAddress: string) {
+  _onAccountChanged({address: newAddress}: {address: string, nodeId: number}) {
     this._address = newAddress;
     this._muteMap = undefined;
     IotaCatSDKObj.switchMqttAddress(newAddress);
@@ -409,7 +409,7 @@ class GroupFiSDKFacade {
     return res;
   }
 
-  async waitWalletReadyAndConnectWallet(): Promise<{ address: string }> {
+  async waitWalletReadyAndConnectWallet(): Promise<{ address: string, nodeId: number }> {
     return new Promise((resolve, reject) => {
       const listener = async () => {
         if (IotaSDK.isTanglePay) {
@@ -422,13 +422,15 @@ class GroupFiSDKFacade {
               params: {
                 // expires: 3000000
               },
-            })) as { address: string; nodeId: string };
+            })) as { address: string; nodeId: number };
             console.log('****iota connect', res);
             this._lastTimeSdkRequestResultReceived = Date.now()
             this._address = res.address;
             resolve(res);
           } catch (error) {
-            reject(null);
+            reject({
+              name: 'TanglePayConnectFailed'
+            });
           }
         }else {
           reject({
