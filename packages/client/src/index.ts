@@ -29,7 +29,13 @@ import {
     TIMELOCK_UNLOCK_CONDITION_TYPE,
     INftOutput,
     OutputTypes,
-    ClientError
+    ClientError,
+    IIssuerFeature,
+    IExpirationUnlockCondition,
+    IStateControllerAddressUnlockCondition,
+    ITimelockUnlockCondition,
+    IStorageDepositReturnUnlockCondition,
+    IOutputMetadataResponse
 } from "@iota/iota.js";
 import { Converter, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
@@ -688,6 +694,7 @@ export class GroupfiSdkClient {
         }
         return res.slice(0,numbersWanted)
     }
+
     // given outputids to be consolidated, try find 100 unspent outputs, filter out the ones in outputIds, then find larget within the 100
     async _getLargestUnSpentOutputAsideThoseForConsolidation(outputIds:string[]){
         this._ensureClientInited()
@@ -796,6 +803,98 @@ export class GroupfiSdkClient {
         outputs = outputs.filter(this._filterOutputsCannotBeConsolidated)
         return {outputs,nextCursor}
     }
+
+    _checkIfSelfOwnedOutput<T extends INftOutput>(outputResponse: IOutputResponse, {addressBech32, expirationReturnAddressBech32}: {addressBech32?: string, expirationReturnAddressBech32?: string}): {owned: boolean, locked?: boolean} {
+        const unlockConditions = (outputResponse.output as T).unlockConditions ?? []
+        const nowUnixTime = Math.round(Date.now() / 1000)
+
+        let storageDepositReturnUnlockCondition: IStorageDepositReturnUnlockCondition | undefined
+        let timelockUnlockCondition: ITimelockUnlockCondition | undefined
+        let expirationUnlockCondition: IExpirationUnlockCondition | undefined
+
+        for(const unlockCondition of unlockConditions) {
+            if(unlockCondition.type === 1) {
+                storageDepositReturnUnlockCondition = unlockCondition
+            }else if(unlockCondition.type === 2) {
+                timelockUnlockCondition = unlockCondition
+            }else if(unlockCondition.type === 3) {
+                expirationUnlockCondition = unlockCondition
+            }
+        }
+
+        let owned: boolean = true
+        let locked: boolean = false
+
+        if(addressBech32 !== undefined) {
+            if(expirationUnlockCondition !== undefined && nowUnixTime > expirationUnlockCondition.unixTime ) {
+                owned = false
+            } 
+        }else if(expirationReturnAddressBech32 !== undefined) {
+            if(expirationUnlockCondition !== undefined && nowUnixTime <= expirationUnlockCondition.unixTime) {
+                owned = false
+            }
+        }
+
+        if(owned) {
+            if(timelockUnlockCondition !== undefined && timelockUnlockCondition.unixTime >= nowUnixTime) {
+                locked = true
+            }else if(expirationUnlockCondition !== undefined) {
+                locked = true
+            }else if(storageDepositReturnUnlockCondition !== undefined) {
+                locked = true
+            }
+        }
+
+        return owned ? {owned, locked} : {owned: false}
+    }
+
+    async checkIfhasOneNicknameNft(address: string): Promise<boolean> {
+        this._ensureClientInited()
+        this._ensureWalletInited()
+
+        try {
+            const {items: items1} = await this._indexer!.nfts({
+                addressBech32: address
+            })
+            const nftOutputIdsByAddressBech32 = items1.map(outputId => ({outputId, addressBech32: address}))
+
+            const {items: items2} = await this._indexer!.nfts({
+                expirationReturnAddressBech32: address
+            })
+
+            const nftOutputIdsByexpirationReturnAddressBech32 = items2.map(outputId => ({outputId, expirationReturnAddressBech32: address}))
+
+            const outputIds: {outputId: string, addressBech32?: string, expirationReturnAddressBech32?: string  }[] = [...nftOutputIdsByAddressBech32, ...nftOutputIdsByexpirationReturnAddressBech32]
+            
+            for(const {outputId, addressBech32, expirationReturnAddressBech32} of outputIds) {
+                const outputResponse = await this._client!.output(outputId) as {metadata: IOutputMetadataResponse,  output: INftOutput}
+                const { owned, locked } = this._checkIfSelfOwnedOutput<INftOutput>(outputResponse, {addressBech32, expirationReturnAddressBech32})
+                if(!owned) {
+                    continue
+                }
+                if(locked) {
+                    continue
+                }
+                const output = outputResponse.output
+                const { immutableFeatures } = output
+                if(immutableFeatures === undefined) {
+                    continue
+                }
+                const issuerFeature = immutableFeatures.find(feature => feature.type === 1) as (IIssuerFeature | undefined)
+                if(issuerFeature === undefined) {
+                    continue
+                }
+                if(issuerFeature.address.type === 16 && issuerFeature.address.nftId === '0xa88f2ed55aab859b9ccf7aabb59c92d617ac3a098a7e39eda61ea4f60854801d') {
+                    console.log('Nickname nft', outputId, output)
+                    return true
+                }
+            }
+            return false
+        }catch(error) {
+            return false
+        }
+    }
+
     _filterOutputsCannotBeConsolidated(outputs:BasicOutputWrapper){
         // filter out output that have tag feature or metadata feature or native tokens
         const features = outputs.output.features
