@@ -15,14 +15,15 @@ import {
   ImInboxEventTypeNewMessage,
   ImInboxEventTypeGroupMemberChanged,
   InboxItemResponse,
-  MessageResponseItem
+  MessageResponseItem,
 } from 'iotacat-sdk-core';
 
-
 import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
-import {GroupfiSdkClient,MessageBody} from 'groupfi-sdk-client';
+import { GroupfiSdkClient, MessageBody } from 'groupfi-sdk-client';
 
 export { SimpleDataExtended };
+
+const NAMING_DOMAIN = 'api.groupfi.ai';
 
 export interface TransactionRes {
   blockId: string;
@@ -114,18 +115,23 @@ class GroupFiSDKFacade {
     return false;
   }
 
-  async handlePushedMessage(pushed: PushedNewMessage): Promise<IMessage | undefined> {
+  async handlePushedMessage(
+    pushed: PushedNewMessage
+  ): Promise<IMessage | undefined> {
     const { type, groupId } = pushed;
 
     if (type === ImInboxEventTypeNewMessage) {
       const { sender, meta } = pushed;
-      
+
       // call client getMessageFromMetafeaturepayloadAndSender({ address: addr, data: pushed.meta, senderAddressBytes: pushed.sender })
-      const res = await this._client!.getMessageFromMetafeaturepayloadAndSender({
-        address: this._address!,
-        data: meta,
-        senderAddressBytes: sender,
-      }) as { messageId: string; message: IMMessage; sender: string } | undefined;
+      const res =
+        (await this._client!.getMessageFromMetafeaturepayloadAndSender({
+          address: this._address!,
+          data: meta,
+          senderAddressBytes: sender,
+        })) as
+          | { messageId: string; message: IMMessage; sender: string }
+          | undefined;
       this._lastTimeSdkRequestResultReceived = Date.now();
       if (res === undefined) {
         return undefined;
@@ -165,7 +171,9 @@ class GroupFiSDKFacade {
     return undefined;
   }
 
-  listenningNewEventItem(callback: (message: EventItemFromFacade) => void): () => void {
+  listenningNewEventItem(
+    callback: (message: EventItemFromFacade) => void
+  ): () => void {
     this._ensureWalletConnected();
     if (!this._mqttConnected) {
       throw new Error('MQTT not connected');
@@ -196,75 +204,117 @@ class GroupFiSDKFacade {
     this._mqttConnected = true;
   }
 
-  listenningAccountChanged(callback: (params: {address: string, nodeId: number}) => void) {
+  listenningAccountChanged(
+    callback: (params: { address: string; nodeId: number }) => void
+  ) {
     const listener = async (accountChangeEvent: {
       address: string;
       nodeId: number;
     }) => {
       const { address, nodeId } = accountChangeEvent;
       // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
-      if(address === this._address) {
-        return
+      if (address === this._address) {
+        return;
       }
-      console.log('accountsChanged', {address, nodeId})
+      console.log('accountsChanged', { address, nodeId });
       // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
       await IotaSDK.request({
         method: 'iota_connect',
         params: {
           // expires: 3000000
         },
-      })
-      console.log('accountsChanged and connect wallet using new address successfully', address)
+      });
+      console.log(
+        'accountsChanged and connect wallet using new address successfully',
+        address
+      );
 
-      this._onAccountChanged({address, nodeId});
-      callback({address, nodeId});
+      this._onAccountChanged({ address, nodeId });
+      callback({ address, nodeId });
     };
     IotaSDK.on('accountsChanged', listener);
     return () => IotaSDK.removeListener('accountsChanged', listener);
   }
 
-  _onAccountChanged({address: newAddress}: {address: string, nodeId: number}) {
+  _onAccountChanged({
+    address: newAddress,
+  }: {
+    address: string;
+    nodeId: number;
+  }) {
     this._address = newAddress;
     this._muteMap = undefined;
     IotaCatSDKObj.switchMqttAddress(newAddress);
-    this._client!.switchAddress(this._address!)
+    this._client!.switchAddress(this._address!);
   }
 
-  async fetchMessageOutputList(continuationToken?: string, limit = 3):Promise<InboxItemResponse> {
-    return await IotaCatSDKObj.fetchMessageOutputList(this._address!,continuationToken, limit) as InboxItemResponse
+  async fetchMessageOutputList(
+    continuationToken?: string,
+    limit = 3
+  ): Promise<InboxItemResponse> {
+    return (await IotaCatSDKObj.fetchMessageOutputList(
+      this._address!,
+      continuationToken,
+      limit
+    )) as InboxItemResponse;
   }
 
   // fullfillOneMessageLite
-  async fullfillOneMessageLite(item:MessageResponseItem):Promise<IMessage> {
-    
+  async fullfillOneMessageLite(item: MessageResponseItem): Promise<IMessage> {
     // call client getMessageFromOutputId({ outputId, address: addr, type: 1 })
-    const res =  await this._client!.getMessageFromOutputId({ outputId: item.outputId, address: this._address!, type: 1 }) as { type:typeof ImInboxEventTypeNewMessage, sender:string, message:IMMessage, messageId:string } | undefined;
+    const res = (await this._client!.getMessageFromOutputId({
+      outputId: item.outputId,
+      address: this._address!,
+      type: 1,
+    })) as
+      | {
+          type: typeof ImInboxEventTypeNewMessage;
+          sender: string;
+          message: IMMessage;
+          messageId: string;
+        }
+      | undefined;
     this._lastTimeSdkRequestResultReceived = Date.now();
-    const message  = res ? {
-      type:ImInboxEventTypeNewMessage,
-      sender:res.sender,
-      message:res.message.data,
-      messageId:res.messageId,
-      timestamp:res.message.timestamp,
-      groupId:res.message.groupId,
-    } : undefined
-    return message! as IMessage
+    const message = res
+      ? {
+          type: ImInboxEventTypeNewMessage,
+          sender: res.sender,
+          message: res.message.data,
+          messageId: res.messageId,
+          timestamp: res.message.timestamp,
+          groupId: res.message.groupId,
+        }
+      : undefined;
+    return message! as IMessage;
   }
-  async fullfillMessageLiteList(list:MessageResponseItem[]):Promise<IMessage[]> {
-      const outputIds = list.map(o=>o.outputId)
-      
-      // call client .getMessagesFromOutputIds({ outputIds, address: addr, type: 1 })
-      const res =  await this._client!.getMessagesFromOutputIds({ outputIds, address: this._address!, type: 1 }) as { type:typeof ImInboxEventTypeNewMessage, sender:string, message:IMMessage, messageId:string }[] | undefined;
-      this._lastTimeSdkRequestResultReceived = Date.now();
-      const messageList  = (res ?? []).map(o=>({
-        type:ImInboxEventTypeNewMessage,
-        sender:o.sender,
-        message:o.message.data,
-        messageId:o.messageId,
-        timestamp:o.message.timestamp,
-        groupId:o.message.groupId,
-      })) as IMessage[]
-      return messageList
+  async fullfillMessageLiteList(
+    list: MessageResponseItem[]
+  ): Promise<IMessage[]> {
+    const outputIds = list.map((o) => o.outputId);
+
+    // call client .getMessagesFromOutputIds({ outputIds, address: addr, type: 1 })
+    const res = (await this._client!.getMessagesFromOutputIds({
+      outputIds,
+      address: this._address!,
+      type: 1,
+    })) as
+      | {
+          type: typeof ImInboxEventTypeNewMessage;
+          sender: string;
+          message: IMMessage;
+          messageId: string;
+        }[]
+      | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now();
+    const messageList = (res ?? []).map((o) => ({
+      type: ImInboxEventTypeNewMessage,
+      sender: o.sender,
+      message: o.message.data,
+      messageId: o.messageId,
+      timestamp: o.message.timestamp,
+      groupId: o.message.groupId,
+    })) as IMessage[];
+    return messageList;
   }
   // getInboxMessage
   async getInboxItems(
@@ -272,16 +322,20 @@ class GroupFiSDKFacade {
     limit = 3
   ): Promise<{ itemList: EventItemFromFacade[]; nextToken?: string }> {
     this._ensureWalletConnected();
-    
+
     // call client fetchInboxItemList(addr, continuationToken, limit)
-    const resstr =  await this._client!.fetchInboxItemList(this._address!, continuationToken, limit) as string | undefined;
+    const resstr = (await this._client!.fetchInboxItemList(
+      this._address!,
+      continuationToken,
+      limit
+    )) as string | undefined;
     this._lastTimeSdkRequestResultReceived = Date.now();
     if (!resstr) {
       return { itemList: [] };
     }
     console.log('***iota_im_groupinboxmessagelist success', resstr);
     const res = JSON.parse(resstr) as {
-      itemList: (MessageBody|EventGroupMemberChanged)[];
+      itemList: (MessageBody | EventGroupMemberChanged)[];
       token?: string;
     };
     console.log('***iota_im_groupinboxmessagelist success', res);
@@ -289,8 +343,8 @@ class GroupFiSDKFacade {
     const token = res.token;
     // log
     console.log('itemList', itemList);
-    const fulfilledMessageList:EventItemFromFacade[] =
-    itemList != undefined
+    const fulfilledMessageList: EventItemFromFacade[] =
+      itemList != undefined
         ? itemList.map((item) => {
             if (item.type === ImInboxEventTypeNewMessage) {
               const msg: IMessage = item;
@@ -326,11 +380,31 @@ class GroupFiSDKFacade {
     return { itemList: fulfilledMessageList, nextToken: token };
   }
 
+  async mintNicknameNFT(name: string): Promise<{result: boolean, blockId?: string, errCode?: number, reason?: string}> {
+    this._ensureWalletConnected();
+    const res = await fetch(
+      `https://${NAMING_DOMAIN}/mint_nicknft?address=${this._address}&name=${name}`
+    );
+    const json = await res.json() as { result: boolean, block_id: string, 'err-msg'?: string, 'err-code'?: number}
+    if(!json.result) {
+      return {result: false, errCode: json['err-code'], reason: json['err-msg']} as {result: boolean, reason: string}
+    }
+    // const blockMetadata = await IotaCatSDKObj.waitBlock(json.block_id!)
+    return {
+      result: true,
+      blockId: json.block_id
+    }
+  }
+
+  async checkIfhasOneNicknameNft() {
+    this._ensureWalletConnected();
+    return await this._client!.checkIfhasOneNicknameNft(this._address!)
+  }
 
   // get smr balance
   async getSMRBalance() {
     this._ensureWalletConnected();
-    
+
     const res = await IotaSDK.request({
       method: 'iota_getBalance',
       params: {
@@ -339,13 +413,15 @@ class GroupFiSDKFacade {
       },
     });
     this._lastTimeSdkRequestResultReceived = Date.now();
-    return res as {amount:number};
+    return res as { amount: number };
   }
 
-  async enteringGroupByGroupId(groupId: string) {
-    
-  }
-  async sendMessage(groupId: string, messageText: string, memberList?: {addr:string,publicKey:string}[]) {
+  async enteringGroupByGroupId(groupId: string) {}
+  async sendMessage(
+    groupId: string,
+    messageText: string,
+    memberList?: { addr: string; publicKey: string }[]
+  ) {
     const address: Address = {
       type: ShimmerBech32Addr,
       addr: this._address!,
@@ -358,8 +434,13 @@ class GroupFiSDKFacade {
     );
     if (!message) throw new Error('prepareSendMessage error');
     // call client sendMessage(addr, groupId, message)
-    const res = await this._client!.sendMessage(this._address!, groupId, message!, memberList)
-    this._lastTimeSdkRequestResultReceived = Date.now()
+    const res = await this._client!.sendMessage(
+      this._address!,
+      groupId,
+      message!,
+      memberList
+    );
+    this._lastTimeSdkRequestResultReceived = Date.now();
     console.log('send message res', res);
     return res;
   }
@@ -382,11 +463,11 @@ class GroupFiSDKFacade {
     excludes?: string[];
   }) {
     this._ensureWalletConnected();
-   
+
     const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
       address: this._address!,
-      includes: includes?.map(g => ({groupName: g})),
-      excludes: excludes?.map(g => ({groupName: g})),
+      includes: includes?.map((g) => ({ groupName: g })),
+      excludes: excludes?.map((g) => ({ groupName: g })),
     });
     return res
       .map(({ groupName, qualifyType }) => ({
@@ -397,25 +478,28 @@ class GroupFiSDKFacade {
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
   }
 
-  _client?: GroupfiSdkClient
+  _client?: GroupfiSdkClient;
   async bootstrap() {
-    this._client = new GroupfiSdkClient()
+    this._client = new GroupfiSdkClient();
     const res = await this.waitWalletReadyAndConnectWallet();
     await Promise.all([
       this.fetchAddressQualifiedGroupConfigs({}),
-      this._client!.setup()
-    ])
-    this._client!.switchAddress(this._address!)
+      this._client!.setup(),
+    ]);
+    this._client!.switchAddress(this._address!);
     return res;
   }
 
-  async waitWalletReadyAndConnectWallet(): Promise<{ address: string, nodeId: number }> {
+  async waitWalletReadyAndConnectWallet(): Promise<{
+    address: string;
+    nodeId: number;
+  }> {
     return new Promise((resolve, reject) => {
       const listener = async () => {
         if (IotaSDK.isTanglePay) {
           IotaSDK._events.off('iota-ready', listener);
           console.log('****iota ready');
-          
+
           try {
             const res = (await IotaSDK.request({
               method: 'iota_connect',
@@ -424,18 +508,18 @@ class GroupFiSDKFacade {
               },
             })) as { address: string; nodeId: number };
             console.log('****iota connect', res);
-            this._lastTimeSdkRequestResultReceived = Date.now()
+            this._lastTimeSdkRequestResultReceived = Date.now();
             this._address = res.address;
             resolve(res);
           } catch (error) {
             reject({
-              name: 'TanglePayConnectFailed'
+              name: 'TanglePayConnectFailed',
             });
           }
-        }else {
+        } else {
           reject({
-            name: 'TanglePayUnintalled'
-          })
+            name: 'TanglePayUnintalled',
+          });
         }
       };
       IotaSDK._events.on('iota-ready', listener);
@@ -454,7 +538,9 @@ class GroupFiSDKFacade {
 
   async voteGroup(groupId: string, vote: number) {
     this._ensureWalletConnected();
-    const res = await this._client!.voteGroup(groupId, vote) as TransactionRes | undefined;
+    const res = (await this._client!.voteGroup(groupId, vote)) as
+      | TransactionRes
+      | undefined;
     if (res === undefined) {
       throw new Error('voteGruop res');
     }
@@ -464,7 +550,9 @@ class GroupFiSDKFacade {
 
   async unvoteGroup(groupId: string) {
     this._ensureWalletConnected();
-    const res = await this._client!.unvoteGroup(groupId) as TransactionRes | undefined;
+    const res = (await this._client!.unvoteGroup(groupId)) as
+      | TransactionRes
+      | undefined;
     if (res === undefined) {
       throw new Error('unvote group error');
     }
@@ -484,7 +572,7 @@ class GroupFiSDKFacade {
     return allUserGroup;
   }
   async getGroupVoteRes(groupId: string) {
-    const allGroupVotes = await this._client!.getAllGroupVotes() as Array<{
+    const allGroupVotes = (await this._client!.getAllGroupVotes()) as Array<{
       groupId: string;
       vote: number;
     }>;
@@ -494,26 +582,42 @@ class GroupFiSDKFacade {
 
   async markGroup(groupId: string) {
     this._ensureWalletConnected();
-    const res = await this._client!.markGroup({ groupId }) as TransactionRes | undefined;
+    const res = (await this._client!.markGroup({ groupId })) as
+      | TransactionRes
+      | undefined;
     return res;
   }
 
-  async joinGroup({groupId,memberList,publicKey}:{groupId: string,publicKey:string,memberList:{addr:string,publicKey:string}[]}) {
+  async joinGroup({
+    groupId,
+    memberList,
+    publicKey,
+  }: {
+    groupId: string;
+    publicKey: string;
+    memberList: { addr: string; publicKey: string }[];
+  }) {
     this._ensureWalletConnected();
-    const isAlreadyInMemberList = memberList.find(o=>o.addr === this._address!);
+    const isAlreadyInMemberList = memberList.find(
+      (o) => o.addr === this._address!
+    );
     if (isAlreadyInMemberList) return true;
-    memberList.push({addr:this._address!,publicKey});
-    const res = await this._client!.markGroup({ groupId, memberList }) as TransactionRes | undefined;
+    memberList.push({ addr: this._address!, publicKey });
+    const res = (await this._client!.markGroup({ groupId, memberList })) as
+      | TransactionRes
+      | undefined;
     return res;
   }
 
   async leaveOrUnMarkGroup(groupId: string) {
     this._ensureWalletConnected();
-    const res = await this._client!.unmarkGroup(groupId) as TransactionRes | undefined;
+    const res = (await this._client!.unmarkGroup(groupId)) as
+      | TransactionRes
+      | undefined;
     return res;
   }
 
- // get current address
+  // get current address
   getCurrentAddress() {
     this._ensureWalletConnected();
     return this._address!;
@@ -530,7 +634,7 @@ class GroupFiSDKFacade {
         qualifiedGroup.groupId === IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     );
   }
- // _addHexPrefixIfAbsent
+  // _addHexPrefixIfAbsent
   addHexPrefixIfAbsent(str: string) {
     return IotaCatSDKObj._addHexPrefixIfAbsent(str);
   }
@@ -544,27 +648,36 @@ class GroupFiSDKFacade {
 
   async getAddressMarkedGroupsWithGroupName() {
     const markedGroups = await this.fetchAddressMarkedGroups();
-    return markedGroups.map((groupId) => {
-      groupId = groupId.startsWith('0x') ? groupId.slice(2) : groupId;
-      const groupMeta = IotaCatSDKObj._groupIdToGroupMeta(groupId)
-      if(groupMeta === undefined) {
-        return 
-      }
-      return {
-        groupId,
-        groupName: groupMeta.groupName,
-        qualifyType: groupMeta.qualifyType
-      };
-    }).filter(Boolean) as {groupId: string;groupName: string; qualifyType: string}[]
+    return markedGroups
+      .map((groupId) => {
+        groupId = groupId.startsWith('0x') ? groupId.slice(2) : groupId;
+        const groupMeta = IotaCatSDKObj._groupIdToGroupMeta(groupId);
+        if (groupMeta === undefined) {
+          return;
+        }
+        return {
+          groupId,
+          groupName: groupMeta.groupName,
+          qualifyType: groupMeta.qualifyType,
+        };
+      })
+      .filter(Boolean) as {
+      groupId: string;
+      groupName: string;
+      qualifyType: string;
+    }[];
   }
 
   async marked(groupId: string) {
     this._ensureWalletConnected();
-    const markedGroupIds = await this.fetchAddressMarkedGroups()
+    const markedGroupIds = await this.fetchAddressMarkedGroups();
     // log markedGroupIds
-    console.log('markedGroupIds', markedGroupIds, groupId)
+    console.log('markedGroupIds', markedGroupIds, groupId);
     for (const markedGroupId of markedGroupIds) {
-      if (IotaCatSDKObj._addHexPrefixIfAbsent(markedGroupId) == IotaCatSDKObj._addHexPrefixIfAbsent(groupId)) {
+      if (
+        IotaCatSDKObj._addHexPrefixIfAbsent(markedGroupId) ==
+        IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+      ) {
         return true;
       }
     }
@@ -572,7 +685,7 @@ class GroupFiSDKFacade {
   }
 
   getGroupMetaByGroupId(groupId: string) {
-    return IotaCatSDKObj._groupIdToGroupMeta(groupId)
+    return IotaCatSDKObj._groupIdToGroupMeta(groupId);
   }
 
   async isGroupPublic(groupId: string) {
@@ -609,17 +722,15 @@ class GroupFiSDKFacade {
     // log
     console.log('***Enter sendAnyOneToSelf, address', this._address!);
     try {
-      
       // call client sendAnyOneOutputToSelf()
-      const res = await this._client!.sendAnyOneOutputToSelf()
-      this._lastTimeSdkRequestResultReceived = Date.now()
+      const res = await this._client!.sendAnyOneOutputToSelf();
+      this._lastTimeSdkRequestResultReceived = Date.now();
       // log
       console.log('***sendAnyOneToSelf res', res);
       return res;
     } catch (error) {
       console.log('***sendAnyOneToSelf error', error);
     }
-    
   }
   async isBlackListed(groupId: string) {
     this._ensureWalletConnected();
@@ -637,7 +748,10 @@ class GroupFiSDKFacade {
     console.log('****muteGroupMember start');
     const memberAddrHash = IotaCatSDKObj._sha256Hash(memberAddress);
     // call client muteGroupMember(groupId, addrHash)
-    const muteGroupMemberRes =  await this._client!.muteGroupMember(groupId, memberAddrHash) as TransactionRes | undefined;
+    const muteGroupMemberRes = (await this._client!.muteGroupMember(
+      groupId,
+      memberAddrHash
+    )) as TransactionRes | undefined;
     console.log('****muteGroupMember res', muteGroupMemberRes);
     this._updateMuteMap(groupId, memberAddrHash);
     return muteGroupMemberRes;
@@ -649,10 +763,13 @@ class GroupFiSDKFacade {
   async unMuteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
     const memberAddrHash = IotaCatSDKObj._sha256Hash(memberAddress);
-    
+
     // call client unmuteGroupMember(groupId, addrHash)
-    const unmuteGroupMemberRes =  await this._client!.unmuteGroupMember(groupId, memberAddrHash) as TransactionRes | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now()
+    const unmuteGroupMemberRes = (await this._client!.unmuteGroupMember(
+      groupId,
+      memberAddrHash
+    )) as TransactionRes | undefined;
+    this._lastTimeSdkRequestResultReceived = Date.now();
     console.log('****unmuteGroupMember res', unmuteGroupMemberRes);
     this._updateMuteMap(groupId, memberAddrHash);
     return unmuteGroupMemberRes;
@@ -693,7 +810,16 @@ class GroupFiSDKFacade {
       this.isBlackListed(groupId),
     ]);
     // log is group public qualified marked muted
-    console.log('isGroupPublic', isGroupPublic, 'isQualified', isQualified, 'marked', marked, 'muted', muted);
+    console.log(
+      'isGroupPublic',
+      isGroupPublic,
+      'isQualified',
+      isQualified,
+      'marked',
+      marked,
+      'muted',
+      muted
+    );
 
     return {
       isGroupPublic,
@@ -713,10 +839,11 @@ class GroupFiSDKFacade {
 
   async getAllUserMuteGroupMembers() {
     this._ensureWalletConnected();
-    
+
     // call client getAllUserMuteGroupMembers(groupId)
-    const AllUserMuteGroupMembers =  await this._client!.getAllUserMuteGroupMembers() as IMUserMuteGroupMember[];
-    this._lastTimeSdkRequestResultReceived = Date.now()
+    const AllUserMuteGroupMembers =
+      (await this._client!.getAllUserMuteGroupMembers()) as IMUserMuteGroupMember[];
+    this._lastTimeSdkRequestResultReceived = Date.now();
     return AllUserMuteGroupMembers;
   }
 }
