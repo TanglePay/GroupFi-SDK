@@ -29,7 +29,8 @@ import {
     TIMELOCK_UNLOCK_CONDITION_TYPE,
     INftOutput,
     OutputTypes,
-    NFT_OUTPUT_TYPE
+    NFT_OUTPUT_TYPE,
+    ClientError
 } from "@iota/iota.js";
 import { Converter, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
@@ -358,21 +359,35 @@ class GroupfiWalletEmbedded {
         const inputsOutputMap:Record<string,OutputTypes> = {}
         // loop through all inputs
         const tasks:Promise<void>[] = []
+        let bypassInputOutputAssetMatch = false
         for (const input of transactionEssence.inputs){
             const inputOutputId = TransactionHelper.outputIdFromTransactionData(input.transactionId, input.transactionOutputIndex)
             tasks.push((async ()=>{
-                const output = await this._client!.output(inputOutputId)
-                inputsOutputMap[inputOutputId] = output.output
+                try {
+                    const output = await this._client!.output(inputOutputId)
+                    inputsOutputMap[inputOutputId] = output.output
+                } catch (e) {
+                    if (e instanceof ClientError) {
+                        if (e.httpStatus === 404) {
+                            // log output not found, might be fast sending
+                            console.log(`Output ${inputOutputId} not found, might be fast sending`)
+                            bypassInputOutputAssetMatch = true
+                        } 
+                    }
+                    if (!bypassInputOutputAssetMatch) throw e
+                }
             })())
         }
         await Promise.all(tasks)
         // log inputsOutputMap
         console.log('inputsOutputMap',inputsOutputMap)
-        const isMatch = this._isTransactionEssenceInputOutputAssetMatch(inputsOutputMap,transactionEssence)
-        if (!isMatch) {
-            // log
-            console.log('Transaction inputs and outputs not match')
-            throw new Error('Transaction inputs and outputs not match')
+        if (!bypassInputOutputAssetMatch) {
+            const isMatch = this._isTransactionEssenceInputOutputAssetMatch(inputsOutputMap,transactionEssence)
+            if (!isMatch) {
+                // log
+                console.log('Transaction inputs and outputs not match')
+                throw new Error('Transaction inputs and outputs not match')
+            }
         }
         const wsTsxEssence = new WriteStream();
         serializeTransactionEssence(wsTsxEssence, transactionEssence);
