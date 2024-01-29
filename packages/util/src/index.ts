@@ -142,3 +142,22 @@ export function sleep(ms: number) {
     }
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+export function createBlobURLFromUint8Array(data:Uint8Array):string {
+    // Convert Uint8Array to Blob
+    const blob = new Blob([data], { type: 'application/octet-stream' });
+
+    // Create and return a URL for the Blob
+    return URL.createObjectURL(blob);
+}
+
+export async function retrieveUint8ArrayFromBlobURL(url:string):Promise<Uint8Array> {
+    // Fetch the Blob from the URL
+    const response = await fetch(url);
+    const blob = await response.blob();
+
+    // Convert Blob to Uint8Array
+    return new Uint8Array(await blob.arrayBuffer());
+}
+export function releaseBlobUrl(url:string) {
+    URL.revokeObjectURL(url)
+}

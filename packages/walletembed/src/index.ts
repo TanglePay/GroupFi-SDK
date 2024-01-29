@@ -30,16 +30,17 @@ import {
     INftOutput,
     OutputTypes,
     NFT_OUTPUT_TYPE,
-    ClientError
+    ClientError,
+    deserializeTransactionEssence
 } from "@iota/iota.js";
-import { Converter, WriteStream } from "@iota/util.js";
+import { Converter, ReadStream, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
 import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
     EncryptedHexPayload
 
 } from "iotacat-sdk-core";
-import {addToMap, mapsEqual} from 'iotacat-sdk-utils';
+import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL} from 'iotacat-sdk-utils';
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -236,10 +237,14 @@ class GroupfiWalletEmbedded {
         if (!this._storage) throw new Error('Storage not initialized')
     }
 
-    async decryptAesKeyFromRecipientsWithPayload(idx:number,recipientsWithPayload:EncryptedHexPayload[]):Promise<string>{
-        const payload = recipientsWithPayload.map(o=>IotaCatSDKObj.encryptedHexPayloadToEncryptedPayload(o))
+    async decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{
+        // log URL.revokeObjectURL
+        console.log('URL.revokeObjectURL',URL.revokeObjectURL)
+
+        const payload = await retrieveUint8ArrayFromBlobURL(recipientPayloadUrl);
+        const list = [{payload}]
         const decrypted = await decryptOneOfList({receiverSecret:this._walletKeyPair!.privateKey,
-            payloadList:payload,tag,idx})
+            payloadList:list,tag,idx:0})
         let salt
         if(decrypted) {
             salt = decrypted.payload
@@ -347,8 +352,11 @@ class GroupfiWalletEmbedded {
         if (!mapsEqual(inputsAssetMap,outputsAssetMap)) throw new Error('inputs and outputs not match, asset not match')
         return true
     }
-    async signAndSendTransactionToSelf({transactionEssence}:{transactionEssence: ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
+    async signAndSendTransactionToSelf({transactionEssenceUrl}:{transactionEssenceUrl: string}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         this._ensureClientInited()
+        const payload = await retrieveUint8ArrayFromBlobURL(transactionEssenceUrl);
+        const rs = new ReadStream(payload);
+        const transactionEssence = deserializeTransactionEssence(rs)
         const isSendingToSelf = this._isTransactionEssenceSendingToSelf(transactionEssence)
         if (!isSendingToSelf) {
             // log
