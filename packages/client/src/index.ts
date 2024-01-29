@@ -64,6 +64,8 @@ import { EventGroupMemberChanged } from 'iotacat-sdk-core';
 import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
 import { GROUPFISELFPUBLICKEYTAG } from 'iotacat-sdk-core';
 import { SharedNotFoundError } from 'iotacat-sdk-core';
+import { createBlobURLFromUint8Array } from 'iotacat-sdk-utils';
+import { releaseBlobUrl } from 'iotacat-sdk-utils';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -502,19 +504,18 @@ export class GroupfiSdkClient {
             }
         } else {
             // move idx recipient to first, and prepare ephemeral public key at start, adjust idx to 0
-            let recipientsWithPayload:EncryptingPayload[] = []
+            let recipientPayload:Uint8Array
             const first = recipients![0]
             if (idx === 0) {
-                const bytes = Converter.hexToBytes(first.mkey)
-                recipientsWithPayload = [{payload:bytes}]
+                recipientPayload = Converter.hexToBytes(first.mkey)
             } else {
                 const first = recipients![0]
                 const pubkey = Converter.hexToBytes(first.mkey).slice(0,32)
                 const target = recipients![idx]
-                const bytes = concatBytes(pubkey,Converter.hexToBytes(target.mkey))
-                recipientsWithPayload = [{payload:bytes}]
+                recipientPayload = concatBytes(pubkey,Converter.hexToBytes(target.mkey))
             }
-            const salt = await this._decryptAesKeyFromRecipientsWithPayload(0,recipientsWithPayload)
+            const recipientPayloadUrl = createBlobURLFromUint8Array(recipientPayload)
+            const salt = await this._decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl)
             if (!salt) throw new Error('Salt not found')
             return {salt}
         }
@@ -1549,30 +1550,36 @@ export class GroupfiSdkClient {
     }
     
     async _signAndSendTransactionEssence({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
+        // log enter _signAndSendTransactionEssence
+        console.log('enter _signAndSendTransactionEssence');
+        const writeStream = new WriteStream();
+        serializeTransactionEssence(writeStream, transactionEssence);
+        const essenceFinal = writeStream.finalBytes();
+        const transactionEssenceUrl = createBlobURLFromUint8Array(essenceFinal);
         const res = await IotaSDK.request({
             method: 'iota_im_sign_and_send_transaction_to_self',
             params: {
               content: {
                 addr: this._accountBech32Address,
-                transactionEssence
+                transactionEssenceUrl
               },
             },
           }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
+        releaseBlobUrl(transactionEssenceUrl)  
         return res
     }
 
-    async _decryptAesKeyFromRecipientsWithPayload(idx:number,recipientsWithPayloadRaw:EncryptedPayload[]):Promise<string>{
-        const recipientsWithPayload = recipientsWithPayloadRaw.map(o=>IotaCatSDKObj.encryptedPayloadToEncryptedHexPayload(o))
+    async _decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{
         const res = await IotaSDK.request({
             method: 'iota_im_decrypt_key',
             params: {
               content: {
                 addr: this._accountBech32Address,
-                recipientsWithPayload,
-                idx
+                recipientPayloadUrl
               },
             },
           }) as string;
+        releaseBlobUrl(recipientPayloadUrl) 
         return res
     }
 
