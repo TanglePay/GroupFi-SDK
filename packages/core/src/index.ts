@@ -115,6 +115,23 @@ class IotaCatSDK {
             console.log('waitOutput',outputId,this._iotaMqttClient)
         })
     }
+
+    async waitBlock(blockId: string) {
+        if(!this._iotaMqttClient) {
+            throw new Error('iota mqtt client not setup')
+        }
+        return new Promise((resolve, reject) => {
+            const subscriptionId = this._iotaMqttClient!.blocksMetadata(blockId, (topic: string, data) => {
+                this._iotaMqttClient!.unsubscribe(subscriptionId)
+                console.log('block', topic, data)
+                if(data.isSolid) {
+                    resolve(data)
+                }
+            })
+            console.log('waitBlock', blockId, this._iotaMqttClient)
+        })
+    }
+
     _events:EventEmitter = new EventEmitter();
     _handleMqttMessage(topic:string, message:Buffer){
         const pushed = this.parsePushedValue(message)
