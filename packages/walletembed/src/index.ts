@@ -131,7 +131,7 @@ const shimmerTestNet = {
 const shimmerMainNet = {
     id: 102,
     isFaucetAvailable: false,
-    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://prerelease.api.iotacat.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "shimmer",
     networkId: "14364762045254553490",
@@ -166,6 +166,7 @@ class GroupfiWalletEmbedded {
             nodeUrlHint = node.apiUrl
         }
         this._client = new SingleNodeClient(nodeUrlHint)
+        this._currentNodeUrl = nodeUrlHint
         this._indexer = new IndexerPluginClient(this._client)
         this._nodeInfo = await this._client.info();
         this._protocolInfo = await this._client.protocolInfo();
@@ -345,13 +346,34 @@ class GroupfiWalletEmbedded {
         if (!mapsEqual(inputsAssetMap,outputsAssetMap)) throw new Error('inputs and outputs not match, asset not match')
         return true
     }
-    async signAndSendTransactionToSelf({transactionEssence,inputsOutputMap}:{transactionEssence: ITransactionEssence,inputsOutputMap:Record<string,OutputTypes>}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
+    async signAndSendTransactionToSelf({transactionEssence}:{transactionEssence: ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         this._ensureClientInited()
         const isSendingToSelf = this._isTransactionEssenceSendingToSelf(transactionEssence)
-        if (!isSendingToSelf) throw new Error('Transaction not sending to self')
+        if (!isSendingToSelf) {
+            // log
+            console.log('Transaction not sending to self')
+            throw new Error('Transaction not sending to self')
+        }
         // check inputs and outputs asset match
+        const inputsOutputMap:Record<string,OutputTypes> = {}
+        // loop through all inputs
+        const tasks:Promise<void>[] = []
+        for (const input of transactionEssence.inputs){
+            const inputOutputId = TransactionHelper.outputIdFromTransactionData(input.transactionId, input.transactionOutputIndex)
+            tasks.push((async ()=>{
+                const output = await this._client!.output(inputOutputId)
+                inputsOutputMap[inputOutputId] = output.output
+            })())
+        }
+        await Promise.all(tasks)
+        // log inputsOutputMap
+        console.log('inputsOutputMap',inputsOutputMap)
         const isMatch = this._isTransactionEssenceInputOutputAssetMatch(inputsOutputMap,transactionEssence)
-        if (!isMatch) throw new Error('Transaction inputs and outputs not match')
+        if (!isMatch) {
+            // log
+            console.log('Transaction inputs and outputs not match')
+            throw new Error('Transaction inputs and outputs not match')
+        }
         const wsTsxEssence = new WriteStream();
         serializeTransactionEssence(wsTsxEssence, transactionEssence);
         const essenceFinal = wsTsxEssence.finalBytes();
