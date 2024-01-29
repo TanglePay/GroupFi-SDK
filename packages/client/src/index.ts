@@ -41,7 +41,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG
 
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllNftOutputs, getAllBasicOutputs} from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllNftOutputs, getAllBasicOutputs, concatBytes} from 'iotacat-sdk-utils';
 import IotaSDK from 'tanglepaysdk-client';
 
 //TODO tune concurrency
@@ -501,8 +501,20 @@ export class GroupfiSdkClient {
                 throw new Error('Address not found in shared output')
             }
         } else {
-            const recipientsWithPayload = recipients!.map((recipient)=>({...recipient,payload:Converter.hexToBytes(recipient.mkey)}))
-            const salt = await this._decryptAesKeyFromRecipientsWithPayload(idx,recipientsWithPayload)
+            // move idx recipient to first, and prepare ephemeral public key at start, adjust idx to 0
+            let recipientsWithPayload:EncryptingPayload[] = []
+            const first = recipients![0]
+            if (idx === 0) {
+                const bytes = Converter.hexToBytes(first.mkey)
+                recipientsWithPayload = [{payload:bytes}]
+            } else {
+                const first = recipients![0]
+                const pubkey = Converter.hexToBytes(first.mkey).slice(0,32)
+                const target = recipients![idx]
+                const bytes = concatBytes(pubkey,Converter.hexToBytes(target.mkey))
+                recipientsWithPayload = [{payload:bytes}]
+            }
+            const salt = await this._decryptAesKeyFromRecipientsWithPayload(0,recipientsWithPayload)
             if (!salt) throw new Error('Salt not found')
             return {salt}
         }
@@ -1140,7 +1152,7 @@ export class GroupfiSdkClient {
             const {outputId,output} = basicOutputWrapper
             inputsOutputMap[outputId] = output
         }
-        const res = await this._signAndSendTransactionEssence({transactionEssence,inputsOutputMap})
+        const res = await this._signAndSendTransactionEssence({transactionEssence})
         return res
     }
     // sendAnyOneOutputToSelf
@@ -1536,14 +1548,13 @@ export class GroupfiSdkClient {
         return {outputWrapper:existing,list:groupIds}
     }
     
-    async _signAndSendTransactionEssence({transactionEssence, inputsOutputMap}:{transactionEssence:ITransactionEssence, inputsOutputMap:{[key:string]:OutputTypes}}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
+    async _signAndSendTransactionEssence({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         const res = await IotaSDK.request({
             method: 'iota_im_sign_and_send_transaction_to_self',
             params: {
               content: {
                 addr: this._accountBech32Address,
-                transactionEssence,
-                inputsOutputMap,
+                transactionEssence
               },
             },
           }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
