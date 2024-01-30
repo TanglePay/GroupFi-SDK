@@ -148,6 +148,7 @@ class GroupfiWalletEmbedded {
     _indexer?: IndexerPluginClient;
     _nodeInfo?: INodeInfo;
     _protocolInfo?: INodeInfoProtocol;
+    _baseSeed?: Ed25519Seed;
     _walletKeyPair?: IKeyPair;
     _accountHexAddress?:string;
     _accountBech32Address?:string;
@@ -195,23 +196,20 @@ class GroupfiWalletEmbedded {
         if (this._hexSeed == hexSeed) return
         this._hexSeed = hexSeed
         const baseSeed = this._hexSeedToEd25519Seed(hexSeed);
-        this._walletKeyPair = this._getPair(baseSeed)
+        this._baseSeed = baseSeed;
     }
-    switchAddress(bech32Address:string){
-        this._accountBech32Address = bech32Address
-        const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
-        if (!res) throw new Error('Invalid bech32 address')
-        const {addressType, addressBytes} = res
-        if (addressType !== ED25519_ADDRESS_TYPE) throw new Error('Address type not supported')
-        this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
+    switchAddressUsingPath(path:number){
+        this._walletKeyPair = this._getPair(this._baseSeed!,path)
+        const genesisEd25519Address = new Ed25519Address(this._walletKeyPair.publicKey);
+        const genesisWalletAddress = genesisEd25519Address.toAddress();
+        this._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
+        console.log('AccountHexAddress', this._accountHexAddress);
+        this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
     }
-
     
-
-    
-    _getPair(baseSeed:Ed25519Seed){
+    _getPair(baseSeed:Ed25519Seed, idx:number){
         const addressGeneratorAccountState = {
-            accountIndex: 0,
+            accountIndex: idx,
             addressIndex: 0,
             isInternal: false
         };
