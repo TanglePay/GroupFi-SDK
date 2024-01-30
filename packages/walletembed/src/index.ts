@@ -196,15 +196,15 @@ class GroupfiWalletEmbedded {
         this._hexSeed = hexSeed
         const baseSeed = this._hexSeedToEd25519Seed(hexSeed);
         this._walletKeyPair = this._getPair(baseSeed)
-        const genesisEd25519Address = new Ed25519Address(this._walletKeyPair.publicKey);
-        const genesisWalletAddress = genesisEd25519Address.toAddress();
-        this._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
-        console.log('AccountHexAddress', this._accountHexAddress);
-        this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
-        console.log('AccountBech32Address', this._accountBech32Address);
-        
     }
-
+    switchAddress(bech32Address:string){
+        this._accountBech32Address = bech32Address
+        const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
+        if (!res) throw new Error('Invalid bech32 address')
+        const {addressType, addressBytes} = res
+        if (addressType !== ED25519_ADDRESS_TYPE) throw new Error('Address type not supported')
+        this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
+    }
 
     
 
@@ -231,7 +231,7 @@ class GroupfiWalletEmbedded {
         if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
     }
     _ensureWalletInited(){
-        if (!this._walletKeyPair || !this._accountHexAddress || !this._accountBech32Address) throw new Error('Wallet not initialized')
+        if (!this._walletKeyPair) throw new Error('Wallet not initialized')
     }
     _ensureStorageInited(){
         if (!this._storage) throw new Error('Storage not initialized')
@@ -259,6 +259,8 @@ class GroupfiWalletEmbedded {
         if (!address || address.type !== ED25519_ADDRESS_TYPE) return false
         const ed25519Address = address as IEd25519Address;
         if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._accountHexAddress) return true
+        // log not self unlock condition
+        console.log('Not self unlock condition',addressUnlockCondition)
         return false
     }
     // check if transactionEssence is sending to self
@@ -455,14 +457,7 @@ class GroupfiWalletEmbedded {
             throw e
         }
     }
-    /*helperContext:{SingleNodeClient:SingleNodeClient,IndexerPluginClient:IndexerPluginClient, bech32Address:string }*/
-    // _getHelperContext
-    _getHelperContext(){
-        this._ensureClientInited()
-        this._ensureWalletInited()
-        const helperContext = {SingleNodeClient:this._client!,IndexerPluginClient:this._indexer!, bech32Address:this._accountBech32Address! }
-        return helperContext
-    }
+
     
     
 
