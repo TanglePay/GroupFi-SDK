@@ -206,9 +206,6 @@ class GroupfiWalletEmbedded {
         console.log('AccountHexAddress', this._accountHexAddress);
         this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
     }
-
-    
-
     
     _getPair(baseSeed:Ed25519Seed, idx:number){
         const addressGeneratorAccountState = {
