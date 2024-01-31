@@ -29,5 +29,5 @@ jobs:
           cd /var/www/html/GroupFi-SDK
           git pull 
           pnpm install 
-          pnpm run build:staging
+          pnpm run build:prerelease
         ENDSSH
