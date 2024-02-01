@@ -140,7 +140,7 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://test.api.groupfi.ai",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
@@ -1660,7 +1660,8 @@ export class GroupfiSdkClient {
             params: {
               content: {
                 addr: this._accountBech32Address,
-                transactionEssenceUrl
+                transactionEssenceUrl,
+                nodeUrlHint:this._curNode!.apiUrl
               },
             },
           }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
@@ -1674,7 +1675,8 @@ export class GroupfiSdkClient {
             params: {
               content: {
                 addr: this._accountBech32Address,
-                recipientPayloadUrl
+                recipientPayloadUrl,
+                nodeUrlHint:this._curNode!.apiUrl
               },
             },
           }) as string;

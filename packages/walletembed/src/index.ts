@@ -123,7 +123,7 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://test.api.groupfi.ai",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
@@ -198,13 +198,15 @@ class GroupfiWalletEmbedded {
         const baseSeed = this._hexSeedToEd25519Seed(hexSeed);
         this._baseSeed = baseSeed;
     }
-    switchAddressUsingPath(path:number){
+    switchAddressUsingPath(rawPath?:number){
+        const path = rawPath??0
         this._walletKeyPair = this._getPair(this._baseSeed!,path)
         const genesisEd25519Address = new Ed25519Address(this._walletKeyPair.publicKey);
         const genesisWalletAddress = genesisEd25519Address.toAddress();
         this._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
-        console.log('AccountHexAddress', this._accountHexAddress);
         this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
+        // log path and hex address and bech32 address, in one line, start with 4 # symbols
+        console.log(`#### Wallet Index ${path} Hex Address ${this._accountHexAddress} Bech32 Address ${this._accountBech32Address}`)
     }
     
     _getPair(baseSeed:Ed25519Seed, idx:number){
@@ -214,8 +216,6 @@ class GroupfiWalletEmbedded {
             isInternal: false
         };
         const path = generateBip44Address(addressGeneratorAccountState,COIN_TYPE_SHIMMER);
-
-        console.log(`Wallet Index ${path}`);
 
         const addressSeed = baseSeed.generateSeedFromPath(new Bip32Path(path));
         const addressKeyPair = addressSeed.keyPair();
@@ -236,9 +236,7 @@ class GroupfiWalletEmbedded {
     }
 
     async decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{
-        // log URL.revokeObjectURL
-        console.log('URL.revokeObjectURL',URL.revokeObjectURL)
-
+        
         const payload = await retrieveUint8ArrayFromBlobURL(recipientPayloadUrl);
         const list = [{payload}]
         const decrypted = await decryptOneOfList({receiverSecret:this._walletKeyPair!.privateKey,
@@ -258,7 +256,7 @@ class GroupfiWalletEmbedded {
         const ed25519Address = address as IEd25519Address;
         if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._accountHexAddress) return true
         // log not self unlock condition
-        console.log('Not self unlock condition',addressUnlockCondition)
+        console.log('Not self unlock condition',addressUnlockCondition,this._accountHexAddress)
         return false
     }
     // check if transactionEssence is sending to self
