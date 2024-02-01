@@ -48,8 +48,9 @@ class IotaCatSDK {
             if (Array.isArray(value)) {
                 value = (value as string[]).sort().join('')
             }
-
-            acc[key] = ""+value
+            if (value) {
+                acc[key] = ""+value
+            }
             return acc
         },{} as Record<string,any>)
         const groupId = CryptoJS.SHA256(JSON.stringify(sortedMap)).toString(CryptoJS.enc.Hex)
