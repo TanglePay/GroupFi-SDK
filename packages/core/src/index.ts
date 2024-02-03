@@ -366,6 +366,25 @@ class IotaCatSDK {
         }, {} as Record<string, MessageGroupMeta>);
         return this._ensureList(json);
     }
+
+    // TODO: It's temporary, it will be adjusted later.
+    async fetchAddressQualifiedGroupConfigsWithoutSetting({address, includes, excludes}: {address: string, includes?: {groupName: string}[], excludes?: {groupName: string}[]}): Promise<MessageGroupMeta[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;
+        const body = {
+            includes,
+            excludes
+        };
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const json = await res.json() as MessageGroupMeta[];
+        return this._ensureList(json);
+    }
+
     // addressbalance
     async fetchAddressBalance(address:string):Promise<number>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressbalance?address=${address}`
