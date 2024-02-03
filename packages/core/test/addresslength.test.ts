@@ -1,10 +1,22 @@
 import { beforeEach, describe, expect, test, beforeAll } from '@jest/globals';
 import { Bech32Helper,ED25519_ADDRESS_TYPE } from '@iota/iota.js';
 import { Converter } from '@iota/util.js';
+import { Ed25519Address } from '@iota/iota.js';
 describe('address length test', () => {
     beforeEach(()=>{
         
     })
+    test('tmp', () => {
+        const publicKeyHex = '0x7dc17c5b15d6dae133e78d6a315b308694c6aba719f7a73a1aeeb7ed86f88d0e';
+        const publicKey = Converter.hexToBytes(publicKeyHex)
+        const indexEd25519Address = new Ed25519Address(publicKey);
+        const indexPublicKeyAddress = indexEd25519Address.toAddress();
+        console.log("####################\tAddress Ed25519", Converter.bytesToHex(indexPublicKeyAddress, true));
+        console.log(
+            "##################\tAddress Bech32",
+            Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, indexPublicKeyAddress, 'smr')
+        );
+    });
     test('test length', () => {
         const bech32Address = 'smr1qzjh56yyjlwcm8pc9xccunkuage3xcae3trgrvmlzz8nts0rtym37stqddc'
         const res = Bech32Helper.fromBech32(bech32Address,'smr')

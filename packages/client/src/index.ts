@@ -140,7 +140,7 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://test.api.groupfi.ai",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
@@ -1168,7 +1168,9 @@ export class GroupfiSdkClient {
                 if (amount.greaterOrEquals(threshold)) {
                     consumedOutputWrapper = remainderBasicOutputWrapperFromHint
                 }
-            } else {
+            } 
+        
+            if (!consumedOutputWrapper ) {
                 const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
                 const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
                 console.log('unspent Outputs', outputs);
