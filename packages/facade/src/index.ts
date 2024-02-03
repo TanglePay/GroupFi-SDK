@@ -472,6 +472,31 @@ class GroupFiSDKFacade {
     }
   }
 
+  
+  // TODO: It's temporary, it will be adjusted later.
+  async getRecommendGroups({
+    includes,
+    excludes,
+  }: {
+    includes?: string[];
+    excludes?: string[];
+  }) {
+    this._ensureWalletConnected();
+
+    const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
+      address: this._address!,
+      includes: includes?.map((g) => ({ groupName: g })),
+      excludes: excludes?.map((g) => ({ groupName: g })),
+    });
+    return res
+      .map(({ groupName, qualifyType }) => ({
+        groupName,
+        groupId: IotaCatSDKObj._groupToGroupId(groupName),
+        qualifyType: qualifyType,
+      }))
+      .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
+  }
+
   async fetchAddressQualifiedGroupConfigs({
     includes,
     excludes,
