@@ -229,14 +229,14 @@ class GroupFiSDKFacade {
         address
       );
 
-      this._onAccountChanged({ address, nodeId });
+      await this._onAccountChanged({ address, nodeId });
       callback({ address, nodeId });
     };
     IotaSDK.on('accountsChanged', listener);
     return () => IotaSDK.removeListener('accountsChanged', listener);
   }
 
-  _onAccountChanged({
+  async _onAccountChanged({
     address: newAddress,
   }: {
     address: string;
@@ -244,6 +244,7 @@ class GroupFiSDKFacade {
   }) {
     this._address = newAddress;
     this._muteMap = undefined;
+    await this.fetchAddressQualifiedGroupConfigs({});
     IotaCatSDKObj.switchMqttAddress(newAddress);
     this._client!.switchAddress(this._address!);
   }
@@ -380,25 +381,41 @@ class GroupFiSDKFacade {
     return { itemList: fulfilledMessageList, nextToken: token };
   }
 
-  async mintNicknameNFT(name: string): Promise<{result: boolean, blockId?: string, errCode?: number, reason?: string}> {
+  async mintNicknameNFT(
+    name: string
+  ): Promise<{
+    result: boolean;
+    blockId?: string;
+    errCode?: number;
+    reason?: string;
+  }> {
     this._ensureWalletConnected();
     const res = await fetch(
       `https://${NAMING_DOMAIN}/mint_nicknft?address=${this._address}&name=${name}`
     );
-    const json = await res.json() as { result: boolean, block_id: string, 'err-msg'?: string, 'err-code'?: number}
-    if(!json.result) {
-      return {result: false, errCode: json['err-code'], reason: json['err-msg']} as {result: boolean, reason: string}
+    const json = (await res.json()) as {
+      result: boolean;
+      block_id: string;
+      'err-msg'?: string;
+      'err-code'?: number;
+    };
+    if (!json.result) {
+      return {
+        result: false,
+        errCode: json['err-code'],
+        reason: json['err-msg'],
+      } as { result: boolean; reason: string };
     }
     // const blockMetadata = await IotaCatSDKObj.waitBlock(json.block_id!)
     return {
       result: true,
-      blockId: json.block_id
-    }
+      blockId: json.block_id,
+    };
   }
 
   async checkIfhasOneNicknameNft() {
     this._ensureWalletConnected();
-    return await this._client!.checkIfhasOneNicknameNft(this._address!)
+    return await this._client!.checkIfhasOneNicknameNft(this._address!);
   }
 
   // get smr balance
