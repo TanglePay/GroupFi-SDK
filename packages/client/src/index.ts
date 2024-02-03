@@ -1168,7 +1168,9 @@ export class GroupfiSdkClient {
                 if (amount.greaterOrEquals(threshold)) {
                     consumedOutputWrapper = remainderBasicOutputWrapperFromHint
                 }
-            } else {
+            } 
+        
+            if (!consumedOutputWrapper ) {
                 const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
                 const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
                 console.log('unspent Outputs', outputs);
