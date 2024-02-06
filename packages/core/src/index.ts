@@ -392,6 +392,32 @@ class IotaCatSDK {
         const json = await res.json()
         return json
     }    
+
+    async fetchAddressNames(addressList: string[]): Promise<{[key: string]: {name: string}}> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressdid`
+        const body = addressList
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const json = await res.json() as Array<{name: string, address: string} | null>
+        const map: {[key: string]: {name: string}} = {}
+        json.map(item => {
+            if(item) {
+                const nameRaw = item.name
+                let name = nameRaw
+                if(nameRaw.endsWith('.gf')) {
+                    name = nameRaw.slice(0, name.length-3)
+                }
+                map[item.address] = {name}
+            }
+        })
+        return map
+    }
+
     setPublicKeyForPreparedMessage(message:IMMessage, publicKeyMap:Record<string,string>){
         // check if message.recipients is null
         if (message.recipients == undefined) {

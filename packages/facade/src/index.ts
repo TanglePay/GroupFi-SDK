@@ -413,6 +413,10 @@ class GroupFiSDKFacade {
     };
   }
 
+  async fetchAddressNames(addressList: string[]) {
+    return await IotaCatSDKObj.fetchAddressNames(addressList)
+  }
+
   async checkIfhasOneNicknameNft() {
     this._ensureWalletConnected();
     return await this._client!.checkIfhasOneNicknameNft(this._address!);
