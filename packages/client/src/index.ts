@@ -885,7 +885,7 @@ export class GroupfiSdkClient {
                 if(issuerFeature === undefined) {
                     continue
                 }
-                if(issuerFeature.address.type === 16 && issuerFeature.address.nftId === '0xa88f2ed55aab859b9ccf7aabb59c92d617ac3a098a7e39eda61ea4f60854801d') {
+                if(issuerFeature.address.type === 16 && issuerFeature.address.nftId === '0xf45a533f41d52e8337a09aaa9f8456e8165a737e395f35d2d6af3467eb240533') {
                     console.log('Nickname nft', outputId, output)
                     return true
                 }
