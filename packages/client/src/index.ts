@@ -896,6 +896,40 @@ export class GroupfiSdkClient {
         }
     }
 
+    async hasUnclaimedNameNFT(address: string): Promise<boolean> {
+        this._ensureClientInited()
+        this._ensureWalletInited()
+
+        try {
+            const {items}: IOutputsResponse = await this._indexer!.nfts({
+                addressBech32: address,
+                hasStorageDepositReturn: true,
+                hasExpiration: true,
+                tagHex: `0x${Converter.utf8ToHex('group-id')}`
+            })
+            for (const outputId of items) {
+                const { output } = await this._client!.output(outputId) as {metadata: IOutputMetadataResponse,  output: INftOutput}
+                if(!output.immutableFeatures) {
+                    continue
+                }
+                const metadataFeature = output.immutableFeatures.find(({type}) => type === 2) as IMetadataFeature | undefined
+                if(!metadataFeature || !metadataFeature.data) {
+                    continue
+                }
+                const metadataFeatureObj = JSON.parse(Converter.hexToUtf8(metadataFeature.data))
+                if(metadataFeatureObj && metadataFeatureObj.property === 'groupfi-name') {
+                    console.log('UnclaimedNameNFT:', outputId, output)
+                    return true
+                }
+            }
+            
+            return false
+            
+        }catch(error) {
+            return false
+        }
+    }
+
     _filterOutputsCannotBeConsolidated(outputs:BasicOutputWrapper){
         // filter out output that have tag feature or metadata feature or native tokens
         const features = outputs.output.features
