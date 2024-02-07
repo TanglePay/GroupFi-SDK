@@ -83,6 +83,7 @@ export interface MessageGroupMeta {
     qualifyType: GroupQualifyTypeStr,
     chainName: string,
     tokenThres: string,
+    tokenId: string,
     collectionIds: string[],
 }
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
