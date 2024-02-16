@@ -422,6 +422,10 @@ class GroupFiSDKFacade {
     return await this._client!.checkIfhasOneNicknameNft(this._address!);
   }
 
+  async hasUnclaimedNameNFT() {
+    return await this._client!.hasUnclaimedNameNFT(this._address!)
+  }
+
   // get smr balance
   async getSMRBalance() {
     this._ensureWalletConnected();
