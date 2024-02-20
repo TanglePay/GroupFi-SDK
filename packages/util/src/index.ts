@@ -4,6 +4,10 @@ import bigInt from "big-integer"
 export * from './runbatch'
 export * from './objectId'
 export * from './consolidate'
+export * from './pipe'
+export * from './concurrent_pipe'
+export * from './stream_processor'
+
 export const concatBytes = (...args: Uint8Array[]) => {
     let totalLength = 0;
     args.forEach((bytes) => {

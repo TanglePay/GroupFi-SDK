@@ -260,6 +260,27 @@ class GroupFiSDKFacade {
     )) as InboxItemResponse;
   }
 
+  // processOneMessage
+  processOneMessage(item: MessageResponseItem):boolean {
+    const pipe = this._client!.getOutputIdToMessagePipe();
+    const res = pipe.write({
+      outputId: item.outputId,
+      address: this._address!,
+      type: 1,
+    });
+    return res;
+  }
+  // registerMessageCallback
+  registerMessageCallback(callback: (param:{message:IMessage,outputId:string}) => void) {
+    const listener = (param: {message:IMessage,outputId:string}|undefined) => {
+      if (param){
+      callback(param);
+      }
+    };
+    const pipe = this._client!.getOutputIdToMessagePipe();
+    pipe.on('data', listener);
+  }
+
   // fullfillOneMessageLite
   async fullfillOneMessageLite(item: MessageResponseItem): Promise<IMessage> {
     // call client getMessageFromOutputId({ outputId, address: addr, type: 1 })
