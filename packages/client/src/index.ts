@@ -47,7 +47,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG
 
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllNftOutputs, getAllBasicOutputs, concatBytes} from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes} from 'iotacat-sdk-utils';
 import IotaSDK from 'tanglepaysdk-client';
 
 //TODO tune concurrency
@@ -72,6 +72,7 @@ import { GROUPFISELFPUBLICKEYTAG } from 'iotacat-sdk-core';
 import { SharedNotFoundError } from 'iotacat-sdk-core';
 import { createBlobURLFromUint8Array } from 'iotacat-sdk-utils';
 import { releaseBlobUrl } from 'iotacat-sdk-utils';
+import { ConcurrentPipe } from 'iotacat-sdk-utils';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -181,6 +182,10 @@ export class GroupfiSdkClient {
 
     _sharedNotFoundRecoveringMessage:Record<string,{payload:{data:Uint8Array,senderAddressBytes:Uint8Array,address:string}[],lastCheckTime:number,numOfChecks:number}> = {};
 
+    _sharedSaltCache:Record<string,string> = {}
+    _sharedSaltFailedCache:Set<string> = new Set()
+    _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
+
     switchAddress(bech32Address:string){
         this._accountBech32Address = bech32Address
         const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
@@ -189,6 +194,7 @@ export class GroupfiSdkClient {
         if (addressType !== ED25519_ADDRESS_TYPE) throw new Error('Address type not supported')
         this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
     }
+    _queuePromise:Promise<any>|undefined;
     async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
         if (this._curNode) return
         // @ts-ignore
@@ -206,6 +212,7 @@ export class GroupfiSdkClient {
         this._sharedNotFoundRecoveringMessageCheckInterval = setInterval(()=>{
             this._tryProcessSharedNotFoundRecoveringMessage()
         }, 5000);
+        this._queuePromise = Promise.resolve()
         console.log('NodeInfo', this._nodeInfo);
         console.log('ProtocolInfo', this._protocolInfo);
     }
@@ -224,7 +231,31 @@ export class GroupfiSdkClient {
     }
 
 
-
+    _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
+    _makeOutputIdToMessagePipe(){
+        const processor = async ({outputId,address,type}:{outputId:string,address:string,type:number})=>{
+            const res = await this.getMessageFromOutputId({outputId,address,type})
+            const message = res
+            ? {
+                type: ImInboxEventTypeNewMessage,
+                sender: res.sender,
+                message: res.message.data,
+                messageId: res.messageId,
+                timestamp: res.message.timestamp,
+                groupId: res.message.groupId,
+                }
+            : undefined;
+            return {message,outputId}
+        }
+        this._outputIdToMessagePipe = new ConcurrentPipe(processor, 12, 64, true)
+    }
+    getOutputIdToMessagePipe(){
+        // if not inited, init
+        if (!this._outputIdToMessagePipe) {
+            this._makeOutputIdToMessagePipe()
+        }
+        return this._outputIdToMessagePipe!
+    }
     
     async _getPublicKeyFromLedgerEd25519(ed25519Address:string):Promise<string|undefined>{
         
@@ -418,7 +449,11 @@ export class GroupfiSdkClient {
             outputId = outputIdUnwrapped
             output = outputUnwrapped
         }
-        
+        // try get salt from shared output cache
+        if (outputId) {
+            const saltFromCache = this._sharedSaltCache[outputId]
+            if (saltFromCache) return {salt:saltFromCache,outputId,output,isHA:false}
+        }
         console.log('sharedOutput', output, address);
         const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutput:output, address,isHA:true,groupId,memberList})
         const isHA = !!outputUnwrapped
@@ -493,7 +528,7 @@ export class GroupfiSdkClient {
             this._isProcessingSharedNotFoundRecoveringMessage = false
         }
     }
-    async _getSaltFromSharedOutput({sharedOutput,address,isHA=false,groupId,memberList}:{sharedOutput?:IBasicOutput, address:string,isHA?:boolean,groupId?:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{salt:string,output?:IBasicOutput}>{
+    async _getSaltFromSharedOutput({sharedOutputId, sharedOutput,address,isHA=false,groupId,memberList}:{sharedOutputId?:string,sharedOutput?:IBasicOutput, address:string,isHA?:boolean,groupId?:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{salt:string,output?:IBasicOutput}>{
         let idx = -1
         let recipients:IMRecipient[]|undefined
         if (sharedOutput) {
@@ -523,20 +558,83 @@ export class GroupfiSdkClient {
             const recipientPayloadUrl = createBlobURLFromUint8Array(recipientPayload)
             const salt = await this._decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl)
             if (!salt) throw new Error('Salt not found')
+            // successfully got salt from shared output, cache it
+            if (sharedOutputId) {
+                this._sharedSaltCache[sharedOutputId] = salt
+            }
             return {salt}
         }
     }
     async _getSaltFromSharedOutputId(outputId:string, address:string):Promise<{salt:string}>{
+        
+        // check if in failed cache
+        if (this._sharedSaltFailedCache.has(outputId)) {
+            // log salt failed cache hit
+            console.log('salt failed cache hit', outputId);
+            // TODO error type?
+            throw new Error('Shared output not found')
+        }
+        // try get salt from shared output cache
+        const saltFromCache = this._sharedSaltCache[outputId]
+        if (saltFromCache) {
+            // log salt cache hit
+            console.log('salt cache hit', outputId);
+            return {salt:saltFromCache}
+        }
+        
+        // if not in cache, check if in waiting cache
+        const waiting = this._sharedSaltWaitingCache[outputId]
+        if (waiting) {
+            // log waiting cache hit
+            console.log('waiting cache hit', outputId);
+            const wait = new Promise((resolve,reject)=>{
+                waiting.push({resolve,reject})
+                setTimeout(()=>{
+                    reject(new Error('Timeout'))
+                }, 5000)
+            })
+            try {
+                const salt = await wait as string
+                return {salt}
+            } catch (error) {
+                //TODO log for now
+                console.log('error', error);
+                throw error
+            }
+        } else {
+            // if not in waiting cache, add to waiting cache
+            this._sharedSaltWaitingCache[outputId] = []
+        }
         try {
+            // log salt cache miss, fetch from network
+            console.log('cache miss fetch from network', outputId);
             const outputsResponse = await this._client!.output(outputId)
             const output = outputsResponse.output as IBasicOutput
-            const {salt} = await this._getSaltFromSharedOutput({sharedOutput:output, address, isHA:false})
+            const {salt} = await this._getSaltFromSharedOutput({sharedOutputId:outputId, sharedOutput:output, address, isHA:false})
+            // check if in waiting cache
+            const waiting = this._sharedSaltWaitingCache[outputId]
+            if (waiting) {
+                for (const item of waiting) {
+                    item.resolve(salt)
+                }
+                delete this._sharedSaltWaitingCache[outputId]
+            }
             return {salt}
         } catch (error) {
             if (error instanceof ClientError) {
                 if (error.httpStatus === 404) {
                     throw IotaCatSDKObj.makeErrorForSharedOutputNotFound(outputId)
                 }
+            }
+            // if not found, add to failed cache
+            this._sharedSaltFailedCache.add(outputId)
+            // check if in waiting cache
+            const waiting = this._sharedSaltWaitingCache[outputId]
+            if (waiting) {
+                for (const item of waiting) {
+                    item.reject(error)
+                }
+                delete this._sharedSaltWaitingCache[outputId]
             }
             throw error
         }
@@ -1015,6 +1113,14 @@ export class GroupfiSdkClient {
         console.log(`_bech32AddrArrToRecipients  recipients total:${total}, withKey:${withKey}`);
         return recipients.filter(r=>r && r.mkey!=null && r.mkey!='noop')
     }
+    // set shared id and salt to cache
+    _setSharedIdAndSaltToCache(sharedId:string,salt:string){
+        this._sharedSaltCache[sharedId] = salt
+    }
+    // get shared id and salt from cache
+    _getSharedIdAndSaltFromCache(sharedId:string){
+        return this._sharedSaltCache[sharedId]
+    }
     async sendMessage(senderAddr:string, groupId:string,message: IMMessage, memberList?:{addr:string,publicKey:string}[]){
         this._ensureClientInited()
         this._ensureWalletInited()
@@ -1037,6 +1143,8 @@ export class GroupfiSdkClient {
                     const {salt, outputId,output,isHA} = await this._getSaltForGroup(groupId,senderAddr,memberList)
                     if (isHA) {
                         const {outputId:outputIdFromHA} = await this._sendBasicOutput([output!]);
+                        // set shared id and salt to cache
+                        this._setSharedIdAndSaltToCache(outputIdFromHA,salt)
                         message.recipientOutputid = outputIdFromHA
                     } else {
                         message.recipientOutputid = outputId
@@ -1691,7 +1799,7 @@ export class GroupfiSdkClient {
         serializeTransactionEssence(writeStream, transactionEssence);
         const essenceFinal = writeStream.finalBytes();
         const transactionEssenceUrl = createBlobURLFromUint8Array(essenceFinal);
-        const res = await IotaSDK.request({
+        const res = await this._sdkRequest({
             method: 'iota_im_sign_and_send_transaction_to_self',
             params: {
               content: {
@@ -1704,9 +1812,8 @@ export class GroupfiSdkClient {
         releaseBlobUrl(transactionEssenceUrl)  
         return res
     }
-
     async _decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{
-        const res = await IotaSDK.request({
+        const res = await this._sdkRequest({
             method: 'iota_im_decrypt_key',
             params: {
               content: {
@@ -1719,5 +1826,9 @@ export class GroupfiSdkClient {
         releaseBlobUrl(recipientPayloadUrl) 
         return res
     }
-
+    async _sdkRequest(args:any){
+        const newCall = () => IotaSDK.request(args)
+        this._queuePromise = this._queuePromise!.then(newCall, newCall)
+        return this._queuePromise
+    }
 }

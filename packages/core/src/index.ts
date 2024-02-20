@@ -34,9 +34,13 @@ class IotaCatSDK {
         return meta.groupName
     }
     _groupIdToGroupMeta(groupId:string):MessageGroupMeta|undefined{
+        // log enter
+        console.log('_groupIdToGroupMeta enter',groupId)
         for (const group in this._groupConfigMap) {
             const meta = this._groupConfigMap[group]
             const groupId_ = this._groupMetaToGroupId(meta)
+            // log groupId_ groupId
+            console.log('_groupIdToGroupMeta groupId_ groupId',groupId_,groupId)
             if (this._addHexPrefixIfAbsent(groupId_) === this._addHexPrefixIfAbsent(groupId)) return meta
         }
         return undefined
