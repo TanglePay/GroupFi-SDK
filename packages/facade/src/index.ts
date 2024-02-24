@@ -335,6 +335,29 @@ class GroupFiSDKFacade {
       : undefined;
     return message! as IMessage;
   }
+  // prepareRemainderHint
+  async prepareRemainderHint() {
+    this._ensureWalletConnected();
+    const res = await this._client!.prepareRemainderHint();
+    return res;
+  }
+  // enablePreparedRemainderHint
+  enablePreparedRemainderHint() {
+    this._ensureWalletConnected();
+    const res = this._client!.enablePrepareRemainderHint();
+    return res;
+  }
+  // disablePreparedRemainderHint
+  disablePreparedRemainderHint() {
+    this._ensureWalletConnected();
+    const res = this._client!.disablePrepareRemainderHint();
+    return res;
+  }
+  async preloadGroupSaltCache(groupId: string, memberList?: { addr: string; publicKey: string }[]) {
+    this._ensureWalletConnected();
+    const res = await this._client!.preloadGroupSaltCache(this._address!,groupId, memberList);
+    return res;
+  }
   async fullfillMessageLiteList(
     list: MessageResponseItem[]
   ): Promise<IMessage[]> {
