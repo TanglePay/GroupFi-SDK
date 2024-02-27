@@ -44,8 +44,8 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserMarkedGroupId, serializeUserMarkedGroupIds, deserializeUserMarkedGroupIds,
     IMUserMuteGroupMember,serializeUserMuteGroupMembers, deserializeUserMuteGroupMembers,
     IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
-    GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG
-
+    GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG,
+    GROUPFICASHTAG
 } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes} from 'iotacat-sdk-utils';
 import IotaSDK from 'tanglepaysdk-client';
@@ -73,6 +73,7 @@ import { SharedNotFoundError } from 'iotacat-sdk-core';
 import { createBlobURLFromUint8Array } from 'iotacat-sdk-utils';
 import { releaseBlobUrl } from 'iotacat-sdk-utils';
 import { ConcurrentPipe } from 'iotacat-sdk-utils';
+import { GROUPFIReservedTags } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -185,7 +186,8 @@ export class GroupfiSdkClient {
     _sharedSaltCache:Record<string,string> = {}
     _sharedSaltFailedCache:Set<string> = new Set()
     _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
-
+    _lastSendTimestamp:number = 0
+    _remainderHintOutdatedTimeperiod = 35 * 1000
     switchAddress(bech32Address:string){
         this._accountBech32Address = bech32Address
         const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
@@ -193,6 +195,8 @@ export class GroupfiSdkClient {
         const {addressType, addressBytes} = res
         if (addressType !== ED25519_ADDRESS_TYPE) throw new Error('Address type not supported')
         this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
+        this._remainderHintSet = []
+        this._lastSendTimestamp = 0;
     }
     _queuePromise:Promise<any>|undefined;
     async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
@@ -219,7 +223,54 @@ export class GroupfiSdkClient {
     setupStorage(storage:StorageFacade){
         this._storage = storage
     }
-
+    _prepareRemainderHintSwitch:boolean = false
+    // enable prepare remainder hint
+    enablePrepareRemainderHint(){
+        this._prepareRemainderHintSwitch = true
+    }
+    // disable prepare remainder hint
+    disablePrepareRemainderHint(){
+        this._prepareRemainderHintSwitch = false
+    }
+// prepare remainder hint
+    // first check timeelapsed > 15 seconds since last send
+    // then fetch all basic outputs for address with no timelock, no metadata
+    // then pick all as inputs, and split to 3 equal amount outputs, and send, outputs will be used as remainder hint
+    async prepareRemainderHint(){
+        if (!this._prepareRemainderHintSwitch) return false
+        const timeElapsed = Date.now() - this._lastSendTimestamp
+        if (timeElapsed < this._remainderHintOutdatedTimeperiod && this._remainderHintSet.length > 0) return false
+        // log actually start prepare
+        console.log('Actually start prepare remainder hint');
+        const outputs = await this._getUnSpentOutputs({numbersWanted:100})
+        let amount = outputs.reduce((acc,output)=>acc.add(bigInt(output.output.amount)),bigInt(0))
+        const amountPerOutput = amount.divide(3)
+        const outputsToSend:IBasicOutput[] = []
+        outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
+        amount = amount.subtract(amountPerOutput)
+        outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
+        amount = amount.subtract(amountPerOutput)
+        outputsToSend.push(this._makeCashBasicOutput(amount));
+        const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0],this._protocolInfo!.rentStructure)
+        // check if first output is enough for deposit
+        if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
+            // log then return
+            console.log('First output is not enough for deposit');
+            this._remainderHintSet = []
+            return false
+        }
+        // log outputsToSend and outputs in one line
+        console.log('outputsToSend', outputsToSend, 'outputs', outputs);
+        const {transactionId} = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs,outputsToSend)
+        this._remainderHintSet = []
+        for (let idx =0;idx<outputsToSend.length;idx++) {
+            const output = outputsToSend[idx]
+            this._remainderHintSet.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx),timestamp:Date.now()})
+        }
+        // log remainderHintSet
+        console.log('remainderHintSet', this._remainderHintSet);
+        return true
+    }
     async _getDltShimmer(){
         const url = 'https://dlt.green/api?dns=shimmer&id=tanglepay&token=egm9jvee56sfjrohylvs0tkc6quwghyo'
         const res = await fetch(url)
@@ -400,23 +451,36 @@ export class GroupfiSdkClient {
         }
         return undefined
     }
-    async _tryGetSharedOutputForGroup(groupId:string):Promise<{outputId:string,output:IBasicOutput}|undefined>{
+    // make cash basic output for given amount
+    _makeCashBasicOutput(amount:bigInt.BigInteger):IBasicOutput{
+        const basicOutput: IBasicOutput = {
+            type: BASIC_OUTPUT_TYPE,
+            amount: amount.toString(),
+            features: [
+                {
+                    type: 3,
+                    tag: `0x${Converter.utf8ToHex(GROUPFICASHTAG)}`
+                }
+            ],
+            unlockConditions: [
+                {
+                    type: ADDRESS_UNLOCK_CONDITION_TYPE,
+                    address: {
+                        type: ED25519_ADDRESS_TYPE,
+                        pubKeyHash: this._accountHexAddress!
+                    }
+                }
+            ]
+        };
+        return basicOutput
+    }
+    async _tryGetSharedOutputIdForGroup(groupId:string):Promise<{outputId:string}|undefined>{
         this._ensureClientInited()
         const apiRes = await this._getSharedOutputIdForGroupFromInxApi(groupId)
         if (apiRes && apiRes.outputId) {
             const {outputId} = apiRes
-            const outputsResponse = await this._client!.output(outputId)
-            return {outputId,output:outputsResponse.output as IBasicOutput}
+            return {outputId}
         } 
-/*
-
-            const res = await this._makeSharedOutputForGroup({groupId})
-            if (!res) return
-            const {output} = res
-            const {blockId,outputId} = await this._sendBasicOutput([output]);
-            return {outputId,output};
-            */
-        
     }
     //ensure group have shared output, if not create one
     async ensureGroupHaveSharedOutput(groupId:string){
@@ -439,22 +503,23 @@ export class GroupfiSdkClient {
         }
         return {message:'ok'}
     }
-    async _getSaltForGroup(groupId:string, address:string,memberList?:{addr:string,publicKey:string}[]):Promise<{salt:string, outputId?:string,output?:IBasicOutput,isHA:boolean}>{
+    async _getSaltForGroup(groupId:string, address:string,memberList?:{addr:string,publicKey:string}[]):Promise<{salt:string, outputId?:string, output?:IBasicOutput,isHA:boolean}>{
         console.log(`_getSaltForGroup groupId:${groupId}, address:${address}`);
-        const sharedOutputResp = await this._tryGetSharedOutputForGroup(groupId)
+        const sharedOutputResp = await this._tryGetSharedOutputIdForGroup(groupId)
         let outputId:string|undefined
         let output:IBasicOutput|undefined
         if (sharedOutputResp) {
-            const {output:outputUnwrapped,outputId:outputIdUnwrapped} = sharedOutputResp
+            const {outputId:outputIdUnwrapped} = sharedOutputResp
             outputId = outputIdUnwrapped
-            output = outputUnwrapped
         }
         // try get salt from shared output cache
         if (outputId) {
-            const saltFromCache = this._sharedSaltCache[outputId]
-            if (saltFromCache) return {salt:saltFromCache,outputId,output,isHA:false}
+            const saltFromCache = this._getSharedIdAndSaltFromCache(outputId)
+            if (saltFromCache) return {salt:saltFromCache,outputId,isHA:false}
+
+            const outputsResponse = await this._client!.output(outputId)
+            output = outputsResponse.output as IBasicOutput
         }
-        console.log('sharedOutput', output, address);
         const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutput:output, address,isHA:true,groupId,memberList})
         const isHA = !!outputUnwrapped
         output = outputUnwrapped || output
@@ -560,7 +625,7 @@ export class GroupfiSdkClient {
             if (!salt) throw new Error('Salt not found')
             // successfully got salt from shared output, cache it
             if (sharedOutputId) {
-                this._sharedSaltCache[sharedOutputId] = salt
+                this._setSharedIdAndSaltToCache(sharedOutputId,salt)
             }
             return {salt}
         }
@@ -575,10 +640,8 @@ export class GroupfiSdkClient {
             throw new Error('Shared output not found')
         }
         // try get salt from shared output cache
-        const saltFromCache = this._sharedSaltCache[outputId]
+        const saltFromCache = this._getSharedIdAndSaltFromCache(outputId)
         if (saltFromCache) {
-            // log salt cache hit
-            console.log('salt cache hit', outputId);
             return {salt:saltFromCache}
         }
         
@@ -1033,7 +1096,12 @@ export class GroupfiSdkClient {
         const features = outputs.output.features
         if (!features) return true
         const tagFeature = features.find(feature=>feature.type === 3)
-        if (tagFeature) return false
+        if (tagFeature) {
+            const tag = (tagFeature as ITagFeature).tag
+            const tagStr = Converter.hexToUtf8(tag)
+            // filter out groupfi tag by GROUPFIReservedTags
+            if (GROUPFIReservedTags.includes(tagStr)) return false
+        }
         const metadataFeature = features.find(feature=>feature.type === 2)
         if (metadataFeature) return false
         if (outputs.output.nativeTokens && outputs.output.nativeTokens.length > 0) return false
@@ -1114,12 +1182,63 @@ export class GroupfiSdkClient {
         return recipients.filter(r=>r && r.mkey!=null && r.mkey!='noop')
     }
     // set shared id and salt to cache
-    _setSharedIdAndSaltToCache(sharedId:string,salt:string){
+    _setSharedIdAndSaltToCache(rawSharedId:string,salt:string){
+        const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
         this._sharedSaltCache[sharedId] = salt
     }
     // get shared id and salt from cache
-    _getSharedIdAndSaltFromCache(sharedId:string){
-        return this._sharedSaltCache[sharedId]
+    _getSharedIdAndSaltFromCache(rawSharedId:string){
+        const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
+        const cachedValue = this._sharedSaltCache[sharedId]
+        // log cache hit or miss
+        if (cachedValue) {
+            console.log('salt cache hit', sharedId);
+        } else if (this._sharedSaltFailedCache.has(sharedId)) {
+            // log salt failed cache hit
+            console.log('salt failed cache hit', sharedId);
+            // TODO error type?
+            throw new Error('Shared output not found')
+        } else  {
+            console.log('salt cache miss', sharedId);
+        }
+        return cachedValue
+    }
+    _preloadGroupSaltCacheWaits:Record<string,{resolve:(value:undefined)=>void,reject:(error:Error)=>void}[]> = {}
+    async preloadGroupSaltCache(senderAddr:string, groupId:string,memberList?:{addr:string,publicKey:string}[]){
+        // if in waiting cache, create a promise, add to waiting cache, return promise
+        const waiting = this._preloadGroupSaltCacheWaits[groupId]
+        if (waiting) {
+            const wait = new Promise<undefined>((resolve,reject)=>{
+                waiting.push({resolve,reject})
+            })
+            return wait
+        } else {
+            this._preloadGroupSaltCacheWaits[groupId] = []
+        }
+        let err:Error|undefined
+        try {
+            const {salt, outputId,output,isHA} = await this._getSaltForGroup(groupId,senderAddr,memberList)
+            if (isHA) {
+                const {outputId:outputIdFromHA} = await this._sendBasicOutput([output!]);
+                // set shared id and salt to cache
+                this._setSharedIdAndSaltToCache(outputIdFromHA,salt)
+            }
+        } catch (error) {
+            console.log('preloadGroupSaltCache error', error);
+            err = error as Error
+        } finally {
+            const waiting = this._preloadGroupSaltCacheWaits[groupId]
+            if (waiting) {
+                delete this._preloadGroupSaltCacheWaits[groupId]
+                for (const item of waiting) {
+                    if (err) {
+                        item.reject(err)
+                    } else {
+                        item.resolve(undefined)
+                    }
+                }
+            }
+        }
     }
     async sendMessage(senderAddr:string, groupId:string,message: IMMessage, memberList?:{addr:string,publicKey:string}[]){
         this._ensureClientInited()
@@ -1309,10 +1428,14 @@ export class GroupfiSdkClient {
                 const amount = bigInt(remainderBasicOutputWrapperFromHint.output.amount)
                 if (amount.greaterOrEquals(threshold)) {
                     consumedOutputWrapper = remainderBasicOutputWrapperFromHint
+                    // log get cash from remainder hint
+                    console.log('get cash from remainder hint', remainderBasicOutputWrapperFromHint);
                 }
             } 
         
             if (!consumedOutputWrapper ) {
+                // log get cash from unspent outputs on the fly
+                console.log('get cash from unspent outputs on the fly');
                 const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
                 const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
                 console.log('unspent Outputs', outputs);
@@ -1347,19 +1470,43 @@ export class GroupfiSdkClient {
         this._setRemainderHint(remainderBasicOutput,remainderOutputId)
         return res
     }
-    _remainderHint:{output:IBasicOutput,outputId:string,timestamp:number}|undefined
+    _remainderHintSet:{output:IBasicOutput,outputId:string,timestamp:number}[] = []
+    _isRemainderHintSetDirty = false
     _setRemainderHint(output?:IBasicOutput,outputId?:string){
+        // log set remainder hint, outputId and output
+        console.log('set remainder hint', outputId, output);
         if (!output || !outputId) {
-            this._remainderHint = undefined
             return
         }
-        this._remainderHint = {output, outputId:outputId, timestamp:Date.now()}
+        // log actual set remainder hint
+        console.log('actual set remainder hint');
+
+        this._remainderHintSet.push({output,outputId,timestamp:Date.now()})
     }
     _tryGetCashFromRemainderHint():BasicOutputWrapper|undefined{
-        if (!this._remainderHint) return undefined
-        const {output,outputId,timestamp} = this._remainderHint
-        const now = Date.now()
-        if ((now - timestamp) > 15*1000) return undefined
+        // log enter try get cash from remainder hint
+        console.log('try get cash from remainder hint');
+        if (this._remainderHintSet.length === 0) return undefined
+        // find then remove the one with oldest timestamp
+        let oldest = this._remainderHintSet[0]
+        let oldestIdx = 0
+        for (let i = 1; i < this._remainderHintSet.length; i++) {
+            const hint = this._remainderHintSet[i]
+            if (hint.timestamp < oldest.timestamp) {
+                oldest = hint
+                oldestIdx = i
+            }
+        }
+        this._remainderHintSet.splice(oldestIdx,1)
+        // log oldest remainder hint
+        console.log('oldest remainder hint', oldest);
+        // return undefined if the oldest is too old
+        if (Date.now() - oldest.timestamp > this._remainderHintOutdatedTimeperiod) {
+            // log oldest remainder hint too old
+            console.log('oldest remainder hint too old', Date.now() - oldest.timestamp)
+            return undefined
+        }
+        const {output,outputId} = oldest
         return {output,outputId}
     }
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
@@ -1809,7 +1956,9 @@ export class GroupfiSdkClient {
               },
             },
           }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
-        releaseBlobUrl(transactionEssenceUrl)  
+        releaseBlobUrl(transactionEssenceUrl)
+        // update _lastSendTimestamp
+        this._lastSendTimestamp = Date.now()
         return res
     }
     async _decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{

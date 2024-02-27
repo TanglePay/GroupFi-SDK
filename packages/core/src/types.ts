@@ -1,3 +1,4 @@
+import { GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, IOTACATSHAREDTAG, IOTACATTAG } from ".";
 
 export interface IMRecipient {
     addr: string;
@@ -192,3 +193,23 @@ export type MessageResponseItem = {
     outputId: string;
     timestamp: number;
 }
+
+export const GROUPFICASHTAG = 'GROUPFICASH'
+
+// tags that can not be used by user
+/*
+export const IOTACATTAG = 'GROUPFIV4'
+export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
+export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
+export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
+export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
+export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
+*/
+export const GROUPFIReservedTags = [
+    IOTACATTAG,
+    IOTACATSHAREDTAG,
+    GROUPFIMARKTAG,
+    GROUPFIMUTETAG,
+    GROUPFIVOTETAG,
+    'PARTICIPANTION',
+]
