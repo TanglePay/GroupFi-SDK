@@ -640,7 +640,12 @@ class GroupFiSDKFacade {
           });
         }
       };
-      IotaSDK._events.on('iota-ready', listener);
+      // TanglePay is ready
+      if(IotaSDK.isTanglePay && IotaSDK.tanglePayVersion !== '') {
+        listener()
+      }else {
+        IotaSDK._events.on('iota-ready', listener);
+      }
     });
   }
 
