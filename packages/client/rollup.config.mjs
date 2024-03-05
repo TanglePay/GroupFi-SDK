@@ -10,6 +10,6 @@ decorateIifeExternal(config[0],{
     'big-integer':'bigInt',
 })
 decoratePlugin(config, replace({
-    'process.env.NODE_ID': JSON.stringify(process.env.NODE_ENV == 'staging--' ? 101 : 102),
+    'process.env.NODE_ID': JSON.stringify(process.env.NODE_ENV == 'staging' ? 101 : 102),
 }),true)
 export default config
