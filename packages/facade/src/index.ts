@@ -36,6 +36,9 @@ export interface RecommendGroup {
   qualifyType: string;
 }
 
+const SHIMMER_MAINNET_ID = 102
+const SUPPORTED_CHAIN_ID_LIST = [SHIMMER_MAINNET_ID]
+
 class GroupFiSDKFacade {
   private _address: string | undefined;
 
@@ -49,7 +52,7 @@ class GroupFiSDKFacade {
         groupName: string;
         groupId: string;
       }
-    | undefined = undefined;
+    | undefined = undefined;  
 
   get currentGroupName() {
     return this._currentGroup?.groupName;
@@ -57,6 +60,10 @@ class GroupFiSDKFacade {
 
   get currentGroupId() {
     return this._currentGroup?.groupId;
+  }
+
+  checkIsChainSupported(nodeId: number) {
+    return SUPPORTED_CHAIN_ID_LIST.includes(nodeId)
   }
 
   getObjectId(obj: Record<string, SimpleDataExtended>) {
@@ -175,9 +182,10 @@ class GroupFiSDKFacade {
     callback: (message: EventItemFromFacade) => void
   ): () => void {
     this._ensureWalletConnected();
-    if (!this._mqttConnected) {
-      throw new Error('MQTT not connected');
-    }
+    this._ensureMqttConnected();
+    // if (!this._mqttConnected) {
+    //   throw new Error('MQTT not connected');
+    // }
     // log listenningNewEventItem
     console.log('***Enter listenningNewEventItem');
     const listener = async (pushed: PushedValue) => {
@@ -196,11 +204,19 @@ class GroupFiSDKFacade {
     return () => IotaCatSDKObj.off('inbox', listener);
   }
 
+  // async setupMqttConnection(connect: any) {
+  //   IotaCatSDKObj.setupMqttConnection(connect);
+  //   IotaCatSDKObj.switchMqttAddress(this._address!);
+  //   // log switchMqttAddress
+  //   console.log('switchMqttAddress', this._address);
+  //   this._mqttConnected = true;
+  // }
+
   async setupMqttConnection(connect: any) {
     IotaCatSDKObj.setupMqttConnection(connect);
-    IotaCatSDKObj.switchMqttAddress(this._address!);
-    // log switchMqttAddress
-    console.log('switchMqttAddress', this._address);
+    // IotaCatSDKObj.switchMqttAddress(this._address!);
+    // // log switchMqttAddress
+    // console.log('switchMqttAddress', this._address);
     this._mqttConnected = true;
   }
 
@@ -238,15 +254,21 @@ class GroupFiSDKFacade {
 
   async _onAccountChanged({
     address: newAddress,
+    nodeId,
   }: {
     address: string;
     nodeId: number;
   }) {
     this._address = newAddress;
-    this._muteMap = undefined;
-    await this.fetchAddressQualifiedGroupConfigs({});
-    IotaCatSDKObj.switchMqttAddress(newAddress);
-    this._client!.switchAddress(this._address!);
+    this.clearAddress();
+
+    await this.initialAddress(nodeId);
+
+    // this._address = newAddress;
+    // this._muteMap = undefined;
+    // await this.fetchAddressQualifiedGroupConfigs({});
+    // IotaCatSDKObj.switchMqttAddress(newAddress);
+    // this._client!.switchAddress(this._address!);
   }
 
   async fetchMessageOutputList(
@@ -261,7 +283,7 @@ class GroupFiSDKFacade {
   }
 
   // processOneMessage
-  processOneMessage(item: MessageResponseItem):boolean {
+  processOneMessage(item: MessageResponseItem): boolean {
     const pipe = this._client!.getOutputIdToMessagePipe();
     const res = pipe.write({
       outputId: item.outputId,
@@ -271,10 +293,14 @@ class GroupFiSDKFacade {
     return res;
   }
   // registerMessageCallback
-  registerMessageCallback(callback: (param:{message:IMessage,outputId:string}) => void) {
-    const listener = (param: {message:IMessage,outputId:string}|undefined) => {
-      if (param){
-      callback(param);
+  registerMessageCallback(
+    callback: (param: { message: IMessage; outputId: string }) => void
+  ) {
+    const listener = (
+      param: { message: IMessage; outputId: string } | undefined
+    ) => {
+      if (param) {
+        callback(param);
       }
     };
     const pipe = this._client!.getOutputIdToMessagePipe();
@@ -308,6 +334,29 @@ class GroupFiSDKFacade {
         }
       : undefined;
     return message! as IMessage;
+  }
+  // prepareRemainderHint
+  async prepareRemainderHint() {
+    this._ensureWalletConnected();
+    const res = await this._client!.prepareRemainderHint();
+    return res;
+  }
+  // enablePreparedRemainderHint
+  enablePreparedRemainderHint() {
+    this._ensureWalletConnected();
+    const res = this._client!.enablePrepareRemainderHint();
+    return res;
+  }
+  // disablePreparedRemainderHint
+  disablePreparedRemainderHint() {
+    this._ensureWalletConnected();
+    const res = this._client!.disablePrepareRemainderHint();
+    return res;
+  }
+  async preloadGroupSaltCache(groupId: string, memberList?: { addr: string; publicKey: string }[]) {
+    this._ensureWalletConnected();
+    const res = await this._client!.preloadGroupSaltCache(this._address!,groupId, memberList);
+    return res;
   }
   async fullfillMessageLiteList(
     list: MessageResponseItem[]
@@ -402,9 +451,7 @@ class GroupFiSDKFacade {
     return { itemList: fulfilledMessageList, nextToken: token };
   }
 
-  async mintNicknameNFT(
-    name: string
-  ): Promise<{
+  async mintNicknameNFT(name: string): Promise<{
     result: boolean;
     blockId?: string;
     errCode?: number;
@@ -435,7 +482,7 @@ class GroupFiSDKFacade {
   }
 
   async fetchAddressNames(addressList: string[]) {
-    return await IotaCatSDKObj.fetchAddressNames(addressList)
+    return await IotaCatSDKObj.fetchAddressNames(addressList);
   }
 
   async checkIfhasOneNicknameNft() {
@@ -444,7 +491,7 @@ class GroupFiSDKFacade {
   }
 
   async hasUnclaimedNameNFT() {
-    return await this._client!.hasUnclaimedNameNFT(this._address!)
+    return await this._client!.hasUnclaimedNameNFT(this._address!);
   }
 
   // get smr balance
@@ -501,6 +548,11 @@ class GroupFiSDKFacade {
     }
   }
 
+  _ensureMqttConnected() {
+    if (!this._mqttConnected) {
+      throw new Error('MQTT not connected');
+    }
+  }
   
   // TODO: It's temporary, it will be adjusted later.
   async getRecommendGroups({
@@ -553,12 +605,30 @@ class GroupFiSDKFacade {
   async bootstrap() {
     this._client = new GroupfiSdkClient();
     const res = await this.waitWalletReadyAndConnectWallet();
-    await Promise.all([
-      this.fetchAddressQualifiedGroupConfigs({}),
-      this._client!.setup(),
-    ]);
-    this._client!.switchAddress(this._address!);
+    await this._client!.setup();
+    // await Promise.all([
+    //   this.fetchAddressQualifiedGroupConfigs({}),
+    //   this._client!.setup(),
+    // ]);
+    // this._client!.switchAddress(this._address!);
+
+    await this.initialAddress(res.nodeId);
     return res;
+  }
+
+  async initialAddress(nodeId: number) {
+    this._ensureWalletConnected();
+    this._ensureMqttConnected();
+
+    if (this.checkIsChainSupported(nodeId)) {
+      IotaCatSDKObj.switchMqttAddress(this._address!);
+      await this.fetchAddressQualifiedGroupConfigs({});
+      this._client!.switchAddress(this._address!);
+    }
+  }
+
+  clearAddress() {
+    this._muteMap = undefined;
   }
 
   async waitWalletReadyAndConnectWallet(): Promise<{
@@ -593,7 +663,12 @@ class GroupFiSDKFacade {
           });
         }
       };
-      IotaSDK._events.on('iota-ready', listener);
+      // TanglePay is ready
+      if(IotaSDK.isTanglePay && IotaSDK.tanglePayVersion !== '') {
+        listener()
+      }else {
+        IotaSDK._events.on('iota-ready', listener);
+      }
     });
   }
 
