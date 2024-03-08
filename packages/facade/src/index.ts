@@ -846,8 +846,8 @@ class GroupFiSDKFacade {
     );
     const groups = groupIds.map((groupId) => ({
       groupId,
-      groupName: this.groupIdToGroupName(groupId) ?? 'unknown',
-    }));
+      groupName: this.groupIdToGroupName(groupId),
+    })).filter(({groupName}) => groupName !== undefined )
     return groups;
   }
 
