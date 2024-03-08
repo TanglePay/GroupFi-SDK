@@ -848,7 +848,7 @@ class GroupFiSDKFacade {
       groupId,
       groupName: this.groupIdToGroupName(groupId),
     })).filter(({groupName}) => groupName !== undefined )
-    return groups;
+    return groups as {groupId: string; groupName: string;}[]
   }
 
   groupNameToGroupId(groupName: string) {
