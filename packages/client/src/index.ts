@@ -164,6 +164,13 @@ const nodes = [
 ]
 export const SharedNotFoundLaterRecoveredMessageKey = 'SharedNotFoundLaterRecovered'
 type Constructor<T> = new () => T;
+
+interface IPrivateKeyRelatedStrategy {
+    getAesKeyFromGroupSharedPayloadAndAddress({payload,address}:{payload:Uint8Array,address:string}):Promise<string|undefined>;
+    makePayloadForGroupSharedWhichContainsAesKeyForEachAddress({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{payload:Uint8Array,aesKey:string}>;
+    signThenSendTransaction({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<string>;
+}
+
 export class GroupfiSdkClient {
     _curNode?:Network;
     _client?: SingleNodeClient;
@@ -189,6 +196,8 @@ export class GroupfiSdkClient {
     _lastSendTimestamp:number = 0
     _remainderHintOutdatedTimeperiod = 35 * 1000
     switchAddress(bech32Address:string){
+        //TODO handle evm address
+        this._strategy = this._makeTPWalletAndShimmerChainStrategy()
         this._accountBech32Address = bech32Address
         const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
         if (!res) throw new Error('Invalid bech32 address')
@@ -199,6 +208,7 @@ export class GroupfiSdkClient {
         this._lastSendTimestamp = 0;
     }
     _queuePromise:Promise<any>|undefined;
+    _strategy:IPrivateKeyRelatedStrategy|undefined;
     async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
         if (this._curNode) return
         // @ts-ignore
@@ -526,10 +536,7 @@ export class GroupfiSdkClient {
         return {salt, outputId,output,isHA}
     }
     // get recipients from shared output
-    _getRecipientsFromSharedOutput(sharedOutput:IBasicOutput):IMRecipient[]{
-        const metaFeature = sharedOutput.features?.find((feature)=>feature.type == 2) as IMetadataFeature
-        if (!metaFeature) throw new Error('Metadata feature not found')
-        const bytes = Converter.hexToBytes(metaFeature.data)
+    _getRecipientsFromSharedOutputPayload(bytes:Uint8Array):IMRecipient[]{
         const recipients = IotaCatSDKObj.deserializeRecipientList(bytes)
         return recipients
     }
@@ -593,22 +600,36 @@ export class GroupfiSdkClient {
             this._isProcessingSharedNotFoundRecoveringMessage = false
         }
     }
+    
     async _getSaltFromSharedOutput({sharedOutputId, sharedOutput,address,isHA=false,groupId,memberList}:{sharedOutputId?:string,sharedOutput?:IBasicOutput, address:string,isHA?:boolean,groupId?:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{salt:string,output?:IBasicOutput}>{
-        let idx = -1
-        let recipients:IMRecipient[]|undefined
+        let salt
         if (sharedOutput) {
-            recipients = this._getRecipientsFromSharedOutput(sharedOutput)
-            idx = this._checkIfAddressInRecipient(address,recipients)
-            console.log('recipients', recipients);        
+            const metaFeature = sharedOutput.features?.find((feature)=>feature.type == 2) as IMetadataFeature
+            if (!metaFeature) throw new Error('Metadata feature not found')
+            const bytes = Converter.hexToBytes(metaFeature.data)
+            salt = await this._strategy!.getAesKeyFromGroupSharedPayloadAndAddress({payload:bytes,address})
         }
-        if (idx === -1) {
-            if (isHA && groupId) {
-                const {output,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
-                return {salt,output}
-            } else {
-                throw new Error('Address not found in shared output')
-            }
+        if (salt === undefined && isHA && groupId) {
+            const {output,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
+            return {salt,output}
+        } 
+        if (salt === undefined) {
+            throw new Error('Salt not found')
         } else {
+            // successfully got salt from shared output, cache it
+            if (sharedOutputId) {
+                this._setSharedIdAndSaltToCache(sharedOutputId,salt)
+            }
+            return {salt}
+        }
+    }
+    _makeTPWalletAndShimmerChainStrategy():IPrivateKeyRelatedStrategy{
+        const getAesKeyFromGroupSharedPayloadAndAddress = async ({payload,address}:{payload:Uint8Array,address:string})=>{
+            let idx = -1
+            let recipients:IMRecipient[]|undefined
+            recipients = this._getRecipientsFromSharedOutputPayload(payload)
+            idx = this._checkIfAddressInRecipient(address,recipients)
+            if (idx === -1) return
             // move idx recipient to first, and prepare ephemeral public key at start, adjust idx to 0
             let recipientPayload:Uint8Array
             const first = recipients![0]
@@ -622,13 +643,29 @@ export class GroupfiSdkClient {
             }
             const recipientPayloadUrl = createBlobURLFromUint8Array(recipientPayload)
             const salt = await this._decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl)
-            if (!salt) throw new Error('Salt not found')
-            // successfully got salt from shared output, cache it
-            if (sharedOutputId) {
-                this._setSharedIdAndSaltToCache(sharedOutputId,salt)
-            }
-            return {salt}
+            return salt
         }
+        const makePayloadForGroupSharedWhichContainsAesKeyForEachAddress = async ({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{payload:Uint8Array,aesKey:string}>=>{
+            let recipients
+            if (memberList) {
+                recipients = memberList.map((member)=>({addr:member.addr,mkey:member.publicKey}))
+            } else {
+                const memberRes = await IotaCatSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
+                recipients = memberRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
+            }
+    
+            console.log('_makeSharedOutputForGroup recipients', recipients);
+            const salt = IotaCatSDKObj._generateRandomStr(32)
+            const payloadList:EncryptingPayload[] = recipients.map((pair)=>({addr:pair.addr,publicKey:Converter.hexToBytes(pair.mkey), content:salt}))
+    
+            const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
+            const preparedRecipients:IMRecipient[] = encryptedPayloadList.map((payload)=>({addr:payload.addr,mkey:Converter.bytesToHex(payload.payload)}))
+            console.log('preparedRecipients', preparedRecipients,preparedRecipients.map(r => ({addr:IotaCatSDKObj.getAddressHashStr(r.addr),mkey:r.mkey})));
+            const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId)
+            return {payload:pl,aesKey:salt}
+        }
+        const signThenSendTransaction = this._signAndSendTransactionEssence.bind(this)
+        return {getAesKeyFromGroupSharedPayloadAndAddress,makePayloadForGroupSharedWhichContainsAesKeyForEachAddress,signThenSendTransaction}
     }
     async _getSaltFromSharedOutputId(outputId:string, address:string):Promise<{salt:string}>{
         
@@ -704,22 +741,7 @@ export class GroupfiSdkClient {
         
     }
     async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput,salt:string}>{
-        let recipients
-        if (memberList) {
-            recipients = memberList.map((member)=>({addr:member.addr,mkey:member.publicKey}))
-        } else {
-            const memberRes = await IotaCatSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
-            recipients = memberRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
-        }
-
-        console.log('_makeSharedOutputForGroup recipients', recipients);
-        const salt = IotaCatSDKObj._generateRandomStr(32)
-        const payloadList:EncryptingPayload[] = recipients.map((pair)=>({addr:pair.addr,publicKey:Converter.hexToBytes(pair.mkey), content:salt}))
-
-        const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
-        const preparedRecipients:IMRecipient[] = encryptedPayloadList.map((payload)=>({addr:payload.addr,mkey:Converter.bytesToHex(payload.payload)}))
-        console.log('preparedRecipients', preparedRecipients,preparedRecipients.map(r => ({addr:IotaCatSDKObj.getAddressHashStr(r.addr),mkey:r.mkey})));
-        const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId)
+        const {payload:pl,aesKey:salt} = await this._strategy!.makePayloadForGroupSharedWhichContainsAesKeyForEachAddress({groupId,memberList})
         const tagFeature: ITagFeature = {
             type: 3,
             tag: `0x${Converter.utf8ToHex(IOTACATSHAREDTAG)}`
@@ -1543,7 +1565,7 @@ export class GroupfiSdkClient {
             const {outputId,output} = basicOutputWrapper
             inputsOutputMap[outputId] = output
         }
-        const res = await this._signAndSendTransactionEssence({transactionEssence})
+        const res = await this._strategy!.signThenSendTransaction({transactionEssence})
         return res
     }
     // sendAnyOneOutputToSelf
