@@ -165,7 +165,7 @@ const nodes = [
 export const SharedNotFoundLaterRecoveredMessageKey = 'SharedNotFoundLaterRecovered'
 type Constructor<T> = new () => T;
 
-interface IPrivateKeyRelatedStrategy {
+interface IWalletRelatedStrategy {
     getAesKeyFromGroupSharedPayloadAndAddress({payload,address}:{payload:Uint8Array,address:string}):Promise<string|undefined>;
     makePayloadForGroupSharedWhichContainsAesKeyForEachAddress({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{payload:Uint8Array,aesKey:string}>;
     signThenSendTransaction({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<string>;
@@ -208,7 +208,7 @@ export class GroupfiSdkClient {
         this._lastSendTimestamp = 0;
     }
     _queuePromise:Promise<any>|undefined;
-    _strategy:IPrivateKeyRelatedStrategy|undefined;
+    _strategy:IWalletRelatedStrategy|undefined;
     async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
         if (this._curNode) return
         // @ts-ignore
@@ -623,7 +623,7 @@ export class GroupfiSdkClient {
             return {salt}
         }
     }
-    _makeTPWalletAndShimmerChainStrategy():IPrivateKeyRelatedStrategy{
+    _makeTPWalletAndShimmerChainStrategy():IWalletRelatedStrategy{
         const getAesKeyFromGroupSharedPayloadAndAddress = async ({payload,address}:{payload:Uint8Array,address:string})=>{
             let idx = -1
             let recipients:IMRecipient[]|undefined
