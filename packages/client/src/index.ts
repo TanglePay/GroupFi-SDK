@@ -114,6 +114,18 @@ type InboxItemResponse = {
     items:EventItem[]
     token:string
 }
+/*
+type PublicItemsResponse struct {
+	Items      []MessageResponseItem `json:"items"`
+	StartToken string             `json:"startToken"`
+	EndToken   string             `json:"endToken"`
+}
+*/
+type PublicItemsResponse = {
+    items:MessageResponseItem[]
+    startToken:string
+    endToken:string
+}
 export type MessageBody = {
     type: typeof ImInboxEventTypeNewMessage,
     sender:string,

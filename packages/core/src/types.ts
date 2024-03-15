@@ -193,7 +193,11 @@ export type MessageResponseItem = {
     outputId: string;
     timestamp: number;
 }
-
+export type PublicItemsResponse = {
+    items:MessageResponseItem[]
+    startToken:string
+    endToken:string
+}
 export const GROUPFICASHTAG = 'GROUPFICASH'
 
 // tags that can not be used by user
