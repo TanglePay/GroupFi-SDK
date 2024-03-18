@@ -206,9 +206,9 @@ class IotaCatSDK {
     }
 
     // fetch publicitems output list
-    async fetchPublicMessageOutputList(groupId:string, startToken?:string, endToken?:string, size:number=10) {
+    async fetchPublicMessageOutputList(groupId:string, direction:'head'|'tail', startToken?:string, endToken?:string, size:number=10) {
         try {
-            const params = {groupId:`${groupId}`,size,startToken,endToken}
+            const params = {groupId,direction, size,startToken,endToken}
             const paramStr = formatUrlParams(params)
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/publicitems${paramStr}`
             const res = await fetch(url)

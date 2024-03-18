@@ -327,6 +327,7 @@ class GroupFiSDKFacade {
       ? {
           type: ImInboxEventTypeNewMessage,
           sender: res.sender,
+          token: item.token,
           message: res.message.data,
           messageId: res.messageId,
           timestamp: res.message.timestamp,
@@ -991,6 +992,24 @@ class GroupFiSDKFacade {
       (await this._client!.getAllUserMuteGroupMembers()) as IMUserMuteGroupMember[];
     this._lastTimeSdkRequestResultReceived = Date.now();
     return AllUserMuteGroupMembers;
+  }
+  // call async fetchPublicMessageOutputList(groupId:string, startToken?:string, endToken?:string, size:number=10) {
+  async fetchPublicMessageOutputList(
+    groupId: string,
+    direction: 'head' | 'tail',
+    startToken?: string,
+    endToken?: string,
+    size = 10
+  ) {
+    this._ensureWalletConnected();
+    const res = await IotaCatSDKObj.fetchPublicMessageOutputList(
+      groupId,
+      direction,
+      startToken,
+      endToken,
+      size
+    );
+    return res;
   }
 }
 
