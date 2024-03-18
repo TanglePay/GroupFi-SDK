@@ -287,6 +287,7 @@ class GroupFiSDKFacade {
     const pipe = this._client!.getOutputIdToMessagePipe();
     const res = pipe.write({
       outputId: item.outputId,
+      token: item.token,
       address: this._address!,
       type: 1,
     });

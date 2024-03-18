@@ -294,9 +294,9 @@ export class GroupfiSdkClient {
     }
 
 
-    _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
+    _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
     _makeOutputIdToMessagePipe(){
-        const processor = async ({outputId,address,type}:{outputId:string,address:string,type:number})=>{
+        const processor = async ({outputId,token,address,type}:{outputId:string,address:string,type:number,token:string})=>{
             const res = await this.getMessageFromOutputId({outputId,address,type})
             const message = res
             ? {
@@ -306,6 +306,7 @@ export class GroupfiSdkClient {
                 messageId: res.messageId,
                 timestamp: res.message.timestamp,
                 groupId: res.message.groupId,
+                token
                 }
             : undefined;
             return {message,outputId}

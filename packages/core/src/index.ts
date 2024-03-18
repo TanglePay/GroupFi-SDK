@@ -60,7 +60,8 @@ class IotaCatSDK {
         const groupId = CryptoJS.SHA256(JSON.stringify(sortedMap)).toString(CryptoJS.enc.Hex)
         return groupId
     }
-    _addHexPrefixIfAbsent(hex:string){
+    _addHexPrefixIfAbsent(hex:string|undefined){
+        if (!hex) return hex
         if (hex.indexOf('0x') === 0) return hex
         return '0x'+hex
     }
@@ -208,7 +209,10 @@ class IotaCatSDK {
     // fetch publicitems output list
     async fetchPublicMessageOutputList(groupId:string, direction:'head'|'tail', startToken?:string, endToken?:string, size:number=10) {
         try {
-            const params = {groupId,direction, size,startToken,endToken}
+            const params = {groupId:this._addHexPrefixIfAbsent(groupId),direction, size,
+                startToken: this._addHexPrefixIfAbsent(startToken),
+                endToken: this._addHexPrefixIfAbsent(endToken)
+            }
             const paramStr = formatUrlParams(params)
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/publicitems${paramStr}`
             const res = await fetch(url)
