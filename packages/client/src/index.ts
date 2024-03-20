@@ -1197,16 +1197,16 @@ export class GroupfiSdkClient {
     // set shared id and salt to cache
     _setSharedIdAndSaltToCache(rawSharedId:string,salt:string){
         const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
-        this._sharedSaltCache[sharedId] = salt
+        this._sharedSaltCache[sharedId!] = salt
     }
     // get shared id and salt from cache
     _getSharedIdAndSaltFromCache(rawSharedId:string){
         const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
-        const cachedValue = this._sharedSaltCache[sharedId]
+        const cachedValue = this._sharedSaltCache[sharedId!]
         // log cache hit or miss
         if (cachedValue) {
             console.log('salt cache hit', sharedId);
-        } else if (this._sharedSaltFailedCache.has(sharedId)) {
+        } else if (this._sharedSaltFailedCache.has(sharedId!)) {
             // log salt failed cache hit
             console.log('salt failed cache hit', sharedId);
             // TODO error type?

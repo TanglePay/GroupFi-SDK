@@ -333,9 +333,12 @@ class IotaCatSDK {
         const json = await res.json()
         return json
     }
+    _gid(groupId:string){
+        return this._addHexPrefixIfAbsent(groupId)
+    }
     // get shared output for a group
     async checkIsGroupPublicFromSharedApiCall(groupId:string):Promise<boolean>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${this._gid(groupId)}`
             try {
                 // @ts-ignore
                 const res = await fetch(url,{
