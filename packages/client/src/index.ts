@@ -200,6 +200,7 @@ export class GroupfiSdkClient {
     _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
     _lastSendTimestamp:number = 0
     _remainderHintOutdatedTimeperiod = 35 * 1000
+
     switchAddress(bech32Address:string){
         this._accountBech32Address = bech32Address
         const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
@@ -210,6 +211,7 @@ export class GroupfiSdkClient {
         this._remainderHintSet = []
         this._lastSendTimestamp = 0;
     }
+    
     _queuePromise:Promise<any>|undefined;
     async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
         if (this._curNode) return
@@ -1992,5 +1994,18 @@ export class GroupfiSdkClient {
         const newCall = () => IotaSDK.request(args)
         this._queuePromise = this._queuePromise!.then(newCall, newCall)
         return this._queuePromise
+    }
+
+    async createSMRProxyAccount(EVMAddr: string) {
+        const SMRAddress = await this._sdkRequest({
+            method: 'iota_im_create_smr_proxy_account',
+            params: {
+                content: {
+                    addr: EVMAddr,
+                    nodeUrlHint:this._curNode!.apiUrl
+                },
+            },
+        })
+        return SMRAddress
     }
 }

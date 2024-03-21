@@ -36,8 +36,9 @@ export interface RecommendGroup {
   qualifyType: string;
 }
 
-const SHIMMER_MAINNET_ID = 102
-const SUPPORTED_CHAIN_ID_LIST = [SHIMMER_MAINNET_ID]
+const TP_SHIMMER_MAINNET_ID = 102
+const TP_EVM_CHAIN_ID = 5
+const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID]
 
 class GroupFiSDKFacade {
   private _address: string | undefined;
@@ -619,14 +620,46 @@ class GroupFiSDKFacade {
   }
 
   async initialAddress(nodeId: number) {
+    console.log('===> Enter initialAddress')
     this._ensureWalletConnected();
     this._ensureMqttConnected();
 
     if (this.checkIsChainSupported(nodeId)) {
-      IotaCatSDKObj.switchMqttAddress(this._address!);
-      await this.fetchAddressQualifiedGroupConfigs({});
-      this._client!.switchAddress(this._address!);
+
+      if (nodeId === TP_SHIMMER_MAINNET_ID) {
+        IotaCatSDKObj.switchMqttAddress(this._address!);
+        await this.fetchAddressQualifiedGroupConfigs({});
+        this._client!.switchAddress(this._address!);
+      }
+
+      if (nodeId === TP_EVM_CHAIN_ID) {
+        
+      }
+
+      // if (nodeId === TP_EVM_CHAIN_ID) {
+      //   // if EVM account
+      //   // 1. Create smr proxy account
+      //   const proxyAddress = await this.createSMRProxyAccount()
+
+      //   // 用 EVM 地址来获取群的关系
+      //   // 1. 监听哪些群
+      //   // IotaCatSDKObj.switchMqttAddress(proxyAddress)
+      //   // 2. 符合资格的群有哪些
+      //   // await this.fetchAddressQualifiedGroupConfigs({})
+
+      //   // 2. 用 SMR proxy address 来做各种操作
+      //   this._client!.switchAddress(proxyAddress)
+        
+      // } else {
+      //   IotaCatSDKObj.switchMqttAddress(this._address!);
+      //   await this.fetchAddressQualifiedGroupConfigs({});
+      //   this._client!.switchAddress(this._address!);
+      // }
     }
+  }
+
+  async createSMRProxyAccount() {
+    return await this._client!.createSMRProxyAccount(this._address!)
   }
 
   clearAddress() {
