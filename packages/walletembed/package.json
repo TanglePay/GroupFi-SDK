@@ -37,6 +37,8 @@
   },
   "homepage": "https://github.com/TanglePay/TanglePay-SDK#readme",
   "dependencies": {
+    "@ethereumjs/util": "^9.0.3",
+    "@ethereumjs/wallet": "^2.0.3",
     "@iota/crypto.js": "2.0.0-rc.2",
     "@iota/iota.js": "2.0.0-rc.4",
     "@iota/pow-browser.js": "2.0.0-rc.3",
