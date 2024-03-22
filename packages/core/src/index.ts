@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -61,6 +61,7 @@ class IotaCatSDK {
         return groupId
     }
     _addHexPrefixIfAbsent(hex:string){
+        // if (!hex) return hex
         if (hex.indexOf('0x') === 0) return hex
         return '0x'+hex
     }
@@ -205,6 +206,22 @@ class IotaCatSDK {
         }
     }
 
+    // fetch publicitems output list
+    async fetchPublicMessageOutputList(groupId:string, direction:'head'|'tail', startToken?:string, endToken?:string, size:number=10) {
+        try {
+            const params = {groupId:this._addHexPrefixIfAbsent(groupId),direction, size,
+                startToken: startToken && this._addHexPrefixIfAbsent(startToken),
+                endToken: endToken && this._addHexPrefixIfAbsent(endToken)
+            }
+            const paramStr = formatUrlParams(params)
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/publicitems${paramStr}`
+            const res = await fetch(url)
+            const data = await res.json() as PublicItemsResponse
+            return data
+        } catch (error) {
+            console.log('error',error)
+        }
+    }
     async fetchIpfsOrigins(address:string):Promise<string[]>{
         const url = `${NFT_CONFIG_URL}/nft.json?v=${new Date().getTime()}`
         const res = await fetch(url)
@@ -316,9 +333,12 @@ class IotaCatSDK {
         const json = await res.json()
         return json
     }
+    _gid(groupId:string){
+        return this._addHexPrefixIfAbsent(groupId)
+    }
     // get shared output for a group
     async checkIsGroupPublicFromSharedApiCall(groupId:string):Promise<boolean>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${this._gid(groupId)}`
             try {
                 // @ts-ignore
                 const res = await fetch(url,{

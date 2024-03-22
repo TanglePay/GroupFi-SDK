@@ -89,6 +89,12 @@ export interface MessageGroupMeta {
 }
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
 export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, address:string}
+export type EventGroupUpdateMinMaxToken = {
+    type: typeof DomainGroupUpdateMinMaxToken
+    groupId:string
+    min?:string
+    max?:string
+}
 export type PushedValue = PushedNewMessage | EventGroupMemberChanged
 export type MessageGroupMetaKey = keyof MessageGroupMeta
 export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain
@@ -140,7 +146,7 @@ export class UserDoesNotHasEnoughTokenError extends Error {
          }
     }
 }
-export type IMessage = {type:typeof ImInboxEventTypeNewMessage,messageId:string, groupId:string, sender:string, message:string, timestamp:number}
+export type IMessage = {type:typeof ImInboxEventTypeNewMessage,messageId:string, groupId:string, sender:string, message:string, timestamp:number,token?:string}
 export type EventItemFromFacade = EventGroupMemberChanged | IMessage
 export interface IGroupFiSDK {
     bootstrap(): Promise<void>;
@@ -180,6 +186,7 @@ const (
 */
 export const ImInboxEventTypeNewMessage = 1
 export const ImInboxEventTypeGroupMemberChanged = 2
+export const DomainGroupUpdateMinMaxToken = 3
 
 export type InboxItemResponse = {
     items:EventItem[]
@@ -191,9 +198,14 @@ export type EventItem = MessageResponseItem | EventGroupMemberChanged
 export type MessageResponseItem = {
     type: typeof ImInboxEventTypeNewMessage
     outputId: string;
+    token: string;
     timestamp: number;
 }
-
+export type PublicItemsResponse = {
+    items:MessageResponseItem[]
+    startToken:string
+    endToken:string
+}
 export const GROUPFICASHTAG = 'GROUPFICASH'
 
 // tags that can not be used by user

@@ -165,3 +165,18 @@ export async function retrieveUint8ArrayFromBlobURL(url:string):Promise<Uint8Arr
 export function releaseBlobUrl(url:string) {
     URL.revokeObjectURL(url)
 }
+// compare two hex strings bytewise
+export function compareHex(a: string, b: string): number {
+    // use byte comparison
+    return compareBytes(hexToBytes(a), hexToBytes(b));
+}
+export function compareBytes(a: Uint8Array, b: Uint8Array): number {
+    const minLength = Math.min(a.length, b.length);
+    for (let i = 0; i < minLength; i++) {
+        if (a[i] < b[i]) return -1;
+        if (a[i] > b[i]) return 1;
+    }
+    if (a.length < b.length) return -1;
+    if (a.length > b.length) return 1;
+    return 0;
+}

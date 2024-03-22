@@ -114,6 +114,18 @@ type InboxItemResponse = {
     items:EventItem[]
     token:string
 }
+/*
+type PublicItemsResponse struct {
+	Items      []MessageResponseItem `json:"items"`
+	StartToken string             `json:"startToken"`
+	EndToken   string             `json:"endToken"`
+}
+*/
+type PublicItemsResponse = {
+    items:MessageResponseItem[]
+    startToken:string
+    endToken:string
+}
 export type MessageBody = {
     type: typeof ImInboxEventTypeNewMessage,
     sender:string,
@@ -282,9 +294,9 @@ export class GroupfiSdkClient {
     }
 
 
-    _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
+    _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
     _makeOutputIdToMessagePipe(){
-        const processor = async ({outputId,address,type}:{outputId:string,address:string,type:number})=>{
+        const processor = async ({outputId,token,address,type}:{outputId:string,address:string,type:number,token:string})=>{
             const res = await this.getMessageFromOutputId({outputId,address,type})
             const message = res
             ? {
@@ -294,6 +306,7 @@ export class GroupfiSdkClient {
                 messageId: res.messageId,
                 timestamp: res.message.timestamp,
                 groupId: res.message.groupId,
+                token
                 }
             : undefined;
             return {message,outputId}
@@ -1184,16 +1197,16 @@ export class GroupfiSdkClient {
     // set shared id and salt to cache
     _setSharedIdAndSaltToCache(rawSharedId:string,salt:string){
         const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
-        this._sharedSaltCache[sharedId] = salt
+        this._sharedSaltCache[sharedId!] = salt
     }
     // get shared id and salt from cache
     _getSharedIdAndSaltFromCache(rawSharedId:string){
         const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
-        const cachedValue = this._sharedSaltCache[sharedId]
+        const cachedValue = this._sharedSaltCache[sharedId!]
         // log cache hit or miss
         if (cachedValue) {
             console.log('salt cache hit', sharedId);
-        } else if (this._sharedSaltFailedCache.has(sharedId)) {
+        } else if (this._sharedSaltFailedCache.has(sharedId!)) {
             // log salt failed cache hit
             console.log('salt failed cache hit', sharedId);
             // TODO error type?
