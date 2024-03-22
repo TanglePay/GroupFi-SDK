@@ -42,6 +42,8 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
 } from "iotacat-sdk-core";
 import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL} from 'iotacat-sdk-utils';
 
+import { hdkey, Wallet } from '@ethereumjs/wallet'
+
 //TODO tune concurrency
 const httpCallLimit = 5;
 const consolidateBatchSize = 29;
@@ -148,18 +150,94 @@ class GroupfiWalletEmbedded {
     _indexer?: IndexerPluginClient;
     _nodeInfo?: INodeInfo;
     _protocolInfo?: INodeInfoProtocol;
-    _baseSeed?: Ed25519Seed;
-    _walletKeyPair?: IKeyPair;
-    _accountHexAddress?:string;
-    _accountBech32Address?:string;
+    // _baseSeed?: Ed25519Seed;
+    // _walletKeyPair?: IKeyPair;
+    // _accountHexAddress?:string;
+    // _accountBech32Address?:string;
     _pubKeyCache?:LRUCache<string>;
     _storage?:StorageFacade;
-    _hexSeed?:string;
+    // _hexSeed?:string;
     _networkId?:string;
     _events:EventEmitter = new EventEmitter();
     //TODO simple cache
     _saltCache:Record<string,string> = {};
     _currentNodeUrl?:string;
+
+
+    _SMRAccount: {
+        _baseSeed?: Ed25519Seed;
+        _walletKeyPair?: IKeyPair;
+        _accountHexAddress?:string;
+        _accountBech32Address?:string;
+        _hexSeed?:string;
+    } = {}
+
+    _EVMAccount: {
+        _wallet?: Wallet,
+        _hexAddress?: string
+    } = {}
+
+    setEVMAccount(hexSeed: string, password: string, rawPath?: string) {
+        try {
+            let wallet: Wallet | undefined = undefined
+            // When An EVM account imported through a private key
+            // the hexSeed is composed of the private key and a password
+            let hexPassword = Converter.utf8ToHex(password, false)
+            if (hexPassword.length % 2) {
+                hexPassword += '0'
+            }
+            const regexp = new RegExp(hexPassword + '$')
+            if (regexp.test(hexPassword)) {
+                const hexPrivateKey = '0x' + hexSeed.replace(regexp, '')
+                const privateKeyBytes = Converter.hexToBytes(hexPrivateKey)
+                wallet = Wallet.fromPrivateKey(privateKeyBytes)
+            } else {
+                const uint8arr = Converter.hexToBytes(hexSeed)
+                const hdwallet = hdkey.EthereumHDKey.fromMasterSeed(uint8arr);
+                const path = rawPath ?? "m/44'/60'/0'/0/0" 
+                wallet = hdwallet.derivePath(path).getWallet();
+            }
+            console.log("setEVMAccount wallet", wallet)
+            this._EVMAccount._wallet = wallet
+            this._EVMAccount._hexAddress = wallet.getChecksumAddressString()
+            console.log('===> setEVMAccount _hexAddress', this._EVMAccount)
+        } catch(error) {
+            console.log('===>setEVMAccount error ', error)
+        }
+    }
+
+    createSMRProxyAccount(password: string) {
+        if (this._EVMAccount._wallet === undefined) {
+            throw new Error('Evm account wallet is undefined.')
+        }
+        // Generate SMR seed from EVM private key
+        const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
+        
+        // Set SMR account baseSeed
+        this._setSMRProxyAccount(smrBaseSeed)
+        
+        const hexSeed = Converter.bytesToHex(smrBaseSeed.toBytes())
+        return {
+            path: 0,
+            password,
+            address: this._SMRAccount._accountBech32Address,
+            seed: this.tpEncrypt(hexSeed, password),
+            publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true)
+        }
+    }
+
+    _setSMRProxyAccount(baseSeed: Ed25519Seed) {
+        this._SMRAccount._baseSeed = baseSeed
+        // Set SMR account additional info
+        const path = 0
+        this.switchAddressUsingPath(path)
+    }
+
+    async setSMRAccount(seed: string, rawPath?: number) {
+        await this.setHexSeed(seed)
+        this.switchAddressUsingPath(rawPath)
+    }
+
     async setup(nodeUrlHint?:string){
         if (this._currentNodeUrl && (!nodeUrlHint || nodeUrlHint === this._currentNodeUrl)) return
         if (!nodeUrlHint) {
@@ -192,21 +270,23 @@ class GroupfiWalletEmbedded {
         return domain
     }
     async setHexSeed(hexSeed:string){
+        const accountObj = this._SMRAccount
         this._ensureClientInited()
-        if (this._hexSeed == hexSeed) return
-        this._hexSeed = hexSeed
+        if (accountObj._hexSeed == hexSeed) return
+        accountObj._hexSeed = hexSeed
         const baseSeed = this._hexSeedToEd25519Seed(hexSeed);
-        this._baseSeed = baseSeed;
+        accountObj._baseSeed = baseSeed;
     }
     switchAddressUsingPath(rawPath?:number){
         const path = rawPath??0
-        this._walletKeyPair = this._getPair(this._baseSeed!,path)
-        const genesisEd25519Address = new Ed25519Address(this._walletKeyPair.publicKey);
+        const accountObj = this._SMRAccount
+        accountObj._walletKeyPair = this._getPair(accountObj._baseSeed!,path)
+        const genesisEd25519Address = new Ed25519Address(accountObj._walletKeyPair.publicKey);
         const genesisWalletAddress = genesisEd25519Address.toAddress();
-        this._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
-        this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
+        accountObj._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
+        accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
         // log path and hex address and bech32 address, in one line, start with 4 # symbols
-        console.log(`#### Wallet Index ${path} Hex Address ${this._accountHexAddress} Bech32 Address ${this._accountBech32Address}`)
+        console.log(`#### Wallet Index ${path} Hex Address ${accountObj._accountHexAddress} Bech32 Address ${accountObj._accountBech32Address}`)
     }
     
     _getPair(baseSeed:Ed25519Seed, idx:number){
@@ -229,7 +309,7 @@ class GroupfiWalletEmbedded {
         if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
     }
     _ensureWalletInited(){
-        if (!this._walletKeyPair) throw new Error('Wallet not initialized')
+        if (!this._SMRAccount._walletKeyPair) throw new Error('Wallet not initialized')
     }
     _ensureStorageInited(){
         if (!this._storage) throw new Error('Storage not initialized')
@@ -239,7 +319,7 @@ class GroupfiWalletEmbedded {
         
         const payload = await retrieveUint8ArrayFromBlobURL(recipientPayloadUrl);
         const list = [{payload}]
-        const decrypted = await decryptOneOfList({receiverSecret:this._walletKeyPair!.privateKey,
+        const decrypted = await decryptOneOfList({receiverSecret:this._SMRAccount._walletKeyPair!.privateKey,
             payloadList:list,tag,idx:0})
         let salt
         if(decrypted) {
@@ -254,9 +334,9 @@ class GroupfiWalletEmbedded {
         const address = addressUnlockCondition.address;
         if (!address || address.type !== ED25519_ADDRESS_TYPE) return false
         const ed25519Address = address as IEd25519Address;
-        if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._accountHexAddress) return true
+        if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._SMRAccount._accountHexAddress) return true
         // log not self unlock condition
-        console.log('Not self unlock condition',addressUnlockCondition,this._accountHexAddress)
+        console.log('Not self unlock condition',addressUnlockCondition,this._SMRAccount._accountHexAddress)
         return false
     }
     // check if transactionEssence is sending to self
@@ -406,8 +486,8 @@ class GroupfiWalletEmbedded {
             type: SIGNATURE_UNLOCK_TYPE,
             signature: {
                 type: ED25519_SIGNATURE_TYPE,
-                publicKey: Converter.bytesToHex(this._walletKeyPair!.publicKey, true),
-                signature: Converter.bytesToHex(Ed25519.sign(this._walletKeyPair!.privateKey, essenceHash), true)
+                publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true),
+                signature: Converter.bytesToHex(Ed25519.sign(this._SMRAccount._walletKeyPair!.privateKey, essenceHash), true)
             }
         };
         const referenceUnlockCondition: UnlockTypes = {
@@ -496,7 +576,17 @@ class GroupfiWalletEmbedded {
         const ivArray = CryptoJS.enc.Utf8.parse(iv)
         return [keyArray, ivArray]
     }
-    tpDecrypt(seed:string, password:string, forceV2 = false){
+    tpEncrypt(seed: string, password: string) {
+        const [key, iv] = this.tpGetKeyAndIvV2(password)
+        let srcs = CryptoJS.enc.Utf8.parse(seed)
+        let encrypted = CryptoJS.AES.encrypt(srcs, key, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+        })
+        return encrypted.ciphertext.toString().toUpperCase()
+    }
+    tpDecrypt(seed:string, password:string, nodeId: number, forceV2 = false){
         const V2_FLAG = 'TanglePayV2'
         const reg = new RegExp(`${V2_FLAG}$`)
         let isV2 = reg.test(seed) || forceV2 ? true : false
