@@ -209,6 +209,7 @@ export class GroupfiSdkClient {
         this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
         this._remainderHintSet = []
         this._lastSendTimestamp = 0;
+        this._sharedSaltCache = {}
     }
     _queuePromise:Promise<any>|undefined;
     async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
