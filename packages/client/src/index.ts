@@ -507,13 +507,32 @@ export class GroupfiSdkClient {
         this._ensureClientInited()
         try {
             const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+            let isMake = false
             if (!res) {
+                isMake = true    
+            } else {
+                const {outputId} = res
+                try {
+                    const output = await this._client!.output(outputId)
+                    if (!output) {
+                        isMake = true
+                    }
+                } catch (error) {
+                    if (error instanceof ClientError) {
+                        if (error.httpStatus === 404) {
+                            isMake = true
+                        }
+                    }
+                }
+            }
+            if (isMake) {
                 const res = await this._makeSharedOutputForGroup({groupId})
                 if (!res) return
                 const {output} = res
                 const {blockId,outputId} = await this._sendBasicOutput([output]);
                 return {outputId,output};
             }
+
         } catch (error) {
             if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                 console.log('GroupMemberTooMany,public for now', error);
