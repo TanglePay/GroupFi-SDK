@@ -295,22 +295,28 @@ export class GroupfiSdkClient {
     }
 
 
-    _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
+    _outputIdToMessagePipe?: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message?:IMessage,outputId:string,status:number}>;
     _makeOutputIdToMessagePipe(){
         const processor = async ({outputId,token,address,type}:{outputId:string,address:string,type:number,token:string})=>{
-            const res = await this.getMessageFromOutputId({outputId,address,type})
-            const message = res
-            ? {
-                type: ImInboxEventTypeNewMessage,
-                sender: res.sender,
-                message: res.message.data,
-                messageId: res.messageId,
-                timestamp: res.message.timestamp,
-                groupId: res.message.groupId,
-                token
-                }
-            : undefined;
-            return {message,outputId}
+            try {
+                const res = await this.getMessageFromOutputId({outputId,address,type})
+                const message = res
+                ? {
+                    type: ImInboxEventTypeNewMessage,
+                    sender: res.sender,
+                    message: res.message.data,
+                    messageId: res.messageId,
+                    timestamp: res.message.timestamp,
+                    groupId: res.message.groupId,
+                    token
+                    }
+                : undefined;
+                const status = message ? 0 : -1
+                return {message,outputId,status}
+            } catch (error) {
+                console.log('Error in pipe', error);
+                return {status:-1,outputId}
+            }
         }
         this._outputIdToMessagePipe = new ConcurrentPipe(processor, 12, 64, true)
     }
