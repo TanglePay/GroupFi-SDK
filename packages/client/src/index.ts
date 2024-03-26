@@ -563,9 +563,17 @@ export class GroupfiSdkClient {
         if (outputId) {
             const saltFromCache = this._getSharedIdAndSaltFromCache(outputId)
             if (saltFromCache) return {salt:saltFromCache,outputId,isHA:false}
-
-            const outputsResponse = await this._client!.output(outputId)
-            output = outputsResponse.output as IBasicOutput
+            try {
+                const outputsResponse = await this._client!.output(outputId)
+                output = outputsResponse.output as IBasicOutput
+            } catch (error) {
+                if (error instanceof ClientError) {
+                    if (error.httpStatus == 404) {
+                        const {output:outputCreated,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
+                        return {salt, outputId,output:outputCreated,isHA:true}
+                    }
+                }
+            }
         }
         const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutput:output, address,isHA:true,groupId,memberList})
         const isHA = !!outputUnwrapped
