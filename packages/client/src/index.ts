@@ -506,7 +506,11 @@ export class GroupfiSdkClient {
     async ensureGroupHaveSharedOutput(groupId:string){
         this._ensureClientInited()
         try {
+            // log entering
+            console.log('ensureGroupHaveSharedOutput', groupId);
             const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+            // log res
+            console.log('ensureGroupHaveSharedOutput InxApi res', res);
             let isMake = false
             if (!res) {
                 isMake = true    
@@ -514,6 +518,8 @@ export class GroupfiSdkClient {
                 const {outputId} = res
                 try {
                     const output = await this._client!.output(outputId)
+                    // log output
+                    console.log('ensureGroupHaveSharedOutput output', output);
                     if (!output) {
                         isMake = true
                     }
@@ -526,6 +532,8 @@ export class GroupfiSdkClient {
                 }
             }
             if (isMake) {
+                // log make shared output
+                console.log('ensureGroupHaveSharedOutput make shared output', groupId);
                 const res = await this._makeSharedOutputForGroup({groupId})
                 if (!res) return
                 const {output} = res
