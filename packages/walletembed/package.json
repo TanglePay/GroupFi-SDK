@@ -44,12 +44,15 @@
     "@iota/pow-browser.js": "2.0.0-rc.3",
     "@iota/pow-node.js": "2.0.0-rc.3",
     "@iota/util.js": "2.0.0-rc.2",
+    "@metamask/eth-sig-util": "^7.0.1",
     "big-integer": "^1.6.51",
     "crypto-js": "^4.1.1",
     "iotacat-sdk-core": "workspace:^",
     "iotacat-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",
-    "tanglepaysdk-client": "^0.1.10"
+    "tanglepaysdk-client": "^0.1.10",
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-util": "^0.15.1"
   },
   "devDependencies": {
     "@types/crypto-js": "^4.1.1"

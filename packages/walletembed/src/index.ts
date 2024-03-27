@@ -43,6 +43,9 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
 import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL} from 'iotacat-sdk-utils';
 
 import { hdkey, Wallet } from '@ethereumjs/wallet'
+import { hashPersonalMessage, ecsign, toRpcSig } from '@ethereumjs/util'
+import tweetnacl from 'tweetnacl'
+import naclUtil from 'tweetnacl-util'
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -365,6 +368,15 @@ class GroupfiWalletEmbedded {
                 const addressUnlockcondition = nftOutput.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
                 const isToSelf = this._isAddressUnlockConditionToSelf(addressUnlockcondition)
                 if (!isToSelf) return false;
+                // It is possible for NFT outputs to carry a "GROUPFI-" tag, such as the PairX nft output
+                const tagFeature = nftOutput.features?.find(feature=>feature.type === 3) as ITagFeature
+                if (tagFeature) {
+                    const tagUtf8 = Converter.hexToUtf8(tagFeature.tag)
+                    // if starts with GROUPFI
+                    if (tagUtf8.startsWith('GROUPFI')) {
+                        isHasGroupfiTag = true
+                    }
+                }
             } else {
                 return false
             }
@@ -422,8 +434,13 @@ class GroupfiWalletEmbedded {
                     const amount = token.amount
                     addToMap(outputsAssetMap,tokenId,amount)
                 }
-            } else {
-                throw new Error('outputs not basic output')
+            } else if(output.type === NFT_OUTPUT_TYPE) {
+                const nftOutput = output as INftOutput
+                const cashAmount = nftOutput.amount
+                addToMap(outputsAssetMap, cashKey, cashAmount)
+            }else {
+                // throw new Error('outputs not basic output')
+                throw new Error('outputs not basic output or nft output')
             }
         }
         // check inputs and outputs asset match
@@ -431,10 +448,12 @@ class GroupfiWalletEmbedded {
         return true
     }
     async signAndSendTransactionToSelf({transactionEssenceUrl}:{transactionEssenceUrl: string}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
+        console.log('===> Enter walletembed signAndSendTransactionToSelf')
         this._ensureClientInited()
         const payload = await retrieveUint8ArrayFromBlobURL(transactionEssenceUrl);
         const rs = new ReadStream(payload);
         const transactionEssence = deserializeTransactionEssence(rs)
+        console.log('===> Enter walletembed transactionEssence', transactionEssence)
         const isSendingToSelf = this._isTransactionEssenceSendingToSelf(transactionEssence)
         if (!isSendingToSelf) {
             // log
@@ -533,8 +552,6 @@ class GroupfiWalletEmbedded {
             throw e
         }
     }
-
-    
     
 
     getTransactionPayloadHash(transactionPayload:ITransactionPayload){
@@ -557,7 +574,39 @@ class GroupfiWalletEmbedded {
         return {transactionId,outputId:messageOutputId,remainderOutputId}
     }
 
+    getEthEncryptionPublicKey(): string | undefined {
+        if (this._EVMAccount._wallet === undefined) {
+            return undefined
+        }
+        const uint8arr = this._EVMAccount._wallet.getPrivateKey()
+        const encryptionPublicKey = tweetnacl.box.keyPair.fromSecretKey(uint8arr).publicKey
+        return naclUtil.encodeBase64(encryptionPublicKey);
+    }
 
+    EthPersonalSign(dataToBeSignedHex: string) {
+        const messageBytes = Converter.hexToBytes(dataToBeSignedHex)
+        const messageHash = hashPersonalMessage(messageBytes)
+        const signature = ecsign(messageHash, this._EVMAccount._wallet!.getPrivateKey())
+        const serializedSignature = toRpcSig(signature.v, signature.r, signature.s)
+        console.log('===> serializedSignature', serializedSignature)
+        return serializedSignature
+    }
+
+    // EthDecrypt(data: string) {
+    //     try {
+    //         const encryptedDataStr = Converter.hexToUtf8(data)
+    //         const encryptedData = JSON.parse(encryptedDataStr) as ethSigUtil.EthEncryptedData
+    //         const uint8arr = this._EVMAccount._wallet!.getPrivateKey()
+    //         const privateKeyStr = Converter.bytesToHex(uint8arr, false)
+    //         return ethSigUtil.decrypt({
+    //             encryptedData,
+    //             privateKey: privateKeyStr
+    //         })
+    //     }catch(error) {
+    //         console.log('EthDecrypt error:', error)
+    //         return undefined
+    //     }
+    // }
 
     tpGetKeyAndIvV2(password:string) {
         // @ts-ignore
@@ -577,6 +626,7 @@ class GroupfiWalletEmbedded {
         return [keyArray, ivArray]
     }
     tpEncrypt(seed: string, password: string) {
+        const V2_FLAG = 'TanglePayV2'
         const [key, iv] = this.tpGetKeyAndIvV2(password)
         let srcs = CryptoJS.enc.Utf8.parse(seed)
         let encrypted = CryptoJS.AES.encrypt(srcs, key, {
@@ -584,7 +634,7 @@ class GroupfiWalletEmbedded {
             mode: CryptoJS.mode.CBC,
             padding: CryptoJS.pad.Pkcs7
         })
-        return encrypted.ciphertext.toString().toUpperCase()
+        return encrypted.ciphertext.toString().toUpperCase() + V2_FLAG
     }
     tpDecrypt(seed:string, password:string, nodeId: number, forceV2 = false){
         const V2_FLAG = 'TanglePayV2'
