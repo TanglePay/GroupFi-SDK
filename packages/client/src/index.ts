@@ -580,7 +580,7 @@ export class GroupfiSdkClient {
         const isHA = !!outputUnwrapped
         output = outputUnwrapped || output
         // log get salt for group result
-        console.log(`_getSaltForGroup result groupId:${groupId}, address:${address}, salt:${salt}, isHA:${isHA} outputId:${outputId}`);
+        console.log(`_getSaltForGroup result groupId:${groupId}, address:${address}, isHA:${isHA} outputId:${outputId}`);
         return {salt, outputId,output,isHA}
     }
     // get recipients from shared output
