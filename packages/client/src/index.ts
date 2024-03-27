@@ -728,6 +728,8 @@ export class GroupfiSdkClient {
             console.log('cache miss fetch from network', outputId);
             const outputsResponse = await this._client!.output(outputId)
             const output = outputsResponse.output as IBasicOutput
+            // log
+            console.log('cache miss fetch from network,output fetched', output);
             const {salt} = await this._getSaltFromSharedOutput({sharedOutputId:outputId, sharedOutput:output, address, isHA:false})
             // check if in waiting cache
             const waiting = this._sharedSaltWaitingCache[outputId]
