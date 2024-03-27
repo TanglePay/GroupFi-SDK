@@ -619,6 +619,10 @@ class GroupFiSDKFacade {
     return res;
   }
 
+  async registerPairX() {
+    this._client!.registerPairX(this._address!)
+  }
+
   async initialAddress(nodeId: number) {
     console.log('===> Enter initialAddress')
     this._ensureWalletConnected();
@@ -659,7 +663,9 @@ class GroupFiSDKFacade {
   }
 
   async createSMRProxyAccount() {
-    return await this._client!.createSMRProxyAccount(this._address!)
+    const SMRAddress = await this._client!.createSMRProxyAccount(this._address!)
+    this._client!.switchAddress(SMRAddress)
+    return SMRAddress
   }
 
   clearAddress() {

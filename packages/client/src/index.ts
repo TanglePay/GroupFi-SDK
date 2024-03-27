@@ -27,7 +27,6 @@ import {
     IOutputResponse,
     REFERENCE_UNLOCK_TYPE,
     TIMELOCK_UNLOCK_CONDITION_TYPE,
-    INftOutput,
     OutputTypes,
     ClientError,
     IIssuerFeature,
@@ -35,7 +34,12 @@ import {
     IStateControllerAddressUnlockCondition,
     ITimelockUnlockCondition,
     IStorageDepositReturnUnlockCondition,
-    IOutputMetadataResponse
+    IOutputMetadataResponse,
+    INftOutput,
+    NFT_OUTPUT_TYPE,
+    ISSUER_FEATURE_TYPE,
+    METADATA_FEATURE_TYPE,
+    TAG_FEATURE_TYPE,
 } from "@iota/iota.js";
 import { Converter, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
@@ -44,11 +48,13 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserMarkedGroupId, serializeUserMarkedGroupIds, deserializeUserMarkedGroupIds,
     IMUserMuteGroupMember,serializeUserMuteGroupMembers, deserializeUserMuteGroupMembers,
     IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
-    GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG,
+    GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
     GROUPFICASHTAG
 } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes} from 'iotacat-sdk-utils';
 import IotaSDK from 'tanglepaysdk-client';
+
+import { EthEncrypt } from './evm'
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -74,6 +80,7 @@ import { createBlobURLFromUint8Array } from 'iotacat-sdk-utils';
 import { releaseBlobUrl } from 'iotacat-sdk-utils';
 import { ConcurrentPipe } from 'iotacat-sdk-utils';
 import { GROUPFIReservedTags } from 'iotacat-sdk-core';
+import { bytesToHex } from 'iotacat-sdk-utils';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -768,6 +775,7 @@ export class GroupfiSdkClient {
         };
        return {output:basicOutput,salt}
     } 
+    // seems not used in index.ts
     _getPair(baseSeed:Ed25519Seed){
         const addressGeneratorAccountState = {
             accountIndex: 0,
@@ -1143,7 +1151,7 @@ export class GroupfiSdkClient {
         const output = outputResponseWrapper.output.output as IBasicOutput
         return {outputId:outputResponseWrapper.outputId,output}
     }
-    _getAmount(output:IBasicOutput){
+    _getAmount(output:IBasicOutput | INftOutput){
         console.log('_getAmount', output, this._protocolInfo!.rentStructure)
         const deposit = TransactionHelper.getStorageDeposit(output, this._protocolInfo!.rentStructure)
         return bigInt(deposit)
@@ -1411,8 +1419,8 @@ export class GroupfiSdkClient {
         };
         return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs, [consolidatedBasicOutput])
     }
-    async _sendBasicOutput(basicOutputs:IBasicOutput[],extraOutputsToBeConsumed:BasicOutputWrapper[] = []){
-        const createdOutputs:IBasicOutput[] = []
+    async _sendBasicOutput(basicOutputs:(IBasicOutput | INftOutput)[],extraOutputsToBeConsumed:BasicOutputWrapper[] = []){
+        const createdOutputs:(IBasicOutput | INftOutput)[] = []
         let amountToSend = bigInt('0')
         for (const basicOutput of basicOutputs) {
             const amountToSend_ = this._getAmount(basicOutput)
@@ -1526,6 +1534,7 @@ export class GroupfiSdkClient {
     }
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
     async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:OutputWrapper[],createdOutputs:OutputTypes[]){
+        console.log('===>Enter _sendTransactionWithConsumedOutputsAndCreatedOutputs')
         this._ensureClientInited()
         this._ensureWalletInited()
         const inputArray:IUTXOInput[] = []
@@ -1956,11 +1965,12 @@ export class GroupfiSdkClient {
     
     async _signAndSendTransactionEssence({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         // log enter _signAndSendTransactionEssence
-        console.log('enter _signAndSendTransactionEssence');
+        console.log('===> enter _signAndSendTransactionEssence');
         const writeStream = new WriteStream();
         serializeTransactionEssence(writeStream, transactionEssence);
         const essenceFinal = writeStream.finalBytes();
         const transactionEssenceUrl = createBlobURLFromUint8Array(essenceFinal);
+        console.log('===>start iota_im_sign_and_send_transaction_to_self')
         const res = await this._sdkRequest({
             method: 'iota_im_sign_and_send_transaction_to_self',
             params: {
@@ -2008,4 +2018,119 @@ export class GroupfiSdkClient {
         })
         return SMRAddress
     }
+    async registerPairX(EVMAddress: string) {
+        try {
+            const mnemonic = Bip39.randomMnemonic(128);
+            const seed = Ed25519Seed.fromMnemonic(mnemonic);
+            const keyPair = this._getPair(seed);
+
+            const encryptionPublicKey = await this._sdkRequest({
+                method: 'iota_im_eth_get_encryption_public_key',
+                params: {
+                    content: {
+                        addr: EVMAddress
+                    }
+                }
+            })
+            
+            // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
+            // only the first 32 bytes can be encrypted
+            const first32BytesOfPrivateKeyHex = Converter.bytesToHex(keyPair.privateKey.slice(0, 32))
+            console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
+
+            const encryptedPrivateKeyHex = EthEncrypt({
+                publicKey: encryptionPublicKey,
+                dataTobeEncrypted: first32BytesOfPrivateKeyHex
+            })
+
+            console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
+    
+            const tagFeature: ITagFeature = {
+                type: 3,
+                tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
+            };
+
+            const metadataObj = {
+                encryptedPrivateKey: encryptedPrivateKeyHex,
+                pairXPublicKey: Converter.bytesToHex(keyPair.publicKey, true),
+                evmAddress: EVMAddress,
+                timestamp: getCurrentEpochInSeconds(),
+                // 1: tp  2: mm
+                scenery: 1
+            }
+            
+            console.log('===> metadataObj', metadataObj)
+
+            const dataTobeSignedStr = [
+                metadataObj.encryptedPrivateKey,
+                metadataObj.evmAddress,
+                metadataObj.pairXPublicKey,
+                metadataObj.scenery,
+                metadataObj.timestamp
+            ].join('')
+
+            console.log('===> dataToBeSignedStr', dataTobeSignedStr)
+
+            const signature = await this._sdkRequest({
+                method: 'iota_im_eth_personal_sign',
+                params: {
+                    content: {
+                        addr: EVMAddress,
+                        dataToBeSignedHex: Converter.utf8ToHex(dataTobeSignedStr, true)
+                    }
+                }
+            })
+
+            console.log('===> signature', signature)
+
+            const metadata = Converter.utf8ToHex(JSON.stringify({
+                ...metadataObj,
+                signature,
+            }), true)
+
+            console.log('===> metadata final', metadata)
+
+            const collectionOutput: INftOutput = {
+                type: NFT_OUTPUT_TYPE,
+                amount: '',
+                nativeTokens: [],
+                nftId:
+                  '0x0000000000000000000000000000000000000000000000000000000000000000',
+                unlockConditions: [
+                    {
+                        type: ADDRESS_UNLOCK_CONDITION_TYPE,
+                        address: {
+                            type: ED25519_ADDRESS_TYPE,
+                            pubKeyHash: this._accountHexAddress!
+                        }
+                    }
+                ],
+                features: [
+                    tagFeature
+                ],
+                immutableFeatures: [
+                  {
+                    type: ISSUER_FEATURE_TYPE,
+                    address: {
+                      type: ED25519_ADDRESS_TYPE,
+                      pubKeyHash: this._accountHexAddress!
+                    },
+                  },
+                  {
+                    type: METADATA_FEATURE_TYPE,
+                    data: metadata
+                  },
+                ],
+            };
+
+            console.log('===> collectionOutput', collectionOutput)
+            
+            const res = await this._sendBasicOutput([collectionOutput])
+            
+            console.log('===> registerPairX res', res)
+        }catch(error) {
+            console.log('====> registerPairX error', error)
+        }        
+    }
 }
+
