@@ -654,14 +654,14 @@ export class GroupfiSdkClient {
         if (sharedOutput) {
             recipients = this._getRecipientsFromSharedOutput(sharedOutput)
             idx = this._checkIfAddressInRecipient(address,recipients)
-            console.log('recipients', recipients);        
+            console.log('recipients', recipients, sharedOutputId);        
         }
         if (idx === -1) {
             if (isHA && groupId) {
                 const {output,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
                 return {salt,output}
             } else {
-                throw new Error('Address not found in shared output')
+                throw new Error(`Address not found in shared output, address:${address},sharedOutputId:${sharedOutputId}`)
             }
         } else {
             // move idx recipient to first, and prepare ephemeral public key at start, adjust idx to 0
