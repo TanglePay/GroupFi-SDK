@@ -575,9 +575,12 @@ export class GroupfiSdkClient {
                 }
             }
         }
-        const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutput:output, address,isHA:true,groupId,memberList})
+        const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutputId:outputId,
+            sharedOutput:output, address,isHA:true,groupId,memberList})
         const isHA = !!outputUnwrapped
         output = outputUnwrapped || output
+        // log get salt for group result
+        console.log(`_getSaltForGroup result groupId:${groupId}, address:${address}, salt:${salt}, isHA:${isHA} outputId:${outputId}`);
         return {salt, outputId,output,isHA}
     }
     // get recipients from shared output
