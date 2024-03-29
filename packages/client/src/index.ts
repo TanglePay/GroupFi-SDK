@@ -506,7 +506,11 @@ export class GroupfiSdkClient {
     async ensureGroupHaveSharedOutput(groupId:string){
         this._ensureClientInited()
         try {
+            // log entering
+            console.log('ensureGroupHaveSharedOutput', groupId);
             const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+            // log res
+            console.log('ensureGroupHaveSharedOutput InxApi res', res);
             let isMake = false
             if (!res) {
                 isMake = true    
@@ -514,6 +518,8 @@ export class GroupfiSdkClient {
                 const {outputId} = res
                 try {
                     const output = await this._client!.output(outputId)
+                    // log output
+                    console.log('ensureGroupHaveSharedOutput output', output);
                     if (!output) {
                         isMake = true
                     }
@@ -526,6 +532,8 @@ export class GroupfiSdkClient {
                 }
             }
             if (isMake) {
+                // log make shared output
+                console.log('ensureGroupHaveSharedOutput make shared output', groupId);
                 const res = await this._makeSharedOutputForGroup({groupId})
                 if (!res) return
                 const {output} = res
@@ -555,13 +563,24 @@ export class GroupfiSdkClient {
         if (outputId) {
             const saltFromCache = this._getSharedIdAndSaltFromCache(outputId)
             if (saltFromCache) return {salt:saltFromCache,outputId,isHA:false}
-
-            const outputsResponse = await this._client!.output(outputId)
-            output = outputsResponse.output as IBasicOutput
+            try {
+                const outputsResponse = await this._client!.output(outputId)
+                output = outputsResponse.output as IBasicOutput
+            } catch (error) {
+                if (error instanceof ClientError) {
+                    if (error.httpStatus == 404) {
+                        const {output:outputCreated,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
+                        return {salt, outputId,output:outputCreated,isHA:true}
+                    }
+                }
+            }
         }
-        const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutput:output, address,isHA:true,groupId,memberList})
+        const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutputId:outputId,
+            sharedOutput:output, address,isHA:true,groupId,memberList})
         const isHA = !!outputUnwrapped
         output = outputUnwrapped || output
+        // log get salt for group result
+        console.log(`_getSaltForGroup result groupId:${groupId}, address:${address}, isHA:${isHA} outputId:${outputId}`);
         return {salt, outputId,output,isHA}
     }
     // get recipients from shared output
@@ -638,14 +657,14 @@ export class GroupfiSdkClient {
         if (sharedOutput) {
             recipients = this._getRecipientsFromSharedOutput(sharedOutput)
             idx = this._checkIfAddressInRecipient(address,recipients)
-            console.log('recipients', recipients);        
+            console.log('recipients', recipients, sharedOutputId);        
         }
         if (idx === -1) {
             if (isHA && groupId) {
                 const {output,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
                 return {salt,output}
             } else {
-                throw new Error('Address not found in shared output')
+                throw new Error(`Address not found in shared output, address:${address},sharedOutputId:${sharedOutputId}`)
             }
         } else {
             // move idx recipient to first, and prepare ephemeral public key at start, adjust idx to 0
@@ -712,6 +731,8 @@ export class GroupfiSdkClient {
             console.log('cache miss fetch from network', outputId);
             const outputsResponse = await this._client!.output(outputId)
             const output = outputsResponse.output as IBasicOutput
+            // log
+            console.log('cache miss fetch from network,output fetched', output);
             const {salt} = await this._getSaltFromSharedOutput({sharedOutputId:outputId, sharedOutput:output, address, isHA:false})
             // check if in waiting cache
             const waiting = this._sharedSaltWaitingCache[outputId]
