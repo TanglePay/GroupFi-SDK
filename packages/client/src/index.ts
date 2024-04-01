@@ -51,10 +51,11 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
     GROUPFICASHTAG
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes} from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair } from 'iotacat-sdk-utils';
 import IotaSDK from 'tanglepaysdk-client';
 
-import { EthEncrypt } from './evm'
+import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
+export * from './types'
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -80,7 +81,9 @@ import { createBlobURLFromUint8Array } from 'iotacat-sdk-utils';
 import { releaseBlobUrl } from 'iotacat-sdk-utils';
 import { ConcurrentPipe } from 'iotacat-sdk-utils';
 import { GROUPFIReservedTags } from 'iotacat-sdk-core';
-import { bytesToHex } from 'iotacat-sdk-utils';
+
+import { Mode, DelegationMode, ImpersonationMode, ShimmerMode } from './types'
+
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -208,7 +211,18 @@ export class GroupfiSdkClient {
     _lastSendTimestamp:number = 0
     _remainderHintOutdatedTimeperiod = 35 * 1000
 
-    switchAddress(bech32Address:string){
+    _requestAdapter?: IRequestAdapter
+    _mode?: Mode
+    _pairX?: PairX
+
+    switchAdapter(params: {adapter: IRequestAdapter, mode: Mode, pairX?: PairX}) {
+        const { adapter, mode, pairX } = params 
+        this._mode = mode
+        this._pairX = pairX
+        this._requestAdapter = adapter
+    }
+
+    async switchAddress(bech32Address: string){
         this._accountBech32Address = bech32Address
         const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
         if (!res) throw new Error('Invalid bech32 address')
@@ -1970,167 +1984,156 @@ export class GroupfiSdkClient {
         serializeTransactionEssence(writeStream, transactionEssence);
         const essenceFinal = writeStream.finalBytes();
         const transactionEssenceUrl = createBlobURLFromUint8Array(essenceFinal);
-        console.log('===>start iota_im_sign_and_send_transaction_to_self')
-        const res = await this._sdkRequest({
-            method: 'iota_im_sign_and_send_transaction_to_self',
-            params: {
-              content: {
-                addr: this._accountBech32Address,
-                transactionEssenceUrl,
-                nodeUrlHint:this._curNode!.apiUrl
-              },
-            },
-          }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
+        const res = await this._sdkRequest(async () => {
+            return await this._requestAdapter!.sendTransation({
+                nodeUrlHint: this._curNode!.apiUrl,
+                essenceFinal: essenceFinal,
+                pairX: this._pairX,
+                transactionEssenceUrl
+            })
+        })
+        // console.log('===>start iota_im_sign_and_send_transaction_to_self')
+        // const res = await this._sdkRequest({
+        //     method: 'iota_im_sign_and_send_transaction_to_self',
+        //     params: {
+        //       content: {
+        //         addr: this._accountBech32Address,
+        //         transactionEssenceUrl,
+        //         nodeUrlHint:this._curNode!.apiUrl
+        //       },
+        //     },
+        //   }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
+
         releaseBlobUrl(transactionEssenceUrl)
         // update _lastSendTimestamp
         this._lastSendTimestamp = Date.now()
         return res
     }
     async _decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{
-        const res = await this._sdkRequest({
-            method: 'iota_im_decrypt_key',
-            params: {
-              content: {
-                addr: this._accountBech32Address,
-                recipientPayloadUrl,
-                nodeUrlHint:this._curNode!.apiUrl
-              },
-            },
-          }) as string;
+        const res = this._requestAdapter!.decrypt({
+            nodeUrlHint: this._curNode!.apiUrl,
+            dataTobeDecrypted: recipientPayloadUrl
+        })
+        // const res = await this._sdkRequest({
+        //     method: 'iota_im_decrypt_key',
+        //     params: {
+        //       content: {
+        //         addr: this._accountBech32Address,
+        //         recipientPayloadUrl,
+        //         nodeUrlHint:this._curNode!.apiUrl
+        //       },
+        //     },
+        //   }) as string;
         releaseBlobUrl(recipientPayloadUrl) 
         return res
     }
-    async _sdkRequest(args:any){
-        const newCall = () => IotaSDK.request(args)
-        this._queuePromise = this._queuePromise!.then(newCall, newCall)
+    async _sdkRequest(call: (...args: any[]) => Promise<any>) {
+        this._queuePromise = this._queuePromise!.then(call, call)
         return this._queuePromise
     }
-
-    async createSMRProxyAccount(EVMAddr: string) {
-        const SMRAddress = await this._sdkRequest({
-            method: 'iota_im_create_smr_proxy_account',
-            params: {
-                content: {
-                    addr: EVMAddr,
-                    nodeUrlHint:this._curNode!.apiUrl
-                },
-            },
-        })
-        return SMRAddress
+    // async _sdkRequest(args:any){
+    //     const newCall = () => IotaSDK.request(args)
+    //     this._queuePromise = this._queuePromise!.then(newCall, newCall)
+    //     return this._queuePromise
+    // }
+    async registerTanglePayPairX(params: {evmAddress: string, pairX: PairX}) {
+        const {pairX, evmAddress} = params
+        const pairXNftOutput = await this.createPairXNftOutput(evmAddress, pairX)
+        const res = await this._sendBasicOutput([pairXNftOutput])
+        this._pairX = pairX
     }
-    async registerPairX(EVMAddress: string) {
-        try {
-            const mnemonic = Bip39.randomMnemonic(128);
-            const seed = Ed25519Seed.fromMnemonic(mnemonic);
-            const keyPair = this._getPair(seed);
+    async createPairXNftOutput(evmAddress: string, pairX: PairX) {
+        if (!this._requestAdapter) {
+            throw new Error('request dapter is undefined')
+        }
 
-            const encryptionPublicKey = await this._sdkRequest({
-                method: 'iota_im_eth_get_encryption_public_key',
-                params: {
-                    content: {
-                        addr: EVMAddress
-                    }
-                }
-            })
+        const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
+
+        const encryptionPublicKey = await this._sdkRequest(proxyModeRequestAdapter.getEncryptionPublicKey)
+
+        // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
+        // only the first 32 bytes can be encrypted
+        const first32BytesOfPrivateKeyHex = Converter.bytesToHex(pairX.privateKey.slice(0, 32))
+        console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
+
+        const encryptedPrivateKeyHex = EthEncrypt({
+            publicKey: encryptionPublicKey,
+            dataTobeEncrypted: first32BytesOfPrivateKeyHex
+        })
+
+        console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
+
+        const tagFeature: ITagFeature = {
+            type: 3,
+            tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
+        };
+
+        const metadataObj = {
+            encryptedPrivateKey: encryptedPrivateKeyHex,
+            pairXPublicKey: Converter.bytesToHex(pairX.publicKey, true),
+            evmAddress: evmAddress,
+            timestamp: getCurrentEpochInSeconds(),
+            // 1: tp  2: mm
+            scenery: 1
+        }
             
-            // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
-            // only the first 32 bytes can be encrypted
-            const first32BytesOfPrivateKeyHex = Converter.bytesToHex(keyPair.privateKey.slice(0, 32))
-            console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
+        console.log('===> metadataObj', metadataObj)
 
-            const encryptedPrivateKeyHex = EthEncrypt({
-                publicKey: encryptionPublicKey,
-                dataTobeEncrypted: first32BytesOfPrivateKeyHex
-            })
+        const dataTobeSignedStr = [
+            metadataObj.encryptedPrivateKey,
+            metadataObj.evmAddress,
+            metadataObj.pairXPublicKey,
+            metadataObj.scenery,
+            metadataObj.timestamp
+        ].join('')
 
-            console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
-    
-            const tagFeature: ITagFeature = {
-                type: 3,
-                tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
-            };
+        console.log('===> dataToBeSignedStr', dataTobeSignedStr)
 
-            const metadataObj = {
-                encryptedPrivateKey: encryptedPrivateKeyHex,
-                pairXPublicKey: Converter.bytesToHex(keyPair.publicKey, true),
-                evmAddress: EVMAddress,
-                timestamp: getCurrentEpochInSeconds(),
-                // 1: tp  2: mm
-                scenery: 1
-            }
-            
-            console.log('===> metadataObj', metadataObj)
+        const dataToBeSignedHex = Converter.utf8ToHex(dataTobeSignedStr, true)
+        const signature = await this._sdkRequest(() => proxyModeRequestAdapter.ethSign({dataToBeSignedHex, nodeUrlHint: this._curNode!.apiUrl}))
 
-            const dataTobeSignedStr = [
-                metadataObj.encryptedPrivateKey,
-                metadataObj.evmAddress,
-                metadataObj.pairXPublicKey,
-                metadataObj.scenery,
-                metadataObj.timestamp
-            ].join('')
+        console.log('===> signature', signature)
 
-            console.log('===> dataToBeSignedStr', dataTobeSignedStr)
+        const metadata = Converter.utf8ToHex(JSON.stringify({
+            ...metadataObj,
+            signature,
+        }), true)
 
-            const signature = await this._sdkRequest({
-                method: 'iota_im_eth_personal_sign',
-                params: {
-                    content: {
-                        addr: EVMAddress,
-                        dataToBeSignedHex: Converter.utf8ToHex(dataTobeSignedStr, true)
-                    }
-                }
-            })
+        console.log('===> metadata final', metadata)
 
-            console.log('===> signature', signature)
-
-            const metadata = Converter.utf8ToHex(JSON.stringify({
-                ...metadataObj,
-                signature,
-            }), true)
-
-            console.log('===> metadata final', metadata)
-
-            const collectionOutput: INftOutput = {
-                type: NFT_OUTPUT_TYPE,
-                amount: '',
-                nativeTokens: [],
-                nftId:
-                  '0x0000000000000000000000000000000000000000000000000000000000000000',
-                unlockConditions: [
-                    {
-                        type: ADDRESS_UNLOCK_CONDITION_TYPE,
-                        address: {
-                            type: ED25519_ADDRESS_TYPE,
-                            pubKeyHash: this._accountHexAddress!
-                        }
-                    }
-                ],
-                features: [
-                    tagFeature
-                ],
-                immutableFeatures: [
-                  {
-                    type: ISSUER_FEATURE_TYPE,
+        const collectionOutput: INftOutput = {
+            type: NFT_OUTPUT_TYPE,
+            amount: '',
+            nativeTokens: [],
+            nftId:
+                '0x0000000000000000000000000000000000000000000000000000000000000000',
+            unlockConditions: [
+                {
+                    type: ADDRESS_UNLOCK_CONDITION_TYPE,
                     address: {
-                      type: ED25519_ADDRESS_TYPE,
-                      pubKeyHash: this._accountHexAddress!
-                    },
-                  },
-                  {
-                    type: METADATA_FEATURE_TYPE,
-                    data: metadata
-                  },
-                ],
-            };
-
-            console.log('===> collectionOutput', collectionOutput)
-            
-            const res = await this._sendBasicOutput([collectionOutput])
-            
-            console.log('===> registerPairX res', res)
-        }catch(error) {
-            console.log('====> registerPairX error', error)
-        }        
+                        type: ED25519_ADDRESS_TYPE,
+                        pubKeyHash: this._accountHexAddress!
+                    }
+                }
+            ],
+            features: [
+                tagFeature
+            ],
+            immutableFeatures: [
+                {
+                type: ISSUER_FEATURE_TYPE,
+                address: {
+                    type: ED25519_ADDRESS_TYPE,
+                    pubKeyHash: this._accountHexAddress!
+                },
+                },
+                {
+                type: METADATA_FEATURE_TYPE,
+                data: metadata
+                },
+            ],
+        };
+        return collectionOutput
     }
 }
 

@@ -32,7 +32,7 @@ export function EthEncrypt({
     ciphertext: naclUtil.encodeBase64(encryptedMessage),
   };
 
-  const hexEncryptedData = Converter.utf8ToHex(JSON.stringify(output), true)
+  const hexEncryptedData = Converter.utf8ToHex(JSON.stringify(output), true);
 
-  return hexEncryptedData
+  return hexEncryptedData;
 }

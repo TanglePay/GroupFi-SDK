@@ -204,30 +204,43 @@ class GroupfiWalletEmbedded {
             this._EVMAccount._wallet = wallet
             this._EVMAccount._hexAddress = wallet.getChecksumAddressString()
             console.log('===> setEVMAccount _hexAddress', this._EVMAccount)
+
+            const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
+            this._setSMRProxyAccount(smrBaseSeed)
         } catch(error) {
             console.log('===>setEVMAccount error ', error)
         }
     }
 
-    createSMRProxyAccount(password: string) {
-        if (this._EVMAccount._wallet === undefined) {
-            throw new Error('Evm account wallet is undefined.')
+    getSMRProxyAccount() {
+        if (!this._SMRAccount._accountBech32Address) {
+            throw new Error('proxy account is undefined')
         }
-        // Generate SMR seed from EVM private key
-        const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
-        
-        // Set SMR account baseSeed
-        this._setSMRProxyAccount(smrBaseSeed)
-        
-        const hexSeed = Converter.bytesToHex(smrBaseSeed.toBytes())
-        return {
-            path: 0,
-            password,
-            address: this._SMRAccount._accountBech32Address,
-            seed: this.tpEncrypt(hexSeed, password),
-            publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true)
-        }
+        return  this._SMRAccount._accountBech32Address
     }
+
+    // createSMRProxyAccount(password: string) {
+    //     // if (this._EVMAccount._wallet === undefined) {
+    //     //     throw new Error('Evm account wallet is undefined.')
+    //     // }
+    //     // // Generate SMR seed from EVM private key
+    //     // const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
+        
+    //     // // Set SMR account baseSeed
+    //     // this._setSMRProxyAccount(smrBaseSeed)
+    //     if (!this._SMRAccount._baseSeed) {
+    //         throw new Error('smr baseSeed is undefined.')
+    //     }
+        
+    //     const hexSeed = Converter.bytesToHex(this._SMRAccount._baseSeed.toBytes())
+    //     return {
+    //         path: 0,
+    //         password,
+    //         address: this._SMRAccount._accountBech32Address,
+    //         seed: this.tpEncrypt(hexSeed, password),
+    //         publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true)
+    //     }
+    // }
 
     _setSMRProxyAccount(baseSeed: Ed25519Seed) {
         this._SMRAccount._baseSeed = baseSeed
