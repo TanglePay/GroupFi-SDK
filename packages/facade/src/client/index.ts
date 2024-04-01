@@ -17,7 +17,7 @@ import {
 } from 'iotacat-sdk-utils';
 import { decryptOneOfList } from 'ecies-ed25519-js';
 import IotaSDK from 'tanglepaysdk-client';
-import { ModeInfo, Mode } from '../types';
+import { ModeInfo, Mode, RegisteredInfo, ModeDetail } from '../types';
 
 import {
   ShimmerModeRequestAdapter,
@@ -31,7 +31,8 @@ export async function initialClient(params: {
   bech32Address?: string;
   evmAddress?: string;
   client: GroupfiSdkClient;
-}) {
+}): Promise<{ pairX: PairX; detail: ModeDetail } | undefined> {
+  console.log('===> Facade initialClient', params);
   const { mode, modeInfo, bech32Address, evmAddress, client } = params;
   switch (mode) {
     case ShimmerMode: {
@@ -45,7 +46,7 @@ export async function initialClient(params: {
         pairX: undefined,
       });
       await client.switchAddress(bech32Address);
-      break;
+      return undefined;
     }
     case ImpersonationMode: {
       if (!evmAddress) {
@@ -62,10 +63,19 @@ export async function initialClient(params: {
           evmAddress: evmAddress!,
           pairX,
         });
+        return {
+          pairX: pairX,
+          detail: {
+            account: proxyAddress,
+          },
+        };
       } else {
         await client.switchAddress(modeInfo.detail.account);
+        return {
+          pairX: modeInfo.pairX!,
+          detail: modeInfo.detail,
+        };
       }
-      break;
     }
     case DelegationMode: {
       if (!evmAddress) {
@@ -80,6 +90,12 @@ export async function initialClient(params: {
       }
       client.switchAdapter({ mode, adapter, pairX });
       client.switchAddress(smrAddress);
+      return {
+        pairX: pairX,
+        detail: {
+          account: smrAddress,
+        },
+      };
     }
   }
 }

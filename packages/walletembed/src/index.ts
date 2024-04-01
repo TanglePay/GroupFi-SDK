@@ -190,7 +190,7 @@ class GroupfiWalletEmbedded {
                 hexPassword += '0'
             }
             const regexp = new RegExp(hexPassword + '$')
-            if (regexp.test(hexPassword)) {
+            if (regexp.test(hexSeed)) {
                 const hexPrivateKey = '0x' + hexSeed.replace(regexp, '')
                 const privateKeyBytes = Converter.hexToBytes(hexPrivateKey)
                 wallet = Wallet.fromPrivateKey(privateKeyBytes)
@@ -219,28 +219,29 @@ class GroupfiWalletEmbedded {
         return  this._SMRAccount._accountBech32Address
     }
 
-    // createSMRProxyAccount(password: string) {
-    //     // if (this._EVMAccount._wallet === undefined) {
-    //     //     throw new Error('Evm account wallet is undefined.')
-    //     // }
-    //     // // Generate SMR seed from EVM private key
-    //     // const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
+
+    importSMRProxyAccount(password: string) {
+        // if (this._EVMAccount._wallet === undefined) {
+        //     throw new Error('Evm account wallet is undefined.')
+        // }
+        // // Generate SMR seed from EVM private key
+        // const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
         
-    //     // // Set SMR account baseSeed
-    //     // this._setSMRProxyAccount(smrBaseSeed)
-    //     if (!this._SMRAccount._baseSeed) {
-    //         throw new Error('smr baseSeed is undefined.')
-    //     }
+        // // Set SMR account baseSeed
+        // this._setSMRProxyAccount(smrBaseSeed)
+        if (!this._SMRAccount._baseSeed) {
+            throw new Error('smr baseSeed is undefined.')
+        }
         
-    //     const hexSeed = Converter.bytesToHex(this._SMRAccount._baseSeed.toBytes())
-    //     return {
-    //         path: 0,
-    //         password,
-    //         address: this._SMRAccount._accountBech32Address,
-    //         seed: this.tpEncrypt(hexSeed, password),
-    //         publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true)
-    //     }
-    // }
+        const hexSeed = Converter.bytesToHex(this._SMRAccount._baseSeed.toBytes())
+        return {
+            path: 0,
+            password,
+            address: this._SMRAccount._accountBech32Address,
+            seed: this.tpEncrypt(hexSeed, password),
+            publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true)
+        }
+    }
 
     _setSMRProxyAccount(baseSeed: Ed25519Seed) {
         this._SMRAccount._baseSeed = baseSeed

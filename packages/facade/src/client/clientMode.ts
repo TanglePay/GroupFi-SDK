@@ -51,6 +51,7 @@ export class ImpersonationModeRequestAdapter
   }
 
   async getEncryptionPublicKey(): Promise<string> {
+    console.log('===> getEncryptionPublicKey this', this)
     return (await IotaSDK.request({
       method: 'iota_im_eth_get_encryption_public_key',
       params: {

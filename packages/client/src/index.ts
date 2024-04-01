@@ -2040,6 +2040,7 @@ export class GroupfiSdkClient {
         const {pairX, evmAddress} = params
         const pairXNftOutput = await this.createPairXNftOutput(evmAddress, pairX)
         const res = await this._sendBasicOutput([pairXNftOutput])
+        console.log('===> registerTanglePayPairX res', res)
         this._pairX = pairX
     }
     async createPairXNftOutput(evmAddress: string, pairX: PairX) {
@@ -2049,7 +2050,7 @@ export class GroupfiSdkClient {
 
         const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
 
-        const encryptionPublicKey = await this._sdkRequest(proxyModeRequestAdapter.getEncryptionPublicKey)
+        const encryptionPublicKey = await this._sdkRequest(proxyModeRequestAdapter.getEncryptionPublicKey.bind(proxyModeRequestAdapter))
 
         // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
         // only the first 32 bytes can be encrypted

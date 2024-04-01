@@ -21,21 +21,33 @@ import {
 import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
 import { GroupfiSdkClient, MessageBody } from 'groupfi-sdk-client';
 
-import { WalletType, TransactionRes, RecommendGroup, Mode, ShimmerMode, ImpersonationMode, TanglePayWallet, MetaMaskWallet, DelegationMode, RegisteredInfo, ModeInfo } from './types'
-import { initialClient } from './client'
+import {
+  WalletType,
+  TransactionRes,
+  RecommendGroup,
+  Mode,
+  ShimmerMode,
+  ImpersonationMode,
+  TanglePayWallet,
+  MetaMaskWallet,
+  DelegationMode,
+  RegisteredInfo,
+  ModeInfo,
+} from './types';
+import { initialClient } from './client';
 
 export { SimpleDataExtended };
-export * from './types'
+export * from './types';
 
 const NAMING_DOMAIN = 'api.groupfi.ai';
 
-const TP_SHIMMER_MAINNET_ID = 102
-const TP_EVM_CHAIN_ID = 5
-const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID]
+const TP_SHIMMER_MAINNET_ID = 102;
+const TP_EVM_CHAIN_ID = 5;
+const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 
 class GroupFiSDKFacade {
   private _address: string | undefined;
-  private _walletType: WalletType | undefined
+  private _walletType: WalletType | undefined;
 
   private _mode: Mode | undefined;
 
@@ -49,7 +61,7 @@ class GroupFiSDKFacade {
         groupName: string;
         groupId: string;
       }
-    | undefined = undefined;  
+    | undefined = undefined;
 
   get currentGroupName() {
     return this._currentGroup?.groupName;
@@ -60,7 +72,7 @@ class GroupFiSDKFacade {
   }
 
   checkIsChainSupported(nodeId: number) {
-    return SUPPORTED_CHAIN_ID_LIST.includes(nodeId)
+    return SUPPORTED_CHAIN_ID_LIST.includes(nodeId);
   }
 
   getObjectId(obj: Record<string, SimpleDataExtended>) {
@@ -218,7 +230,7 @@ class GroupFiSDKFacade {
   }
 
   listenningTPAccountChanged(
-    callback: (params: { address: string; nodeId: number, mode: Mode }) => void
+    callback: (params: { address: string; nodeId: number; mode: Mode }) => void
   ) {
     const listener = async (accountChangeEvent: {
       address: string;
@@ -229,8 +241,8 @@ class GroupFiSDKFacade {
       if (address === this._address) {
         return;
       }
-      this._address = address
-      this._mode = this.getTPMode(nodeId)
+      this._address = address;
+      this._mode = this.getTPMode(nodeId);
       console.log('accountsChanged', { address, nodeId, mode: this._mode });
       // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
       await IotaSDK.request({
@@ -243,7 +255,7 @@ class GroupFiSDKFacade {
         'accountsChanged and connect wallet using new address successfully',
         address
       );
-      const res = { address, nodeId, mode: this._mode }
+      const res = { address, nodeId, mode: this._mode };
       await this._onAccountChanged(res);
       callback(res);
     };
@@ -257,13 +269,11 @@ class GroupFiSDKFacade {
   }: {
     address: string;
     nodeId: number;
-    mode: Mode
+    mode: Mode;
   }) {
     // this._address = newAddress;
     // this.clearAddress();
-
     // await this.initialAddress(nodeId);
-
     // this._address = newAddress;
     // this._muteMap = undefined;
     // await this.fetchAddressQualifiedGroupConfigs({});
@@ -355,9 +365,16 @@ class GroupFiSDKFacade {
     const res = this._client!.disablePrepareRemainderHint();
     return res;
   }
-  async preloadGroupSaltCache(groupId: string, memberList?: { addr: string; publicKey: string }[]) {
+  async preloadGroupSaltCache(
+    groupId: string,
+    memberList?: { addr: string; publicKey: string }[]
+  ) {
     this._ensureWalletConnected();
-    const res = await this._client!.preloadGroupSaltCache(this._address!,groupId, memberList);
+    const res = await this._client!.preloadGroupSaltCache(
+      this._address!,
+      groupId,
+      memberList
+    );
     return res;
   }
   async fullfillMessageLiteList(
@@ -555,7 +572,7 @@ class GroupFiSDKFacade {
       throw new Error('MQTT not connected');
     }
   }
-  
+
   // TODO: It's temporary, it will be adjusted later.
   async getRecommendGroups({
     includes,
@@ -566,11 +583,12 @@ class GroupFiSDKFacade {
   }) {
     this._ensureWalletConnected();
 
-    const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
-      address: this._address!,
-      includes: includes?.map((g) => ({ groupName: g })),
-      excludes: excludes?.map((g) => ({ groupName: g })),
-    });
+    const res =
+      await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
+        address: this._address!,
+        includes: includes?.map((g) => ({ groupName: g })),
+        excludes: excludes?.map((g) => ({ groupName: g })),
+      });
     return res
       .map(({ groupName, qualifyType }) => ({
         groupName,
@@ -605,30 +623,32 @@ class GroupFiSDKFacade {
 
   _client?: GroupfiSdkClient;
   async bootstrap(walletType: WalletType): Promise<{
-    address: string
-    mode: Mode
+    address: string;
+    mode: Mode;
   }> {
     this._client = new GroupfiSdkClient();
     await this._client!.setup();
 
-    let res: {
-      address: string
-      nodeId?: number
-      mode?: Mode 
-    } | undefined = undefined
+    let res:
+      | {
+          address: string;
+          nodeId?: number;
+          mode?: Mode;
+        }
+      | undefined = undefined;
     if (walletType === TanglePayWallet) {
       // connect tanglepay wallet
-      res = await this.waitWalletReadyAndConnectTanglePayWallet()
+      res = await this.waitWalletReadyAndConnectTanglePayWallet();
     } else if (walletType === MetaMaskWallet) {
       // connect metamask wallet
       res = {
         address: '0x928100571464c900A2F53689353770455D78a200',
-        mode: DelegationMode
-      }
+        mode: DelegationMode,
+      };
     }
 
-    if(!res?.mode){
-      throw new Error('mode is undefined.')
+    if (!res?.mode) {
+      throw new Error('mode is undefined.');
     }
     // await Promise.all([
     //   this.fetchAddressQualifiedGroupConfigs({}),
@@ -637,11 +657,11 @@ class GroupFiSDKFacade {
     // this._client!.switchAddress(this._address!);
 
     // await this.initialAddress(res.mode);
-    return {address: res.address, mode: res.mode};
+    return { address: res.address, mode: res.mode };
   }
 
-  async fetchRegisteredInfo(): Promise<RegisteredInfo | undefined>{
-    return undefined
+  async fetchRegisteredInfo(): Promise<RegisteredInfo | undefined> {
+    return undefined;
   }
 
   async initialAddress(mode: Mode, modeInfo: ModeInfo) {
@@ -650,12 +670,12 @@ class GroupFiSDKFacade {
 
     this.clearAddress();
 
-    let bech32Address: string | undefined = undefined
-    let evmAddress: string | undefined = undefined
+    let bech32Address: string | undefined = undefined;
+    let evmAddress: string | undefined = undefined;
 
     // shimmer mode, setup normally
     if (mode === ShimmerMode) {
-      bech32Address = this._address
+      bech32Address = this._address;
       IotaCatSDKObj.switchMqttAddress(this._address!);
       await this.fetchAddressQualifiedGroupConfigs({});
       // this._client!.switchAddress(this._address!);
@@ -663,16 +683,30 @@ class GroupFiSDKFacade {
       //   bech32Address: this._address!,
       //   mode: ShimmerMode
       // })
-    }else {
-      evmAddress = this._address
+    } else {
+      evmAddress = this._address;
     }
-    await initialClient({
+    return await initialClient({
       mode,
       modeInfo,
       bech32Address,
       evmAddress,
       client: this._client!,
-    })
+    });
+  }
+
+  async importSMRProxyAccount() {
+    console.log('===> iota_im_import_smr_proxy_account', this._address!,  this._client!._curNode!.apiUrl)
+    const res = await IotaSDK.request({
+      method: 'iota_im_import_smr_proxy_account',
+      params: {
+        content: {
+          addr: this._address!,
+          nodeUrlHint: this._client!._curNode!.apiUrl
+        }
+      }
+    }) as string
+    return res
   }
 
   // async createSMRProxyAccount() {
@@ -687,18 +721,18 @@ class GroupFiSDKFacade {
 
   getTPMode(nodeId: number): Mode {
     if (nodeId === TP_SHIMMER_MAINNET_ID) {
-      return ShimmerMode
+      return ShimmerMode;
     }
     if (nodeId === TP_EVM_CHAIN_ID) {
-      return ImpersonationMode
+      return ImpersonationMode;
     }
-    throw new Error('unknown nodeId')
+    throw new Error('unknown nodeId');
   }
 
   async waitWalletReadyAndConnectTanglePayWallet(): Promise<{
     address: string;
     nodeId: number;
-    mode: Mode | undefined
+    mode: Mode | undefined;
   }> {
     return new Promise((resolve, reject) => {
       const listener = async () => {
@@ -713,14 +747,14 @@ class GroupFiSDKFacade {
                 // expires: 3000000
               },
             })) as { address: string; nodeId: number };
-            console.log('===>iota connect', res)
+            console.log('===>iota connect', res);
             this._lastTimeSdkRequestResultReceived = Date.now();
             this._address = res.address;
-            const mode = this.getTPMode(res.nodeId)
-            this._mode = mode
+            const mode = this.getTPMode(res.nodeId);
+            this._mode = mode;
             resolve({
               ...res,
-              mode
+              mode,
             });
           } catch (error) {
             reject({
@@ -734,9 +768,9 @@ class GroupFiSDKFacade {
         }
       };
       // TanglePay is ready
-      if(IotaSDK.isTanglePay && IotaSDK.tanglePayVersion !== '') {
-        listener()
-      }else {
+      if (IotaSDK.isTanglePay && IotaSDK.tanglePayVersion !== '') {
+        listener();
+      } else {
         IotaSDK._events.on('iota-ready', listener);
       }
     });
@@ -839,7 +873,7 @@ class GroupFiSDKFacade {
     return this._address!;
   }
   getCurrentMode() {
-    return this._mode
+    return this._mode;
   }
   async isQualified(groupId: string) {
     this._ensureWalletConnected();
@@ -917,11 +951,13 @@ class GroupFiSDKFacade {
     const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
       address ?? this._address!
     );
-    const groups = groupIds.map((groupId) => ({
-      groupId,
-      groupName: this.groupIdToGroupName(groupId),
-    })).filter(({groupName}) => groupName !== undefined )
-    return groups as {groupId: string; groupName: string;}[]
+    const groups = groupIds
+      .map((groupId) => ({
+        groupId,
+        groupName: this.groupIdToGroupName(groupId),
+      }))
+      .filter(({ groupName }) => groupName !== undefined);
+    return groups as { groupId: string; groupName: string }[];
   }
 
   groupNameToGroupId(groupName: string) {
