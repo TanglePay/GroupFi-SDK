@@ -114,6 +114,18 @@ type InboxItemResponse = {
     items:EventItem[]
     token:string
 }
+/*
+type PublicItemsResponse struct {
+	Items      []MessageResponseItem `json:"items"`
+	StartToken string             `json:"startToken"`
+	EndToken   string             `json:"endToken"`
+}
+*/
+type PublicItemsResponse = {
+    items:MessageResponseItem[]
+    startToken:string
+    endToken:string
+}
 export type MessageBody = {
     type: typeof ImInboxEventTypeNewMessage,
     sender:string,
@@ -197,6 +209,7 @@ export class GroupfiSdkClient {
         this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
         this._remainderHintSet = []
         this._lastSendTimestamp = 0;
+        this._sharedSaltCache = {}
     }
     _queuePromise:Promise<any>|undefined;
     async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
@@ -282,21 +295,28 @@ export class GroupfiSdkClient {
     }
 
 
-    _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
+    _outputIdToMessagePipe?: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message?:IMessage,outputId:string,status:number}>;
     _makeOutputIdToMessagePipe(){
-        const processor = async ({outputId,address,type}:{outputId:string,address:string,type:number})=>{
-            const res = await this.getMessageFromOutputId({outputId,address,type})
-            const message = res
-            ? {
-                type: ImInboxEventTypeNewMessage,
-                sender: res.sender,
-                message: res.message.data,
-                messageId: res.messageId,
-                timestamp: res.message.timestamp,
-                groupId: res.message.groupId,
-                }
-            : undefined;
-            return {message,outputId}
+        const processor = async ({outputId,token,address,type}:{outputId:string,address:string,type:number,token:string})=>{
+            try {
+                const res = await this.getMessageFromOutputId({outputId,address,type})
+                const message = res
+                ? {
+                    type: ImInboxEventTypeNewMessage,
+                    sender: res.sender,
+                    message: res.message.data,
+                    messageId: res.messageId,
+                    timestamp: res.message.timestamp,
+                    groupId: res.message.groupId,
+                    token
+                    }
+                : undefined;
+                const status = message ? 0 : -1
+                return {message,outputId,status}
+            } catch (error) {
+                console.log('Error in pipe', error);
+                return {status:-1,outputId}
+            }
         }
         this._outputIdToMessagePipe = new ConcurrentPipe(processor, 12, 64, true)
     }
@@ -486,14 +506,41 @@ export class GroupfiSdkClient {
     async ensureGroupHaveSharedOutput(groupId:string){
         this._ensureClientInited()
         try {
+            // log entering
+            console.log('ensureGroupHaveSharedOutput', groupId);
             const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+            // log res
+            console.log('ensureGroupHaveSharedOutput InxApi res', res);
+            let isMake = false
             if (!res) {
+                isMake = true    
+            } else {
+                const {outputId} = res
+                try {
+                    const output = await this._client!.output(outputId)
+                    // log output
+                    console.log('ensureGroupHaveSharedOutput output', output);
+                    if (!output) {
+                        isMake = true
+                    }
+                } catch (error) {
+                    if (error instanceof ClientError) {
+                        if (error.httpStatus === 404) {
+                            isMake = true
+                        }
+                    }
+                }
+            }
+            if (isMake) {
+                // log make shared output
+                console.log('ensureGroupHaveSharedOutput make shared output', groupId);
                 const res = await this._makeSharedOutputForGroup({groupId})
                 if (!res) return
                 const {output} = res
                 const {blockId,outputId} = await this._sendBasicOutput([output]);
                 return {outputId,output};
             }
+
         } catch (error) {
             if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                 console.log('GroupMemberTooMany,public for now', error);
@@ -516,13 +563,24 @@ export class GroupfiSdkClient {
         if (outputId) {
             const saltFromCache = this._getSharedIdAndSaltFromCache(outputId)
             if (saltFromCache) return {salt:saltFromCache,outputId,isHA:false}
-
-            const outputsResponse = await this._client!.output(outputId)
-            output = outputsResponse.output as IBasicOutput
+            try {
+                const outputsResponse = await this._client!.output(outputId)
+                output = outputsResponse.output as IBasicOutput
+            } catch (error) {
+                if (error instanceof ClientError) {
+                    if (error.httpStatus == 404) {
+                        const {output:outputCreated,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
+                        return {salt, outputId,output:outputCreated,isHA:true}
+                    }
+                }
+            }
         }
-        const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutput:output, address,isHA:true,groupId,memberList})
+        const {salt,output:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutputId:outputId,
+            sharedOutput:output, address,isHA:true,groupId,memberList})
         const isHA = !!outputUnwrapped
         output = outputUnwrapped || output
+        // log get salt for group result
+        console.log(`_getSaltForGroup result groupId:${groupId}, address:${address}, isHA:${isHA} outputId:${outputId}`);
         return {salt, outputId,output,isHA}
     }
     // get recipients from shared output
@@ -599,14 +657,14 @@ export class GroupfiSdkClient {
         if (sharedOutput) {
             recipients = this._getRecipientsFromSharedOutput(sharedOutput)
             idx = this._checkIfAddressInRecipient(address,recipients)
-            console.log('recipients', recipients);        
+            console.log('recipients', recipients, sharedOutputId);        
         }
         if (idx === -1) {
             if (isHA && groupId) {
                 const {output,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
                 return {salt,output}
             } else {
-                throw new Error('Address not found in shared output')
+                throw new Error(`Address not found in shared output, address:${address},sharedOutputId:${sharedOutputId}`)
             }
         } else {
             // move idx recipient to first, and prepare ephemeral public key at start, adjust idx to 0
@@ -673,6 +731,8 @@ export class GroupfiSdkClient {
             console.log('cache miss fetch from network', outputId);
             const outputsResponse = await this._client!.output(outputId)
             const output = outputsResponse.output as IBasicOutput
+            // log
+            console.log('cache miss fetch from network,output fetched', output);
             const {salt} = await this._getSaltFromSharedOutput({sharedOutputId:outputId, sharedOutput:output, address, isHA:false})
             // check if in waiting cache
             const waiting = this._sharedSaltWaitingCache[outputId]
@@ -1184,16 +1244,16 @@ export class GroupfiSdkClient {
     // set shared id and salt to cache
     _setSharedIdAndSaltToCache(rawSharedId:string,salt:string){
         const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
-        this._sharedSaltCache[sharedId] = salt
+        this._sharedSaltCache[sharedId!] = salt
     }
     // get shared id and salt from cache
     _getSharedIdAndSaltFromCache(rawSharedId:string){
         const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
-        const cachedValue = this._sharedSaltCache[sharedId]
+        const cachedValue = this._sharedSaltCache[sharedId!]
         // log cache hit or miss
         if (cachedValue) {
             console.log('salt cache hit', sharedId);
-        } else if (this._sharedSaltFailedCache.has(sharedId)) {
+        } else if (this._sharedSaltFailedCache.has(sharedId!)) {
             // log salt failed cache hit
             console.log('salt failed cache hit', sharedId);
             // TODO error type?
