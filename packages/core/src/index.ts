@@ -391,6 +391,23 @@ class IotaCatSDK {
         return this._ensureList(json);
     }
 
+    async fetchAddressPairX(evmAddress: string) {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addresspairx?address=${evmAddress}`
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+        })
+        const json = await res.json() as {
+            publicKey: string,
+            privateKeyEncrypted: string
+            mmProxyAddress: string
+            tpProxyAddress: string 
+        } | null
+        return json
+    }
+
     // TODO: It's temporary, it will be adjusted later.
     async fetchAddressQualifiedGroupConfigsWithoutSetting({address, includes, excludes}: {address: string, includes?: {groupName: string}[], excludes?: {groupName: string}[]}): Promise<MessageGroupMeta[]> {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;

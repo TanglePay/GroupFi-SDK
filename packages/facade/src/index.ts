@@ -18,7 +18,7 @@ import {
   MessageResponseItem,
 } from 'iotacat-sdk-core';
 
-import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
+import { SimpleDataExtended, hexToBytes, objectId } from 'iotacat-sdk-utils';
 import { GroupfiSdkClient, MessageBody } from 'groupfi-sdk-client';
 
 import {
@@ -33,8 +33,16 @@ import {
   DelegationMode,
   RegisteredInfo,
   ModeInfo,
+  PairX
 } from './types';
 import { initialClient } from './client';
+import { toChecksumAddress } from '@ethereumjs/util'
+
+import {
+  ShimmerModeRequestAdapter,
+  ImpersonationModeRequestAdapter,
+  DelegationModeRequestAdapter,
+} from './client/clientMode';
 
 export { SimpleDataExtended };
 export * from './types';
@@ -264,13 +272,13 @@ class GroupFiSDKFacade {
   }
 
   async _onAccountChanged({
-    address: newAddress,
     mode,
   }: {
     address: string;
     nodeId: number;
     mode: Mode;
   }) {
+    this.switchClientAdapter(mode)
     // this._address = newAddress;
     // this.clearAddress();
     // await this.initialAddress(nodeId);
@@ -626,6 +634,7 @@ class GroupFiSDKFacade {
     address: string;
     mode: Mode;
   }> {
+    this._walletType = walletType;
     this._client = new GroupfiSdkClient();
     await this._client!.setup();
 
@@ -640,16 +649,15 @@ class GroupFiSDKFacade {
       // connect tanglepay wallet
       res = await this.waitWalletReadyAndConnectTanglePayWallet();
     } else if (walletType === MetaMaskWallet) {
-      // connect metamask wallet
-      res = {
-        address: '0x928100571464c900A2F53689353770455D78a200',
-        mode: DelegationMode,
-      };
+      res = await this.connectMetaMaskWallet()
     }
 
     if (!res?.mode) {
       throw new Error('mode is undefined.');
     }
+    
+    this.switchClientAdapter(res.mode)
+
     // await Promise.all([
     //   this.fetchAddressQualifiedGroupConfigs({}),
     //   this._client!.setup(),
@@ -660,8 +668,62 @@ class GroupFiSDKFacade {
     return { address: res.address, mode: res.mode };
   }
 
-  async fetchRegisteredInfo(): Promise<RegisteredInfo | undefined> {
-    return undefined;
+  // async decryptPairX({publicKey, privateKeyEncrypted}:{publicKey:string, privateKeyEncrypted: string}): Promise<any> {
+  //   const res = await this._client!.decryptPairX({
+  //     encryptedData: privateKeyEncrypted
+  //   })
+  //   const privateKey = 'a926fd69cdd4adf8161e861b0e48dd452ba4cbc23995a72684b048fd56976150'
+  //   console.log('===> decryptPairX', res)
+  //   console.log(res)
+  // }
+
+  async fetchRegisteredInfo(isPairXPresent: boolean): Promise<RegisteredInfo | undefined> {
+    const res = await IotaCatSDKObj.fetchAddressPairX(this._address!)
+    console.log('===>fetchRegisteredInfo res', res, isPairXPresent)
+    if (!res) {
+      return undefined
+    }
+    let registeredInfo: RegisteredInfo = {}
+    if (res.mmProxyAddress){
+      registeredInfo[DelegationMode] = {
+        account: res.mmProxyAddress
+      }
+    }
+    if (res.tpProxyAddress) {
+      registeredInfo[ImpersonationMode] = {
+        account: res.tpProxyAddress
+      }
+    }
+    if (isPairXPresent) {
+      return registeredInfo
+    }
+    const pairX = await this._client!.decryptPairX({publicKey: res.publicKey, privateKeyEncrypted: res.privateKeyEncrypted})
+    registeredInfo.pairX = pairX
+    return registeredInfo
+  }
+  
+  switchClientAdapter(mode: Mode) {
+    const nodeUrlHint = this._client!.getCurrentNode().apiUrl;
+    switch(mode) {
+      case ShimmerMode: {
+        const adapter = new ShimmerModeRequestAdapter(this._address!, nodeUrlHint);
+        this._client!.switchAdapter({adapter, mode})
+        return
+      }
+      case ImpersonationMode: {
+        const adapter = new ImpersonationModeRequestAdapter(
+          this._address!,
+          nodeUrlHint
+        );
+        this._client!.switchAdapter({adapter, mode})
+        return
+      }
+      case DelegationMode: {
+        const adapter = new DelegationModeRequestAdapter(this._address!);
+        this._client!.switchAdapter({adapter, mode})
+        return
+      }
+    }
   }
 
   async initialAddress(mode: Mode, modeInfo: ModeInfo) {
@@ -696,17 +758,21 @@ class GroupFiSDKFacade {
   }
 
   async importSMRProxyAccount() {
-    console.log('===> iota_im_import_smr_proxy_account', this._address!,  this._client!._curNode!.apiUrl)
-    const res = await IotaSDK.request({
+    console.log(
+      '===> iota_im_import_smr_proxy_account',
+      this._address!,
+      this._client!._curNode!.apiUrl
+    );
+    const res = (await IotaSDK.request({
       method: 'iota_im_import_smr_proxy_account',
       params: {
         content: {
           addr: this._address!,
-          nodeUrlHint: this._client!._curNode!.apiUrl
-        }
-      }
-    }) as string
-    return res
+          nodeUrlHint: this._client!._curNode!.apiUrl,
+        },
+      },
+    })) as string;
+    return res;
   }
 
   // async createSMRProxyAccount() {
@@ -727,6 +793,46 @@ class GroupFiSDKFacade {
       return ImpersonationMode;
     }
     throw new Error('unknown nodeId');
+  }
+
+  async connectMetaMaskWallet(): Promise<{address: string, mode: Mode}> {
+    return new Promise((resolve, reject) => {
+      if (typeof window.ethereum === undefined) {
+        reject({
+          name: 'MetaMaskUnintalled',
+        });
+      }
+      const connect = async () => {
+        try {
+          const accounts = (await window.ethereum
+            .request({ method: 'eth_requestAccounts' })
+            .catch(() => {
+              reject({
+                name: 'MetaMaskConnectFailed',
+              });
+            })) as string[];
+          const rawAccount = accounts[0];
+          // MetaMask 返回的地址没有经过 toChecksumAddress
+          // toChecksumAddress 是将任意以太坊地址转换为符合EIP-55规范的校验和地址格式
+          if (!rawAccount) {
+            throw new Error()
+          }
+          
+          const account = toChecksumAddress(rawAccount)
+          this._mode = DelegationMode
+          this._address = account
+          resolve({
+            mode: this._mode,
+            address: this._address,
+          })
+        }catch(err) {
+          reject({
+            name: 'MetaMaskConnectFailed',
+          })
+        }
+      };
+      connect();
+    });
   }
 
   async waitWalletReadyAndConnectTanglePayWallet(): Promise<{

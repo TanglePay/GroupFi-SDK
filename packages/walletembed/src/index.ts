@@ -40,7 +40,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     EncryptedHexPayload
 
 } from "iotacat-sdk-core";
-import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL} from 'iotacat-sdk-utils';
+import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL, EthDecrypt, tpEncrypt, tpDecrypt} from 'iotacat-sdk-utils';
 
 import { hdkey, Wallet } from '@ethereumjs/wallet'
 import { hashPersonalMessage, ecsign, toRpcSig } from '@ethereumjs/util'
@@ -205,6 +205,9 @@ class GroupfiWalletEmbedded {
             this._EVMAccount._hexAddress = wallet.getChecksumAddressString()
             console.log('===> setEVMAccount _hexAddress', this._EVMAccount)
 
+            console.log('private Key uint8Array', this._EVMAccount._wallet!.getPrivateKey())
+            console.log('private Key str', this._EVMAccount._wallet!.getPrivateKeyString())
+
             const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
             this._setSMRProxyAccount(smrBaseSeed)
         } catch(error) {
@@ -238,7 +241,7 @@ class GroupfiWalletEmbedded {
             path: 0,
             password,
             address: this._SMRAccount._accountBech32Address,
-            seed: this.tpEncrypt(hexSeed, password),
+            seed: tpEncrypt(hexSeed, password),
             publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true)
         }
     }
@@ -588,6 +591,13 @@ class GroupfiWalletEmbedded {
         return {transactionId,outputId:messageOutputId,remainderOutputId}
     }
 
+    ethDecrypt(encryptedData: string): string | undefined {
+        if (this._EVMAccount._wallet === undefined) {
+            return undefined
+        }
+        return EthDecrypt({encryptedData, privateKey: this._EVMAccount._wallet.getPrivateKey()})
+    }
+
     getEthEncryptionPublicKey(): string | undefined {
         if (this._EVMAccount._wallet === undefined) {
             return undefined
@@ -606,61 +616,8 @@ class GroupfiWalletEmbedded {
         return serializedSignature
     }
 
-    // EthDecrypt(data: string) {
-    //     try {
-    //         const encryptedDataStr = Converter.hexToUtf8(data)
-    //         const encryptedData = JSON.parse(encryptedDataStr) as ethSigUtil.EthEncryptedData
-    //         const uint8arr = this._EVMAccount._wallet!.getPrivateKey()
-    //         const privateKeyStr = Converter.bytesToHex(uint8arr, false)
-    //         return ethSigUtil.decrypt({
-    //             encryptedData,
-    //             privateKey: privateKeyStr
-    //         })
-    //     }catch(error) {
-    //         console.log('EthDecrypt error:', error)
-    //         return undefined
-    //     }
-    // }
-
-    tpGetKeyAndIvV2(password:string) {
-        // @ts-ignore
-        const md5 = CryptoJS.MD5(password, 16).toString()
-        const kdf1 = CryptoJS.PBKDF2(md5, md5, { keySize: 16, iterations: 1000 })
-        const kdf2 = CryptoJS.PBKDF2(kdf1.toString(), kdf1.toString(), { keySize: 16, iterations: 1000 })
-        return [kdf1, kdf2]
-    }
-    tpGetKeyAndIv(password:string) {
-        // @ts-ignore
-        let key = CryptoJS.MD5(password, 16).toString().toLocaleUpperCase()
-        let iv = CryptoJS.MD5(password.slice(0, parseInt('' + (password.length / 2))))
-            .toString()
-            .toLocaleUpperCase()
-        const keyArray = CryptoJS.enc.Utf8.parse(key)
-        const ivArray = CryptoJS.enc.Utf8.parse(iv)
-        return [keyArray, ivArray]
-    }
-    tpEncrypt(seed: string, password: string) {
-        const V2_FLAG = 'TanglePayV2'
-        const [key, iv] = this.tpGetKeyAndIvV2(password)
-        let srcs = CryptoJS.enc.Utf8.parse(seed)
-        let encrypted = CryptoJS.AES.encrypt(srcs, key, {
-            iv: iv,
-            mode: CryptoJS.mode.CBC,
-            padding: CryptoJS.pad.Pkcs7
-        })
-        return encrypted.ciphertext.toString().toUpperCase() + V2_FLAG
-    }
-    tpDecrypt(seed:string, password:string, nodeId: number, forceV2 = false){
-        const V2_FLAG = 'TanglePayV2'
-        const reg = new RegExp(`${V2_FLAG}$`)
-        let isV2 = reg.test(seed) || forceV2 ? true : false
-        seed = seed.replace(reg, '')
-        const [key, iv] = isV2 ? this.tpGetKeyAndIvV2(password) : this.tpGetKeyAndIv(password)
-        let encryptedHexStr = CryptoJS.enc.Hex.parse(seed)
-        let srcs = CryptoJS.enc.Base64.stringify(encryptedHexStr)
-        let decrypt = CryptoJS.AES.decrypt(srcs, key, { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 })
-        let decryptedStr = decrypt.toString(CryptoJS.enc.Utf8)
-        return decryptedStr.toString()
+    tpDecrypt(seed:string, password:string, forceV2 = false){
+        return tpDecrypt(seed, password, forceV2)
     }
 }
 

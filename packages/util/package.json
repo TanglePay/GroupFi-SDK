@@ -37,12 +37,14 @@
   },
   "homepage": "https://github.com/TanglePay/TanglePay-SDK#readme",
   "devDependencies": {
-    "@iota/iota.js": "2.0.0-rc.4"
+    "@iota/iota.js": "2.0.0-rc.4",
+    "@types/crypto-js": "^4.1.1"
   },
   "dependencies": {
     "@iota/crypto.js": "^2.0.0-rc.2",
     "@iota/util.js": "^2.0.0-rc.2",
     "big-integer": "^1.6.51",
+    "crypto-js": "^4.1.1",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1"
   }

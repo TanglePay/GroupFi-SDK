@@ -1,3 +1,8 @@
+declare global {
+  interface Window {
+    ethereum: any
+  }
+}
 export const TanglePayWallet = 1
 export const MetaMaskWallet = 2
 export type WalletType = typeof TanglePayWallet | typeof MetaMaskWallet
@@ -43,7 +48,7 @@ export interface ModeDetail {
 }
 
 export interface RegisteredInfo {
-  pairX: PairX
+  pairX?: PairX
   [ImpersonationMode]?: ModeDetail
   [DelegationMode]?: ModeDetail
 }

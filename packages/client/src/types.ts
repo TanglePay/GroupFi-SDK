@@ -21,29 +21,27 @@ export interface SendTransationRes {
 }
 
 export interface IRequestAdapterDecryptParams {
-  dataTobeDecrypted: string;
-  nodeUrlHint: string;
+  dataTobeDecrypted: Uint8Array;
   pairX?: PairX;
 }
 
 export interface IRequestAdapterSendTransationParams {
-  essenceFinal: Uint8Array;
-  transactionEssenceUrl?: string;
+  essence: Uint8Array;
   pairX?: PairX;
-  nodeUrlHint: string;
 }
 
 export interface IRequestAdapter {
   decrypt: (params: IRequestAdapterDecryptParams) => Promise<string>;
 
-  sendTransation: (
+  sendTransaction: (
     params: IRequestAdapterSendTransationParams
   ) => Promise<SendTransationRes>;
 }
 
 export interface IProxyModeRequest {
   getEncryptionPublicKey: () => Promise<string>;
-  ethSign: (params: { dataToBeSignedHex: string, nodeUrlHint: string }) => Promise<string>;
+  ethSign: (params: { dataToBeSignedHex: string}) => Promise<string>;
+  decryptPairX: (params: {encryptedData: string}) => Promise<string> 
 }
 
 export type IProxyModeRequestAdapter = IProxyModeRequest & IRequestAdapter

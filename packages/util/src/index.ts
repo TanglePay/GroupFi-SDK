@@ -8,7 +8,8 @@ export * from './consolidate';
 export * from './pipe';
 export * from './concurrent_pipe';
 export * from './stream_processor';
-export * from './evm';
+export * from './crypto';
+export * from './SerialAsyncQueue'
 
 export const concatBytes = (...args: Uint8Array[]) => {
   let totalLength = 0;
@@ -32,6 +33,8 @@ export const addressHash = (address: string, key: string): Uint8Array => {
 export const hexToBytes = (hex: string) => {
   return Converter.hexToBytes(hex);
 };
+export const utf8ToHex = (str: string, includePrefix?: boolean) => Converter.utf8ToHex(str, includePrefix)
+
 export const bytesToHex = (bytes: Uint8Array, isPrefix = false) => {
   return Converter.bytesToHex(bytes, isPrefix);
 };

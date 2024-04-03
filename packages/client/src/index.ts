@@ -215,14 +215,21 @@ export class GroupfiSdkClient {
     _mode?: Mode
     _pairX?: PairX
 
-    switchAdapter(params: {adapter: IRequestAdapter, mode: Mode, pairX?: PairX}) {
-        const { adapter, mode, pairX } = params 
+    switchAdapter(params: {adapter: IRequestAdapter, mode: Mode}) {
+        const { adapter, mode } = params 
         this._mode = mode
-        this._pairX = pairX
         this._requestAdapter = adapter
     }
 
-    async switchAddress(bech32Address: string){
+    getRequestAdapter() {
+        if (!this._requestAdapter) {
+            throw new Error('request adapter is undefined.')
+        }
+        return this._requestAdapter
+    }
+
+    async switchAddress(bech32Address: string, pairX?: PairX){
+        this._pairX = pairX
         this._accountBech32Address = bech32Address
         const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
         if (!res) throw new Error('Invalid bech32 address')
@@ -254,6 +261,12 @@ export class GroupfiSdkClient {
         this._queuePromise = Promise.resolve()
         console.log('NodeInfo', this._nodeInfo);
         console.log('ProtocolInfo', this._protocolInfo);
+    }
+    getCurrentNode() {
+        if (!this._curNode) {
+            throw new Error('node is undefined')
+        }
+        return this._curNode
     }
     setupStorage(storage:StorageFacade){
         this._storage = storage
@@ -656,8 +669,8 @@ export class GroupfiSdkClient {
                 const target = recipients![idx]
                 recipientPayload = concatBytes(pubkey,Converter.hexToBytes(target.mkey))
             }
-            const recipientPayloadUrl = createBlobURLFromUint8Array(recipientPayload)
-            const salt = await this._decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl)
+            // const recipientPayloadUrl = createBlobURLFromUint8Array(recipientPayload)
+            const salt = await this._decryptAesKeyFromRecipientsWithPayload(recipientPayload)
             if (!salt) throw new Error('Salt not found')
             // successfully got salt from shared output, cache it
             if (sharedOutputId) {
@@ -1983,15 +1996,11 @@ export class GroupfiSdkClient {
         const writeStream = new WriteStream();
         serializeTransactionEssence(writeStream, transactionEssence);
         const essenceFinal = writeStream.finalBytes();
-        const transactionEssenceUrl = createBlobURLFromUint8Array(essenceFinal);
-        const res = await this._sdkRequest(async () => {
-            return await this._requestAdapter!.sendTransation({
-                nodeUrlHint: this._curNode!.apiUrl,
-                essenceFinal: essenceFinal,
+        // const transactionEssenceUrl = createBlobURLFromUint8Array(essenceFinal);
+        const res = await this._requestAdapter!.sendTransaction({
+                essence: essenceFinal,
                 pairX: this._pairX,
-                transactionEssenceUrl
             })
-        })
         // console.log('===>start iota_im_sign_and_send_transaction_to_self')
         // const res = await this._sdkRequest({
         //     method: 'iota_im_sign_and_send_transaction_to_self',
@@ -2004,15 +2013,14 @@ export class GroupfiSdkClient {
         //     },
         //   }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
 
-        releaseBlobUrl(transactionEssenceUrl)
+        // releaseBlobUrl(transactionEssenceUrl)
         // update _lastSendTimestamp
         this._lastSendTimestamp = Date.now()
         return res
     }
-    async _decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{
+    async _decryptAesKeyFromRecipientsWithPayload(recipientPayload:Uint8Array):Promise<string>{
         const res = this._requestAdapter!.decrypt({
-            nodeUrlHint: this._curNode!.apiUrl,
-            dataTobeDecrypted: recipientPayloadUrl
+            dataTobeDecrypted: recipientPayload
         })
         // const res = await this._sdkRequest({
         //     method: 'iota_im_decrypt_key',
@@ -2024,18 +2032,34 @@ export class GroupfiSdkClient {
         //       },
         //     },
         //   }) as string;
-        releaseBlobUrl(recipientPayloadUrl) 
+        // releaseBlobUrl(recipientPayloadUrl) 
         return res
     }
     async _sdkRequest(call: (...args: any[]) => Promise<any>) {
         this._queuePromise = this._queuePromise!.then(call, call)
         return this._queuePromise
     }
+    
     // async _sdkRequest(args:any){
     //     const newCall = () => IotaSDK.request(args)
     //     this._queuePromise = this._queuePromise!.then(newCall, newCall)
     //     return this._queuePromise
     // }
+
+    async decryptPairX({privateKeyEncrypted, publicKey}: {privateKeyEncrypted: string, publicKey: string}): Promise<PairX> {
+        const  proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
+        const first32BytesOfPrivateKeyHex =  await proxyModeRequestAdapter.decryptPairX({encryptedData: privateKeyEncrypted})
+        const first32BytesOfPrivateKey = Converter.hexToBytes(first32BytesOfPrivateKeyHex) 
+        console.log('===decryptPairX', first32BytesOfPrivateKeyHex)
+        console.log('first32BytesOfPrivateKey', first32BytesOfPrivateKey)
+        const publicKeyBytes = Converter.hexToBytes(publicKey)
+        console.log('===>publicKeyBytes', publicKeyBytes)
+        return {
+            publicKey: publicKeyBytes,
+            privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)
+        }
+    }
+
     async registerTanglePayPairX(params: {evmAddress: string, pairX: PairX}) {
         const {pairX, evmAddress} = params
         const pairXNftOutput = await this.createPairXNftOutput(evmAddress, pairX)
@@ -2050,7 +2074,13 @@ export class GroupfiSdkClient {
 
         const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
 
-        const encryptionPublicKey = await this._sdkRequest(proxyModeRequestAdapter.getEncryptionPublicKey.bind(proxyModeRequestAdapter))
+        const encryptionPublicKey = await proxyModeRequestAdapter.getEncryptionPublicKey()
+
+        const test = pairX.privateKey
+        const test111 = test.slice(0,32)
+
+        console.log('===> test', test)
+        console.log('===> test111', test111)
 
         // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
         // only the first 32 bytes can be encrypted
@@ -2091,7 +2121,7 @@ export class GroupfiSdkClient {
         console.log('===> dataToBeSignedStr', dataTobeSignedStr)
 
         const dataToBeSignedHex = Converter.utf8ToHex(dataTobeSignedStr, true)
-        const signature = await this._sdkRequest(() => proxyModeRequestAdapter.ethSign({dataToBeSignedHex, nodeUrlHint: this._curNode!.apiUrl}))
+        const signature = await proxyModeRequestAdapter.ethSign({dataToBeSignedHex})
 
         console.log('===> signature', signature)
 

@@ -1,29 +1,18 @@
 import {
   DelegationMode,
-  IRequestAdapter,
   ImpersonationMode,
   PairX,
-  SendTransationRes,
   ShimmerMode,
-  IRequestAdapterDecryptParams,
-  IRequestAdapterSendTransationParams,
   GroupfiSdkClient,
 } from 'groupfi-sdk-client';
-import { IotaCatSDKObj, IOTACATTAG } from 'iotacat-sdk-core';
-import {
-  generateSMRPair,
-  retrieveUint8ArrayFromBlobURL,
-  strToBytes,
-} from 'iotacat-sdk-utils';
-import { decryptOneOfList } from 'ecies-ed25519-js';
-import IotaSDK from 'tanglepaysdk-client';
-import { ModeInfo, Mode, RegisteredInfo, ModeDetail } from '../types';
+import { generateSMRPair } from 'iotacat-sdk-utils';
+import { ModeInfo, Mode, ModeDetail } from '../types';
 
 import {
-  ShimmerModeRequestAdapter,
   ImpersonationModeRequestAdapter,
   DelegationModeRequestAdapter,
 } from './clientMode';
+
 
 export async function initialClient(params: {
   mode: Mode;
@@ -39,25 +28,18 @@ export async function initialClient(params: {
       if (!bech32Address) {
         throw new Error('ShimmerMode bech32Address is undefined');
       }
-      const adapter = new ShimmerModeRequestAdapter(bech32Address);
-      client.switchAdapter({
-        adapter,
-        mode,
-        pairX: undefined,
-      });
-      await client.switchAddress(bech32Address);
+      await client.switchAddress(bech32Address, undefined);
       return undefined;
     }
     case ImpersonationMode: {
       if (!evmAddress) {
         throw new Error('ImpersonationMode evmAddress is undefined');
       }
-      const adapter = new ImpersonationModeRequestAdapter(evmAddress);
-      client.switchAdapter({ adapter, mode, pairX: modeInfo.pairX });
+      const adapter = client.getRequestAdapter() as ImpersonationModeRequestAdapter
       if (!modeInfo.detail) {
         // Need to register
         const proxyAddress = await adapter.getProxyAccount();
-        await client.switchAddress(proxyAddress);
+        await client.switchAddress(proxyAddress, modeInfo.pairX);
         const pairX = modeInfo.pairX ?? generateSMRPair();
         await client.registerTanglePayPairX({
           evmAddress: evmAddress!,
@@ -70,7 +52,7 @@ export async function initialClient(params: {
           },
         };
       } else {
-        await client.switchAddress(modeInfo.detail.account);
+        await client.switchAddress(modeInfo.detail.account, modeInfo.pairX);
         return {
           pairX: modeInfo.pairX!,
           detail: modeInfo.detail,
@@ -81,15 +63,14 @@ export async function initialClient(params: {
       if (!evmAddress) {
         throw new Error('DelegationMode evmAddress is undefined');
       }
-      const adapter = new DelegationModeRequestAdapter(evmAddress);
+      const adapter = client.getRequestAdapter() as DelegationModeRequestAdapter
       const pairX = modeInfo.pairX ?? generateSMRPair();
       let smrAddress = modeInfo.detail?.account;
       if (!smrAddress) {
-        // neet to register
+        // Need to register
         smrAddress = await adapter.registerPairX({ pairX });
       }
-      client.switchAdapter({ mode, adapter, pairX });
-      client.switchAddress(smrAddress);
+      client.switchAddress(smrAddress, pairX);
       return {
         pairX: pairX,
         detail: {
