@@ -83,7 +83,7 @@ export class ImpersonationModeRequestAdapter
           nodeUrlHint: this._nodeUrlHint,
         },
       },
-    })) as string;
+    })) as {bech32Address: string, hexAddress: string};
   }
 
   async decryptPairX(params: { encryptedData: string }) {

@@ -38,8 +38,8 @@ export async function initialClient(params: {
       const adapter = client.getRequestAdapter() as ImpersonationModeRequestAdapter
       if (!modeInfo.detail) {
         // Need to register
-        const proxyAddress = await adapter.getProxyAccount();
-        await client.switchAddress(proxyAddress, modeInfo.pairX);
+        const {bech32Address} = await adapter.getProxyAccount();
+        await client.switchAddress(bech32Address, modeInfo.pairX);
         const pairX = modeInfo.pairX ?? generateSMRPair();
         await client.registerTanglePayPairX({
           evmAddress: evmAddress!,
@@ -48,7 +48,7 @@ export async function initialClient(params: {
         return {
           pairX: pairX,
           detail: {
-            account: proxyAddress,
+            account: bech32Address,
           },
         };
       } else {

@@ -219,7 +219,10 @@ class GroupfiWalletEmbedded {
         if (!this._SMRAccount._accountBech32Address) {
             throw new Error('proxy account is undefined')
         }
-        return  this._SMRAccount._accountBech32Address
+        return  {
+            bech32Address: this._SMRAccount._accountBech32Address,
+            hexAddress: this._SMRAccount._accountHexAddress
+        }
     }
 
 

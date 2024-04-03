@@ -19,7 +19,7 @@ import {
 } from 'iotacat-sdk-core';
 
 import { SimpleDataExtended, hexToBytes, objectId } from 'iotacat-sdk-utils';
-import { GroupfiSdkClient, MessageBody } from 'groupfi-sdk-client';
+import { GroupfiSdkClient, IProxyModeRequest, MessageBody } from 'groupfi-sdk-client';
 
 import {
   WalletType,
@@ -755,6 +755,14 @@ class GroupFiSDKFacade {
       evmAddress,
       client: this._client!,
     });
+  }
+
+  async getSMRProxyAccount(): Promise<{bech32Address: string, hexAddress: string} | undefined> {
+    if (this._mode !== ImpersonationMode) {
+      return
+    }
+    const adapter = this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter
+    return await adapter.getProxyAccount()
   }
 
   async importSMRProxyAccount() {
