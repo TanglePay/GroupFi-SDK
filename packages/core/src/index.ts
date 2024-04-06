@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -13,6 +13,7 @@ export * from './types';
 export * from './codec_mark';
 export * from './codec_mute';
 export * from './codec_vote';
+export * from './codec_evm_qualify';
 const SHA256_LEN = 32
 class IotaCatSDK {
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
@@ -805,6 +806,17 @@ class IotaCatSDK {
             payload:hexPayload
         }
     }
+
+    async filterEvmGroupQualify(param:{
+        addressList:string[], 
+        qualifyType:GroupQualifyTypeStr,
+        nftCollectionId?:string,
+        tokenId?:string,
+        tokenThres?:string
+    }):Promise<{addressList:string[],signature:string}>
+    {
+        return {} as any
+    }
 }
 
 const instance = new IotaCatSDK
@@ -815,7 +827,11 @@ export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
+<<<<<<< Updated upstream
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV1'
+=======
+export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
+>>>>>>> Stashed changes
 export const IotaCatSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

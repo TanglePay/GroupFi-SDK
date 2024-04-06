@@ -49,7 +49,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserMuteGroupMember,serializeUserMuteGroupMembers, deserializeUserMuteGroupMembers,
     IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
-    GROUPFICASHTAG
+    GROUPFICASHTAG,MessageGroupMeta
 } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair } from 'iotacat-sdk-utils';
 import IotaSDK from 'tanglepaysdk-client';
@@ -84,6 +84,8 @@ import { GROUPFIReservedTags } from 'iotacat-sdk-core';
 
 import { Mode, DelegationMode, ImpersonationMode, ShimmerMode } from './types'
 
+import { GROUPFIQUALIFYTAG } from 'iotacat-sdk-core';
+import { serializeEvmQualify } from 'iotacat-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -752,7 +754,52 @@ export class GroupfiSdkClient {
         }
         
     }
-    async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput,salt:string}>{
+    // _makeSharedOutputForEvmGroup
+    async _makeSharedOutputForEvmGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{outputs:IBasicOutput[],salt:string}>{
+        // get group config
+        const selfEvmAddress = this._accountHexAddress
+        const selfPublicKey = await this.getPublicKey(selfEvmAddress!)
+        memberList?.push({addr:selfEvmAddress!,publicKey:selfPublicKey!})
+        const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
+        const addressToBeFiltered = memberList ? memberList.map(member=>member.addr) : []
+        let filterParam = {
+            addressList:addressToBeFiltered,
+            qualifyType:groupConfig.qualifyType,
+        }
+        if (groupConfig.qualifyType === 'nft'){
+            filterParam = Object.assign(filterParam,{
+                nftCollectionId:groupConfig.collectionIds[0],
+            })
+        }
+        if (groupConfig.qualifyType === 'token'){
+            filterParam = Object.assign(filterParam,{
+                tokenId:groupConfig.tokenId,
+                tokenThres:groupConfig.tokenThres
+            })
+        }
+        const {addressList:addressListFiltered,signature} = await IotaCatSDKObj.filterEvmGroupQualify(filterParam)
+        const memberListFiltered = memberList?.filter((pair)=>{
+            const {addr} = pair
+            return addressListFiltered.includes(addr)
+        })
+        const qualifyOutput = await this._getEvmQualify(groupId,addressListFiltered,signature)
+        const {output,salt} = await this._makeSharedOutputForGroupInternal({groupId,memberList:memberListFiltered})
+        return {
+            outputs:[qualifyOutput,output],
+            salt
+        }
+    }
+
+    async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{outputs:IBasicOutput[],salt:string}>{
+        const isEvm = false;
+        if (isEvm) {
+            return this._makeSharedOutputForEvmGroup({groupId,memberList})
+        } else {
+            const {output,salt} = await this._makeSharedOutputForGroupInternal({groupId,memberList})
+            return {outputs:[output],salt}
+        }
+    }
+    async _makeSharedOutputForGroupInternal({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput,salt:string}>{
         let recipients
         if (memberList) {
             recipients = memberList.map((member)=>({addr:member.addr,mkey:member.publicKey}))
@@ -801,8 +848,18 @@ export class GroupfiSdkClient {
             ]
         };
        return {output:basicOutput,salt}
-    } 
-    // seems not used in index.ts
+    }
+    // add timeunlock to basic output
+    _addTimeUnlockToBasicOutput(basicOutput:IBasicOutput,timeFromNow:number){
+        basicOutput.unlockConditions.push({
+            type: TIMELOCK_UNLOCK_CONDITION_TYPE,
+            unixTime: getCurrentEpochInSeconds() + timeFromNow
+        })
+    }
+    _addMinimalAmountToBasicOutput(basicOutput:IBasicOutput){
+        const deposit = TransactionHelper.getStorageDeposit(basicOutput,this._protocolInfo!.rentStructure)
+        basicOutput.amount = deposit.toString()
+    }
     _getPair(baseSeed:Ed25519Seed){
         const addressGeneratorAccountState = {
             accountIndex: 0,
@@ -1989,7 +2046,17 @@ export class GroupfiSdkClient {
         const groupIds = deserializeUserVoteGroups(data)
         return {outputWrapper:existing,list:groupIds}
     }
-    
+    // _persistEvmQualify
+    async _getEvmQualify(groupId:string,addressList:string[],signature:string):Promise<IBasicOutput>{
+        const tag = `0x${Converter.utf8ToHex(GROUPFIQUALIFYTAG)}`
+        const data = serializeEvmQualify(groupId,addressList,signature)
+        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const twoWeekSecs =  60 * 60 * 24 * 14
+        this._addTimeUnlockToBasicOutput(basicOutput, twoWeekSecs)
+        this._addMinimalAmountToBasicOutput(basicOutput)
+        return basicOutput
+    }
+    //TODO
     async _signAndSendTransactionEssence({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         // log enter _signAndSendTransactionEssence
         console.log('===> enter _signAndSendTransactionEssence');
