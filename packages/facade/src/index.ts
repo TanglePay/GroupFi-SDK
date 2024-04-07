@@ -44,6 +44,8 @@ import {
   DelegationModeRequestAdapter,
 } from './client/clientMode';
 
+import { AuxiliaryService } from './auxiliaryService'
+
 export { SimpleDataExtended };
 export * from './types';
 
@@ -56,6 +58,7 @@ const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 class GroupFiSDKFacade {
   private _address: string | undefined;
   private _walletType: WalletType | undefined;
+  private _nodeId: number | undefined
 
   private _mode: Mode | undefined;
 
@@ -63,6 +66,8 @@ class GroupFiSDKFacade {
 
   private _lastTimeSdkRequestResultSent: number = 0;
   private _lastTimeSdkRequestResultReceived: number = 0;
+
+  private _auxiliaryService = new AuxiliaryService()
 
   private _currentGroup:
     | {
@@ -238,34 +243,68 @@ class GroupFiSDKFacade {
   }
 
   listenningTPAccountChanged(
-    callback: (params: { address: string; nodeId: number; mode: Mode }) => void
+    callback: (params: { address: string; nodeId: number; mode: Mode, isAddressChanged: boolean }) => void
   ) {
     const listener = async (accountChangeEvent: {
       address: string;
       nodeId: number;
     }) => {
+      console.log('===>Ente rlistenningTPAccountChanged', accountChangeEvent)
       const { address, nodeId } = accountChangeEvent;
-      // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
-      if (address === this._address) {
-        return;
+
+      const newMode = this.getTPMode(nodeId)
+
+      // 第一次连接钱包，也会触发这个函数, 这样避免第一次连接时处罚
+      if (this._address === address && this._mode === newMode && this._nodeId === nodeId) {
+        return
       }
-      this._address = address;
-      this._mode = this.getTPMode(nodeId);
-      console.log('accountsChanged', { address, nodeId, mode: this._mode });
-      // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
-      await IotaSDK.request({
-        method: 'iota_connect',
-        params: {
-          // expires: 3000000
-        },
-      });
-      console.log(
-        'accountsChanged and connect wallet using new address successfully',
-        address
-      );
-      const res = { address, nodeId, mode: this._mode };
+
+      if (this._address !== address) {
+        // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
+        await IotaSDK.request({
+          method: 'iota_connect',
+          params: {
+            // expires: 3000000
+          },
+        });
+      }
+
+      const res = {
+        address,
+        nodeId,
+        mode: newMode,
+        isAddressChanged: this._address === address
+      }
+
+      this._address = address
+      this._nodeId = nodeId
+      this._mode = newMode
+
       await this._onAccountChanged(res);
       callback(res);
+      // this._nodeId = nodeId
+      // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
+      // const newMode= this.getTPMode(nodeId);
+      // if (this._address === address && this._mode === newMode) {
+      //   return;
+      // }
+      // this._address = address;
+      // this._mode = newMode;
+      // console.log('accountsChanged', { address, nodeId, mode: this._mode });
+      // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
+      // await IotaSDK.request({
+      //   method: 'iota_connect',
+      //   params: {
+      //     // expires: 3000000
+      //   },
+      // });
+      // console.log(
+      //   'accountsChanged and connect wallet using new address successfully',
+      //   address
+      // );
+      
+      
+      
     };
     IotaSDK.on('accountsChanged', listener);
     return () => IotaSDK.removeListener('accountsChanged', listener);
@@ -277,6 +316,7 @@ class GroupFiSDKFacade {
     address: string;
     nodeId: number;
     mode: Mode;
+    isAddressChanged: boolean
   }) {
     this.switchClientAdapter(mode)
     // this._address = newAddress;
@@ -478,6 +518,10 @@ class GroupFiSDKFacade {
     return { itemList: fulfilledMessageList, nextToken: token };
   }
 
+  async fetchEthPrice() {
+    return await this._auxiliaryService.fetchEthPrice()
+  }
+
   async mintNicknameNFT(name: string): Promise<{
     result: boolean;
     blockId?: string;
@@ -485,27 +529,7 @@ class GroupFiSDKFacade {
     reason?: string;
   }> {
     this._ensureWalletConnected();
-    const res = await fetch(
-      `https://${NAMING_DOMAIN}/mint_nicknft?address=${this._address}&name=${name}`
-    );
-    const json = (await res.json()) as {
-      result: boolean;
-      block_id: string;
-      'err-msg'?: string;
-      'err-code'?: number;
-    };
-    if (!json.result) {
-      return {
-        result: false,
-        errCode: json['err-code'],
-        reason: json['err-msg'],
-      } as { result: boolean; reason: string };
-    }
-    // const blockMetadata = await IotaCatSDKObj.waitBlock(json.block_id!)
-    return {
-      result: true,
-      blockId: json.block_id,
-    };
+    return await this._auxiliaryService.mintNicknameNFT(this._address!, name)
   }
 
   async fetchAddressNames(addressList: string[]) {
@@ -633,6 +657,7 @@ class GroupFiSDKFacade {
   async bootstrap(walletType: WalletType): Promise<{
     address: string;
     mode: Mode;
+    nodeId: number | undefined
   }> {
     this._walletType = walletType;
     this._client = new GroupfiSdkClient();
@@ -665,7 +690,7 @@ class GroupFiSDKFacade {
     // this._client!.switchAddress(this._address!);
 
     // await this.initialAddress(res.mode);
-    return { address: res.address, mode: res.mode };
+    return { address: res.address, mode: res.mode, nodeId: res.nodeId };
   }
 
   // async decryptPairX({publicKey, privateKeyEncrypted}:{publicKey:string, privateKeyEncrypted: string}): Promise<any> {
@@ -797,10 +822,7 @@ class GroupFiSDKFacade {
     if (nodeId === TP_SHIMMER_MAINNET_ID) {
       return ShimmerMode;
     }
-    if (nodeId === TP_EVM_CHAIN_ID) {
-      return ImpersonationMode;
-    }
-    throw new Error('unknown nodeId');
+    return ImpersonationMode
   }
 
   async connectMetaMaskWallet(): Promise<{address: string, mode: Mode}> {
@@ -829,6 +851,7 @@ class GroupFiSDKFacade {
           const account = toChecksumAddress(rawAccount)
           this._mode = DelegationMode
           this._address = account
+          this._nodeId = undefined
           resolve({
             mode: this._mode,
             address: this._address,
@@ -864,6 +887,7 @@ class GroupFiSDKFacade {
             console.log('===>iota connect', res);
             this._lastTimeSdkRequestResultReceived = Date.now();
             this._address = res.address;
+            this._nodeId = res.nodeId
             const mode = this.getTPMode(res.nodeId);
             this._mode = mode;
             resolve({
@@ -985,6 +1009,9 @@ class GroupFiSDKFacade {
   getCurrentAddress() {
     this._ensureWalletConnected();
     return this._address!;
+  }
+  getCurrentNodeId() {
+    return this._nodeId
   }
   getCurrentMode() {
     return this._mode;
