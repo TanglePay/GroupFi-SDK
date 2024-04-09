@@ -806,13 +806,22 @@ class IotaCatSDK {
             payload:hexPayload
         }
     }
-
+/*
+{
+    "chain": 148,
+    "addresses" : ["address1","address2"],
+    "contract" : "group contract address",
+    "threshold" : 1,
+    "erc" : 721,
+    "ts" : 1712647238
+}*/
     async filterEvmGroupQualify(param:{
-        addressList:string[], 
-        qualifyType:GroupQualifyTypeStr,
-        nftCollectionId?:string,
-        tokenId?:string,
-        tokenThres?:string
+        addresses:string[], 
+        chain:number,
+        contract:string,
+        threshold?:number,
+        erc:20|721,
+        ts:number,
     }):Promise<{addressList:string[],signature:string}>
     {
         return {} as any
@@ -827,11 +836,8 @@ export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
-<<<<<<< Updated upstream
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV1'
-=======
 export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
->>>>>>> Stashed changes
 export const IotaCatSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'
