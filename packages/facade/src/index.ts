@@ -18,8 +18,11 @@ import {
   MessageResponseItem,
 } from 'iotacat-sdk-core';
 
-import { SimpleDataExtended, hexToBytes, objectId } from 'iotacat-sdk-utils';
+import { SimpleDataExtended, hexToBytes, objectId, sleep } from 'iotacat-sdk-utils';
 import { GroupfiSdkClient, IProxyModeRequest, MessageBody } from 'groupfi-sdk-client';
+import { Web3 } from 'web3'
+import smrPurchaseAbi from './contractAbi/smr-purchase'
+import bigInt from "big-integer";
 
 import {
   WalletType,
@@ -44,7 +47,7 @@ import {
   DelegationModeRequestAdapter,
 } from './client/clientMode';
 
-import { AuxiliaryService } from './auxiliaryService'
+import { AuxiliaryService, config } from './auxiliaryService'
 
 export { SimpleDataExtended };
 export * from './types';
@@ -518,8 +521,62 @@ class GroupFiSDKFacade {
     return { itemList: fulfilledMessageList, nextToken: token };
   }
 
-  async fetchEthPrice() {
-    return await this._auxiliaryService.fetchEthPrice()
+  getTpNodeInfo(nodeId: number) {
+    return config.find(({tpNodeId}) => tpNodeId === nodeId)
+  }
+
+  async fetchSMRPrice(nodeId: number) {
+    const conf = config.find(c => c.tpNodeId === nodeId)
+    if (!conf) {
+      return undefined
+    }
+    const res = await this._auxiliaryService.fetchSMRPrice(conf.chainId)
+    return res
+  }
+
+  async buySMR(params: {targetAmount: string, principalAmount: string, nodeId: number, contract: string, web3: Web3}) {
+      const { web3, principalAmount, targetAmount, contract: contractAddress } = params
+      const proxyAddress = await this.getSMRProxyAccount()
+      if (proxyAddress === undefined) {
+        throw new Error('proxy account is undefined.')
+      }
+  
+      console.log('===> Enter buySMR', params)
+      
+      
+      console.log('===> proxyAddress', proxyAddress)
+  
+      const contract = new web3.eth.Contract(smrPurchaseAbi, params.contract)
+
+      const transaction = contract.methods.buySmr(proxyAddress.hexAddress, targetAmount)
+      
+      const options = {
+        from: this._address,
+        to: contractAddress,
+        data: transaction.encodeABI(),
+        value: principalAmount
+      }
+      
+      await IotaSDK.request({
+        method: 'eth_sendTransaction',
+        params: options,
+      })
+
+      await this.checkSMRPurchaseCompleted({
+        targetAmount,
+        targetAddress: proxyAddress.bech32Address
+      })
+  }
+
+  async checkSMRPurchaseCompleted({targetAddress,targetAmount}: {targetAmount: string, targetAddress: string}) {
+    for(;;) {
+      const balance = await IotaCatSDKObj.fetchAddressBalance(targetAddress);
+      console.log('===> checkSMRPurchaseCompleted balance', balance)
+      if (bigInt(balance).geq(bigInt(targetAmount))) {
+        return true
+      }
+      await sleep(1000)
+    }
   }
 
   async mintNicknameNFT(name: string): Promise<{
@@ -780,9 +837,11 @@ class GroupFiSDKFacade {
       evmAddress,
       client: this._client!,
     });
-  }
+  }  
 
   async getSMRProxyAccount(): Promise<{bech32Address: string, hexAddress: string} | undefined> {
+
+    
     if (this._mode !== ImpersonationMode) {
       return
     }

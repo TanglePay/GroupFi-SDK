@@ -38,9 +38,11 @@
     "@ethereumjs/util": "^9.0.3",
     "@iota/iota.js": "2.0.0-rc.4",
     "@metamask/sdk": "^0.18.1",
+    "big-integer": "^1.6.51",
     "groupfi-sdk-client": "workspace:^",
     "iotacat-sdk-core": "workspace:^",
     "iotacat-sdk-utils": "workspace:^",
-    "tanglepaysdk-client": "^0.1.10"
+    "tanglepaysdk-client": "^0.1.10",
+    "web3": "^4.7.0"
   }
 }
