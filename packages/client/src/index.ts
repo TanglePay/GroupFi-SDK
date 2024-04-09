@@ -52,7 +52,6 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFICASHTAG
 } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair } from 'iotacat-sdk-utils';
-import IotaSDK from 'tanglepaysdk-client';
 
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
@@ -1060,9 +1059,11 @@ export class GroupfiSdkClient {
         return owned ? {owned, locked} : {owned: false}
     }
 
-    async checkIfhasOneNicknameNft(address: string): Promise<boolean> {
+    async checkIfhasOneNicknameNft(): Promise<boolean> {
         this._ensureClientInited()
         this._ensureWalletInited()
+
+        const address = this._accountBech32Address;
 
         try {
             const {items: items1} = await this._indexer!.nfts({

@@ -1,15 +1,50 @@
+export const config = [
+  {
+    chainId: 148,
+    tpNodeId: 5,
+    name: 'Shimmer EVM',
+    url: 'https://json-rpc.evm.shimmer.network/',
+    token: 'SMR',
+  },
+  {
+    chainId: 56,
+    tpNodeId: 4,
+    name: 'BSC',
+    url: 'https://bsc-dataseed.binance.org/',
+    token: 'BNB',
+  },
+  {
+    chainId: 137,
+    tpNodeId: 7,
+    name: 'Polygon',
+    url: 'https://polygon-rpc.com/',
+    token: 'MATIC',
+  }
+];
+
 export class AuxiliaryService {
-  _domain = 'api.groupfi.ai'
+  _domain = 'testapi.groupfi.ai';
 
-  async fetchEthPrice() {
+  async fetchSMRPrice(chainId: number) {
+    const res = await fetch(`https://${this._domain}/smr_price`);
+    const json = (await res.json()) as {
+      data: {
+        [key: string]: {
+          contract: string;
+          token: string;
+          price: string;
+          deci: number;
+        };
+      };
+    };
 
+    return json.data[chainId]
   }
 
-  // async fetchTPEVMConfig() {
-  //   const res = 
-  // }
-
-  async mintNicknameNFT(address: string, name: string): Promise<{
+  async mintNicknameNFT(
+    address: string,
+    name: string
+  ): Promise<{
     result: boolean;
     blockId?: string;
     errCode?: number;

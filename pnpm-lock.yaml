@@ -99,8 +99,8 @@ importers:
         specifier: ^9.1.2
         version: 9.1.2
       rollup-plugin-polyfill-node:
-        specifier: ^0.12.0
-        version: 0.12.0(rollup@3.29.2)
+        specifier: ^0.13.0
+        version: 0.13.0(rollup@3.29.2)
       ts-jest:
         specifier: ^29.0.5
         version: 29.1.1(@babel/core@7.22.19)(babel-jest@29.7.0)(jest@29.7.0)(typescript@4.9.5)
@@ -222,6 +222,9 @@ importers:
       '@metamask/sdk':
         specifier: ^0.18.1
         version: 0.18.1(react-i18next@13.5.0)(react-native@0.73.6)(react@18.2.0)(rollup@3.29.2)
+      big-integer:
+        specifier: ^1.6.51
+        version: 1.6.51
       groupfi-sdk-client:
         specifier: workspace:^
         version: link:../client
@@ -1676,6 +1679,13 @@ packages:
     engines: {node: '>=6.9.0'}
     dependencies:
       regenerator-runtime: 0.14.0
+
+  /@babel/runtime@7.24.4:
+    resolution: {integrity: sha512-dkxf7+hn8mFBwKjs9bvBlArzLVxVbS8usaPUDd5p2a9JCL9tB8OaOVN1isD4+Xyk4ns89/xeOmbQvgdK7IIVdA==}
+    engines: {node: '>=6.9.0'}
+    dependencies:
+      regenerator-runtime: 0.14.0
+    dev: false
 
   /@babel/template@7.22.15:
     resolution: {integrity: sha512-QPErUVm4uyJa60rkI73qneDacvdvzxshT3kksGqlGWYdOTIUOwJ7RDUL8sGqslY1uXWSL6xMFKEXDS3ox2uF0w==}
@@ -3147,18 +3157,18 @@ packages:
       rollup: 3.29.2
     dev: true
 
-  /@rollup/plugin-inject@5.0.3(rollup@3.29.2):
-    resolution: {integrity: sha512-411QlbL+z2yXpRWFXSmw/teQRMkXcAAC8aYTemc15gwJRpvEVDQwoe+N/HTFD8RFG8+88Bme9DK2V9CVm7hJdA==}
+  /@rollup/plugin-inject@5.0.5(rollup@3.29.2):
+    resolution: {integrity: sha512-2+DEJbNBoPROPkgTDNe8/1YXWcqxbN5DTjASVIOx8HS+pITXushyNiBV56RB08zuptzz8gT3YfkqriTBVycepg==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
-      rollup: ^1.20.0||^2.0.0||^3.0.0
+      rollup: ^1.20.0||^2.0.0||^3.0.0||^4.0.0
     peerDependenciesMeta:
       rollup:
         optional: true
     dependencies:
       '@rollup/pluginutils': 5.0.4(rollup@3.29.2)
       estree-walker: 2.0.2
-      magic-string: 0.27.0
+      magic-string: 0.30.5
       rollup: 3.29.2
     dev: true
 
@@ -7933,7 +7943,7 @@ packages:
     resolution: {integrity: sha512-2oScjfv6Yb79PelU1+p8SVrCMW9ZjgEiipxq7jMRn8mbbtWzyv3g8Mkwr+KwOoDFI/61hYPUbY8cUnu278+x1g==}
     engines: {node: '>=18'}
     dependencies:
-      '@babel/runtime': 7.22.15
+      '@babel/runtime': 7.24.4
     dev: false
 
   /metro-source-map@0.80.8:
@@ -9211,7 +9221,7 @@ packages:
       react-native:
         optional: true
     dependencies:
-      '@babel/runtime': 7.22.15
+      '@babel/runtime': 7.24.4
       html-parse-stringify: 3.0.1
       i18next: 22.5.1
       react: 18.2.0
@@ -9584,12 +9594,12 @@ packages:
       - supports-color
     dev: true
 
-  /rollup-plugin-polyfill-node@0.12.0(rollup@3.29.2):
-    resolution: {integrity: sha512-PWEVfDxLEKt8JX1nZ0NkUAgXpkZMTb85rO/Ru9AQ69wYW8VUCfDgP4CGRXXWYni5wDF0vIeR1UoF3Jmw/Lt3Ug==}
+  /rollup-plugin-polyfill-node@0.13.0(rollup@3.29.2):
+    resolution: {integrity: sha512-FYEvpCaD5jGtyBuBFcQImEGmTxDTPbiHjJdrYIp+mFIwgXiXabxvKUK7ZT9P31ozu2Tqm9llYQMRWsfvTMTAOw==}
     peerDependencies:
-      rollup: ^1.20.0 || ^2.0.0 || ^3.0.0
+      rollup: ^1.20.0 || ^2.0.0 || ^3.0.0 || ^4.0.0
     dependencies:
-      '@rollup/plugin-inject': 5.0.3(rollup@3.29.2)
+      '@rollup/plugin-inject': 5.0.5(rollup@3.29.2)
       rollup: 3.29.2
     dev: true
 

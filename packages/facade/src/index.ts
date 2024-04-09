@@ -18,8 +18,11 @@ import {
   MessageResponseItem,
 } from 'iotacat-sdk-core';
 
-import { SimpleDataExtended, hexToBytes, objectId } from 'iotacat-sdk-utils';
+import { SimpleDataExtended, hexToBytes, objectId, sleep } from 'iotacat-sdk-utils';
 import { GroupfiSdkClient, IProxyModeRequest, MessageBody } from 'groupfi-sdk-client';
+import { Web3 } from 'web3'
+import smrPurchaseAbi from './contractAbi/smr-purchase'
+import bigInt from "big-integer";
 
 import {
   WalletType,
@@ -44,7 +47,7 @@ import {
   DelegationModeRequestAdapter,
 } from './client/clientMode';
 
-import { AuxiliaryService } from './auxiliaryService'
+import { AuxiliaryService, config } from './auxiliaryService'
 
 export { SimpleDataExtended };
 export * from './types';
@@ -57,6 +60,7 @@ const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 
 class GroupFiSDKFacade {
   private _address: string | undefined;
+  private _proxyAddress: string | undefined;
   private _walletType: WalletType | undefined;
   private _nodeId: number | undefined
 
@@ -259,6 +263,7 @@ class GroupFiSDKFacade {
         return
       }
 
+
       if (this._address !== address) {
         // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
         await IotaSDK.request({
@@ -269,11 +274,14 @@ class GroupFiSDKFacade {
         });
       }
 
+      console.log('===> this._address', this._address)
+      console.log('===> address', address)
+
       const res = {
         address,
         nodeId,
         mode: newMode,
-        isAddressChanged: this._address === address
+        isAddressChanged: this._address !== address
       }
 
       this._address = address
@@ -518,8 +526,62 @@ class GroupFiSDKFacade {
     return { itemList: fulfilledMessageList, nextToken: token };
   }
 
-  async fetchEthPrice() {
-    return await this._auxiliaryService.fetchEthPrice()
+  getTpNodeInfo(nodeId: number) {
+    return config.find(({tpNodeId}) => tpNodeId === nodeId)
+  }
+
+  async fetchSMRPrice(nodeId: number) {
+    const conf = config.find(c => c.tpNodeId === nodeId)
+    if (!conf) {
+      return undefined
+    }
+    const res = await this._auxiliaryService.fetchSMRPrice(conf.chainId)
+    return res
+  }
+
+  async buySMR(params: {targetAmount: string, principalAmount: string, nodeId: number, contract: string, web3: Web3}) {
+      const { web3, principalAmount, targetAmount, contract: contractAddress } = params
+      const proxyAddress = await this.getSMRProxyAccount()
+      if (proxyAddress === undefined) {
+        throw new Error('proxy account is undefined.')
+      }
+  
+      console.log('===> Enter buySMR', params)
+      
+      
+      console.log('===> proxyAddress', proxyAddress)
+  
+      const contract = new web3.eth.Contract(smrPurchaseAbi, params.contract)
+
+      const transaction = contract.methods.buySmr(proxyAddress.hexAddress, targetAmount)
+      
+      const options = {
+        from: this._address,
+        to: contractAddress,
+        data: transaction.encodeABI(),
+        value: principalAmount
+      }
+      
+      await IotaSDK.request({
+        method: 'eth_sendTransaction',
+        params: options,
+      })
+
+      await this.checkSMRPurchaseCompleted({
+        targetAmount,
+        targetAddress: proxyAddress.bech32Address
+      })
+  }
+
+  async checkSMRPurchaseCompleted({targetAddress,targetAmount}: {targetAmount: string, targetAddress: string}) {
+    for(;;) {
+      const balance = await IotaCatSDKObj.fetchAddressBalance(targetAddress);
+      console.log('===> checkSMRPurchaseCompleted balance', balance)
+      if (bigInt(balance).geq(bigInt(targetAmount))) {
+        return true
+      }
+      await sleep(1000)
+    }
   }
 
   async mintNicknameNFT(name: string): Promise<{
@@ -529,7 +591,8 @@ class GroupFiSDKFacade {
     reason?: string;
   }> {
     this._ensureWalletConnected();
-    return await this._auxiliaryService.mintNicknameNFT(this._address!, name)
+    const addr = this._proxyAddress ?? this._address!
+    return await this._auxiliaryService.mintNicknameNFT(addr, name)
   }
 
   async fetchAddressNames(addressList: string[]) {
@@ -538,7 +601,7 @@ class GroupFiSDKFacade {
 
   async checkIfhasOneNicknameNft() {
     this._ensureWalletConnected();
-    return await this._client!.checkIfhasOneNicknameNft(this._address!);
+    return await this._client!.checkIfhasOneNicknameNft();
   }
 
   async hasUnclaimedNameNFT() {
@@ -590,12 +653,19 @@ class GroupFiSDKFacade {
   }
   async fetchAddressBalance() {
     this._ensureWalletConnected();
-    const balance = await IotaCatSDKObj.fetchAddressBalance(this._address!);
+    const addr = this._proxyAddress ?? this._address!
+    const balance = await IotaCatSDKObj.fetchAddressBalance(addr);
     return balance ?? 0;
   }
   _ensureWalletConnected() {
     if (!this._address) {
       throw new Error('Wallet not connected.');
+    }
+  }
+
+  _ensureProxyAddressExisted() {
+    if (!this._proxyAddress) {
+      throw new Error('Proxy address is undefined.');
     }
   }
 
@@ -773,16 +843,23 @@ class GroupFiSDKFacade {
     } else {
       evmAddress = this._address;
     }
-    return await initialClient({
+    const res = await initialClient({
       mode,
       modeInfo,
       bech32Address,
       evmAddress,
       client: this._client!,
     });
-  }
+
+    console.log('===> initialClient end', res)
+
+    this._proxyAddress = res?.detail.account ?? this._address!
+    return res
+  }  
 
   async getSMRProxyAccount(): Promise<{bech32Address: string, hexAddress: string} | undefined> {
+
+    
     if (this._mode !== ImpersonationMode) {
       return
     }
