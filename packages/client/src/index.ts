@@ -791,7 +791,7 @@ export class GroupfiSdkClient {
     }
 
     async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{outputs:IBasicOutput[],salt:string}>{
-        const isEvm = false;
+        const isEvm = this._mode != ShimmerMode 
         if (isEvm) {
             return this._makeSharedOutputForEvmGroup({groupId,memberList})
         } else {
