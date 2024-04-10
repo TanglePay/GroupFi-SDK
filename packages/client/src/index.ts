@@ -52,7 +52,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFICASHTAG,MessageGroupMeta
 } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair } from 'iotacat-sdk-utils';
-
+import AddressMappingStore from './AddressMappingStore';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
 
@@ -333,7 +333,11 @@ export class GroupfiSdkClient {
 
     _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
     _makeOutputIdToMessagePipe(){
-        const processor = async ({outputId,token,address,type}:{outputId:string,address:string,type:number,token:string})=>{
+        const processor = async (
+            {outputId,token,address,type}:{outputId:string,address:string,type:number,token:string},
+            callback: (error?: Error | null) => void,
+            stream:ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined>
+        )=>{
             const res = await this.getMessageFromOutputId({outputId,address,type})
             const message = res
             ? {
@@ -346,7 +350,19 @@ export class GroupfiSdkClient {
                 token
                 }
             : undefined;
-            return {message,outputId}
+            if (this._mode === ShimmerMode) {
+                const res = {message,outputId}
+                stream.push(res)
+                callback()
+            } else {
+                const fn = (evmAddress:string)=>{
+                    message!.sender = evmAddress
+                    const res = {message,outputId}
+                    stream.push(res)
+                    callback()
+                }
+                AddressMappingStore.getMapping(message!.sender, fn,callback)
+            }
         }
         this._outputIdToMessagePipe = new ConcurrentPipe(processor, 12, 64, true)
     }

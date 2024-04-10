@@ -826,6 +826,30 @@ class IotaCatSDK {
     {
         return {} as any
     }
+
+    // call /batchsmraddresstoevmaddress, method POST
+    async batchSmrAddressToEvmAddress(addresses:string[]):Promise<{[key:string]:string}>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/batchsmraddresstoevmaddress`
+        try {
+            
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(addresses)
+            })
+            const convertedAddressed = await res.json() as string[]
+            const map: {[key: string]: string} = {}
+            addresses.forEach((address, index) => {
+                map[address] = convertedAddressed[index]
+            })
+            return map
+        } catch (error) {
+            console.log('error',error)
+            return {}
+        }
+    }
 }
 
 const instance = new IotaCatSDK
