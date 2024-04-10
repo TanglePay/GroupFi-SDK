@@ -617,7 +617,7 @@ class GroupFiSDKFacade {
   }
 
   async hasUnclaimedNameNFT() {
-    return await this._client!.hasUnclaimedNameNFT(this._address!);
+    return await this._client!.hasUnclaimedNameNFT(this._proxyAddress!);
   }
 
   // get smr balance
