@@ -1188,7 +1188,7 @@ class GroupFiSDKFacade {
 
   async loadAddressPublicKey() {
     this._ensureWalletConnected();
-    return await IotaCatSDKObj.fetchAddressPublicKey(this._address!);
+    return await IotaCatSDKObj.fetchAddressPublicKey(this._proxyAddress!);
   }
   async sendAnyOneToSelf() {
     // log
