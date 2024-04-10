@@ -868,21 +868,8 @@ class GroupFiSDKFacade {
   }
 
   async importSMRProxyAccount() {
-    console.log(
-      '===> iota_im_import_smr_proxy_account',
-      this._address!,
-      this._client!._curNode!.apiUrl
-    );
-    const res = (await IotaSDK.request({
-      method: 'iota_im_import_smr_proxy_account',
-      params: {
-        content: {
-          addr: this._address!,
-          nodeUrlHint: this._client!._curNode!.apiUrl,
-        },
-      },
-    })) as string;
-    return res;
+    const adapter = this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter
+    return await adapter.importProxyAccount()
   }
 
   // async createSMRProxyAccount() {

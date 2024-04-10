@@ -74,6 +74,19 @@ export class ImpersonationModeRequestAdapter
     this._nodeUrlHint = nodeUrlHint;
   }
 
+  async importProxyAccount() {
+    const res = (await IotaSDK.request({
+      method: 'iota_im_import_smr_proxy_account',
+      params: {
+        content: {
+          addr: this._evmAddress,
+          nodeUrlHint: this._nodeUrlHint,
+        },
+      },
+    })) as string;
+    return res
+  }
+
   async getProxyAccount() {
     return (await IotaSDK.request({
       method: 'iota_im_get_eth_proxy_account',
@@ -150,7 +163,7 @@ export class DelegationModeRequestAdapter
 {
   private _evmAddress: string;
 
-  private serviceDomain = 'api.groupfi.ai';
+  private serviceDomain = 'testapi.groupfi.ai';
 
   constructor(evmAddress: string) {
     this._evmAddress = evmAddress;
@@ -199,20 +212,27 @@ export class DelegationModeRequestAdapter
 
       const signature = await this.ethSign({ dataToBeSignedHex });
 
-      const body = utf8ToHex(
-        JSON.stringify({
-          ...metadataObj,
-          signature,
-        }),
-        true
-      );
+      const body = JSON.stringify({
+        ...metadataObj,
+        signature
+      })
+
+      // const body = utf8ToHex(
+      //   JSON.stringify({
+      //     ...metadataObj,
+      //     signature,
+      //   }),
+      //   true
+      // );
+
+      console.log('===> mm register PairX body', body)
 
       const res = await fetch(`https://${this.serviceDomain}/proxy/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: body,
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: body,
       });
 
       const resJson = (await res.json()) as {
@@ -220,7 +240,7 @@ export class DelegationModeRequestAdapter
         proxy_account: string;
       };
 
-      console.log('mm register PairX', resJson);
+      console.log('mm register PairX resJson', resJson);
 
       if (resJson.result) {
         return resJson.proxy_account;
