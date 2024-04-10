@@ -1,7 +1,7 @@
 import { Duplex } from 'stream';
 
 // Update the Processor type to accept T and return O
-type Processor<T, O> = (data: T) => Promise<O>;
+type Processor<T, O> = (data: T,callback: (error?: Error | null) => void,stream:ConcurrentPipe<T,O>) => Promise<void>;
 
 export class ConcurrentPipe<T, O> extends Duplex {
     private processor: Processor<T, O>;
@@ -53,9 +53,7 @@ export class ConcurrentPipe<T, O> extends Duplex {
 
         this.activeWorkers++;
         try {
-            const processedData = await this.processor(task.chunk);
-            this.push(processedData);
-            task.callback();
+            await this.processor(task.chunk,task.callback,this);
         } catch (error) {
             task.callback(error as Error);
         } finally {
