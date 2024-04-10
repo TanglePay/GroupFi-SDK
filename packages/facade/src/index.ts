@@ -246,6 +246,22 @@ class GroupFiSDKFacade {
     this._mqttConnected = true;
   }
 
+  listenningMetaMaskAccountChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
+    const listenner = async (accounts: string[]) => {
+      const {mode, address} = await this.connectMetaMaskWallet()
+      const res = {
+        mode,
+        address,
+        nodeId: undefined,
+        isAddressChanged: true,
+      }
+      await this._onAccountChanged(res);
+      callback(res)
+    }
+    window.ethereum.on("accountsChanged", listenner);
+    return () => window.ethereum.removeListener("accountsChanged", listenner)
+  }
+
   listenningTPAccountChanged(
     callback: (params: { address: string; nodeId: number; mode: Mode, isAddressChanged: boolean }) => void
   ) {
@@ -322,7 +338,7 @@ class GroupFiSDKFacade {
     mode,
   }: {
     address: string;
-    nodeId: number;
+    nodeId?: number;
     mode: Mode;
     isAddressChanged: boolean
   }) {
