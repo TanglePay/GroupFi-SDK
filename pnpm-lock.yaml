@@ -216,6 +216,9 @@ importers:
       '@ethereumjs/util':
         specifier: ^9.0.3
         version: 9.0.3
+      '@iota/crypto.js':
+        specifier: ^1.8.6
+        version: 1.8.6
       '@iota/iota.js':
         specifier: 2.0.0-rc.4
         version: 2.0.0-rc.4
@@ -2041,6 +2044,14 @@ packages:
     resolution: {integrity: sha512-ZnQMnLV4e7hDlUvw8H+U8ASL02SS2Gn6+9Ac3wGGLIe7+je2AeAOxPY+izIPJDfFDb7eDjev0Us8MO1iFRN8hA==}
     dev: true
 
+  /@iota/crypto.js@1.8.6:
+    resolution: {integrity: sha512-bmsBL+gEJVlT1KgkOqjIkPsyNs5VV9MyrAWo9UAYdGNxfyH+KeYiiRzIaQwwhCzUkncuNzlCTbEo2qRJQoKETg==}
+    engines: {node: '>=14.0.0'}
+    dependencies:
+      '@iota/util.js': 1.8.6
+      big-integer: 1.6.51
+    dev: false
+
   /@iota/crypto.js@2.0.0-rc.1:
     resolution: {integrity: sha512-gidDFvbIcthVIaxqntffUCFHHNZNhu1e3zjwt6yaYLeuqJcc2AXPv/UF8Lz9Mfkw9aSM8xVUwo8/uYDkvs2eOQ==}
     engines: {node: '>=14.0.0'}
@@ -2110,6 +2121,13 @@ packages:
 
   /@iota/types@2.0.0-rc.2:
     resolution: {integrity: sha512-huL+171zMQgGYV4/zhHLFcE8heTLRJhtlqLEJaM1Q+klb2KxNqFX0EySU8pxZ/nslh0Dem3QQ+Jmwv1FdBmpFQ==}
+    dev: false
+
+  /@iota/util.js@1.8.6:
+    resolution: {integrity: sha512-vQRYU0bDKORGFzeoN2zn7tO4Kjqv+h2P/J//MRspg9Kyy1TKgtGkn0j0M2ZSwJjScH6Cn2BQmRLet/ZBpg6osA==}
+    engines: {node: '>=14.0.0'}
+    dependencies:
+      big-integer: 1.6.51
     dev: false
 
   /@iota/util.js@2.0.0-rc.1:
