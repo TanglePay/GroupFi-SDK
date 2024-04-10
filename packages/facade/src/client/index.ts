@@ -45,6 +45,8 @@ export async function initialClient(params: {
           evmAddress: evmAddress!,
           pairX,
         });
+        // import smr proxy account after registering pairX
+        adapter.importProxyAccount()
         return {
           pairX: pairX,
           detail: {
