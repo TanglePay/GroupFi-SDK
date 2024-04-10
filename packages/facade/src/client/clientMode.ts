@@ -6,6 +6,7 @@ import {
   IRequestAdapterSendTransationParams,
   IProxyModeRequest,
 } from 'groupfi-sdk-client';
+import { Ed25519 } from '@iota/crypto.js';
 import { IotaCatSDKObj, IOTACATTAG } from 'iotacat-sdk-core';
 import {
   strToBytes,
@@ -16,9 +17,11 @@ import {
   EthEncrypt,
   getCurrentEpochInSeconds,
   utf8ToHex,
+  concatBytes,
 } from 'iotacat-sdk-utils';
 import { decryptOneOfList } from 'ecies-ed25519-js';
 import IotaSDK from 'tanglepaysdk-client';
+import auxiliaryService from '../auxiliaryService';
 
 export class ShimmerModeRequestAdapter implements IRequestAdapter {
   private _bech32Address: string;
@@ -55,7 +58,7 @@ export class ShimmerModeRequestAdapter implements IRequestAdapter {
     if (!essence) {
       throw new Error('transactionEssenceUrl is undefined.');
     }
-    return await sendTransationByTanglePay({
+    return await sendTransactionByTanglePay({
       essence,
       nodeUrlHint: this._nodeUrlHint,
       addr: this._bech32Address,
@@ -84,7 +87,7 @@ export class ImpersonationModeRequestAdapter
         },
       },
     })) as string;
-    return res
+    return res;
   }
 
   async getProxyAccount() {
@@ -96,18 +99,18 @@ export class ImpersonationModeRequestAdapter
           nodeUrlHint: this._nodeUrlHint,
         },
       },
-    })) as {bech32Address: string, hexAddress: string};
+    })) as { bech32Address: string; hexAddress: string };
   }
 
   async decryptPairX(params: { encryptedData: string }) {
-    console.log('Enter client mode decryptPairX')
+    console.log('Enter client mode decryptPairX');
     return (await IotaSDK.request({
       method: 'iota_im_eth_decrypt',
       params: {
         content: {
           addr: this._evmAddress,
           nodeUrlHint: this._nodeUrlHint,
-          encryptedData: params.encryptedData
+          encryptedData: params.encryptedData,
         },
       },
     })) as string;
@@ -150,7 +153,7 @@ export class ImpersonationModeRequestAdapter
     if (!essence) {
       throw new Error('essence is undefined.');
     }
-    return await sendTransationByTanglePay({
+    return await sendTransactionByTanglePay({
       essence,
       nodeUrlHint: this._nodeUrlHint,
       addr: this._evmAddress,
@@ -162,8 +165,6 @@ export class DelegationModeRequestAdapter
   implements IRequestAdapter, IProxyModeRequest
 {
   private _evmAddress: string;
-
-  private serviceDomain = 'testapi.groupfi.ai';
 
   constructor(evmAddress: string) {
     this._evmAddress = evmAddress;
@@ -214,36 +215,17 @@ export class DelegationModeRequestAdapter
 
       const body = JSON.stringify({
         ...metadataObj,
-        signature
-      })
-
-      // const body = utf8ToHex(
-      //   JSON.stringify({
-      //     ...metadataObj,
-      //     signature,
-      //   }),
-      //   true
-      // );
-
-      console.log('===> mm register PairX body', body)
-
-      const res = await fetch(`https://${this.serviceDomain}/proxy/register`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: body,
+        signature,
       });
 
-      const resJson = (await res.json()) as {
-        result: boolean;
-        proxy_account: string;
-      };
+      console.log('===> mm register PairX body', body);
 
-      console.log('mm register PairX resJson', resJson);
+      const res = await auxiliaryService.register(body);
 
-      if (resJson.result) {
-        return resJson.proxy_account;
+      console.log('mm register PairX resJson', res);
+
+      if (res.result) {
+        return res.proxy_account;
       } else {
         throw new Error('Failed to register');
       }
@@ -276,12 +258,35 @@ export class DelegationModeRequestAdapter
     return await decryptByPairX({ dataTobeDecrypted, pairX });
   }
 
-  //TODO
-  async sendTransaction({ pairX }: IRequestAdapterSendTransationParams) {
+  //TODO，还未调试
+  async sendTransaction({
+    pairX,
+    essence,
+  }: IRequestAdapterSendTransationParams) {
     if (!pairX) {
       throw new Error('DelegationMode sendTransation pairX is undefined');
     }
-    return '' as any;
+
+    const ts = getCurrentEpochInSeconds();
+
+    const tsBytes = strToBytes(ts.toString());
+    const dataTobeSignedUint8Array = concatBytes(essence, tsBytes);
+
+    const signatureUint8Array = Ed25519.sign(
+      pairX.privateKey,
+      dataTobeSignedUint8Array
+    );
+
+    const body = JSON.stringify({
+      essence: bytesToHex(essence, true),
+      ts,
+      sign: bytesToHex(signatureUint8Array, true),
+    });
+
+    const res = await auxiliaryService.sendTransaction(body);
+    console.log('==>proxy send transaction res', res);
+
+    return res;
   }
 }
 
@@ -308,7 +313,7 @@ async function decryptByPairX({
   return salt;
 }
 
-async function sendTransationByTanglePay({
+async function sendTransactionByTanglePay({
   nodeUrlHint,
   essence,
   addr,

@@ -19,7 +19,7 @@ export const config = [
     name: 'Polygon',
     url: 'https://polygon-rpc.com/',
     token: 'MATIC',
-  }
+  },
 ];
 
 export class AuxiliaryService {
@@ -38,7 +38,36 @@ export class AuxiliaryService {
       };
     };
 
-    return json.data[chainId]
+    return json.data[chainId];
+  }
+
+  async sendTransaction(body: string) {
+    const res = await fetch(`https://${this._domain}/proxy/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: body,
+    });
+    const json = await res.json();
+    return json;
+  }
+
+  async register(body: string) {
+    const res = await fetch(`https://${this._domain}/proxy/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: body,
+    });
+
+    const resJson = (await res.json()) as {
+      result: boolean;
+      proxy_account: string;
+    };
+
+    return resJson;
   }
 
   async mintNicknameNFT(
@@ -73,3 +102,6 @@ export class AuxiliaryService {
     };
   }
 }
+
+const instance = new AuxiliaryService();
+export default instance;

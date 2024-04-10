@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@ethereumjs/util": "^9.0.3",
+    "@iota/crypto.js": "^1.8.6",
     "@iota/iota.js": "2.0.0-rc.4",
     "@metamask/sdk": "^0.18.1",
     "big-integer": "^1.6.51",

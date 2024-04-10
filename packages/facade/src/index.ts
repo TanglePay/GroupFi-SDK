@@ -249,6 +249,7 @@ class GroupFiSDKFacade {
   listenningMetaMaskAccountChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
     const listenner = async (accounts: string[]) => {
       const {mode, address} = await this.connectMetaMaskWallet()
+      console.log('metamask account changed', mode, address)
       const res = {
         mode,
         address,
@@ -326,9 +327,6 @@ class GroupFiSDKFacade {
       //   'accountsChanged and connect wallet using new address successfully',
       //   address
       // );
-      
-      
-      
     };
     IotaSDK.on('accountsChanged', listener);
     return () => IotaSDK.removeListener('accountsChanged', listener);
@@ -563,8 +561,6 @@ class GroupFiSDKFacade {
       }
   
       console.log('===> Enter buySMR', params)
-      
-      
       console.log('===> proxyAddress', proxyAddress)
   
       const contract = new web3.eth.Contract(smrPurchaseAbi, params.contract)
