@@ -788,15 +788,6 @@ class GroupFiSDKFacade {
     return { address: res.address, mode: res.mode, nodeId: res.nodeId };
   }
 
-  // async decryptPairX({publicKey, privateKeyEncrypted}:{publicKey:string, privateKeyEncrypted: string}): Promise<any> {
-  //   const res = await this._client!.decryptPairX({
-  //     encryptedData: privateKeyEncrypted
-  //   })
-  //   const privateKey = 'a926fd69cdd4adf8161e861b0e48dd452ba4cbc23995a72684b048fd56976150'
-  //   console.log('===> decryptPairX', res)
-  //   console.log(res)
-  // }
-
   async fetchRegisteredInfo(isPairXPresent: boolean): Promise<RegisteredInfo | undefined> {
     const res = await IotaCatSDKObj.fetchAddressPairX(this._address!)
     console.log('===>fetchRegisteredInfo res', res, isPairXPresent)
@@ -855,40 +846,23 @@ class GroupFiSDKFacade {
     // shimmer mode, setup normally
     if (this._mode === ShimmerMode) {
       this._proxyAddress = this._address
-      IotaCatSDKObj.switchMqttAddress(this._address!);
-      await this.fetchAddressQualifiedGroupConfigs({});
-      // this._client!.switchAddress(this._address!);
-      // this._client!.switchAddress({
-      //   bech32Address: this._address!,
-      //   mode: ShimmerMode
-      // })
+      this._client!.switchAddress(this._address!);
     } else if (this._mode === ImpersonationMode){
       const proxy = await this.getSMRProxyAccount()
       if (proxy) {
         this._proxyAddress = proxy.bech32Address
       }
-      IotaCatSDKObj.switchMqttAddress(this._address!);
-      await this.fetchAddressQualifiedGroupConfigs({});
-    } else if (this._mode === DelegationMode) {
-      IotaCatSDKObj.switchMqttAddress(this._address!);
-      await this.fetchAddressQualifiedGroupConfigs({});
     }
-    // const res = await initialClient({
-    //   mode,
-    //   modeInfo,
-    //   bech32Address,
-    //   evmAddress,
-    //   client: this._client!,
-    // });
-
-    // console.log('===> initialClient end', res)
-
-    // this._proxyAddress = res?.detail.account ?? this._address!
-    // return res
+    IotaCatSDKObj.switchMqttAddress(this._address!);
+    await this.fetchAddressQualifiedGroupConfigs({});
   }
 
-  setDelegationModeProxyAddress(address: string) {
-    this._proxyAddress = address
+  setProxyModeInfo(modeInfo: ModeInfo) {
+    if (!modeInfo.pairX || !modeInfo.detail) {
+      return
+    }
+    this._proxyAddress = modeInfo.detail.account
+    this._client!.switchAddress(this._proxyAddress, modeInfo.pairX)
   }
 
   async registerPairX(modeInfo: ModeInfo) {
@@ -896,7 +870,7 @@ class GroupFiSDKFacade {
     if (this._mode === ImpersonationMode) {
       const adapter = this._client!.getRequestAdapter()  as ImpersonationModeRequestAdapter
       const {bech32Address} = await adapter.getProxyAccount();
-      await this._client!.switchAddress(bech32Address, modeInfo.pairX);
+      await this._client!.switchAddress(bech32Address, pairX);
       await this._client!.registerTanglePayPairX({
         evmAddress: this._address!,
         pairX,
@@ -922,12 +896,6 @@ class GroupFiSDKFacade {
     const adapter = this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter
     return await adapter.importProxyAccount()
   }
-
-  // async createSMRProxyAccount() {
-  //   const SMRAddress = await this._client!.createSMRProxyAccount(this._address!)
-  //   this._client!.switchAddress(SMRAddress)
-  //   return SMRAddress
-  // }
 
   clearAddress() {
     this._muteMap = undefined;
