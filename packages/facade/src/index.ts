@@ -870,7 +870,8 @@ class GroupFiSDKFacade {
       IotaCatSDKObj.switchMqttAddress(this._address!);
       await this.fetchAddressQualifiedGroupConfigs({});
     } else if (this._mode === DelegationMode) {
-
+      IotaCatSDKObj.switchMqttAddress(this._address!);
+      await this.fetchAddressQualifiedGroupConfigs({});
     }
     // const res = await initialClient({
     //   mode,
@@ -884,6 +885,10 @@ class GroupFiSDKFacade {
 
     // this._proxyAddress = res?.detail.account ?? this._address!
     // return res
+  }
+
+  setDelegationModeProxyAddress(address: string) {
+    this._proxyAddress = address
   }
 
   async registerPairX(modeInfo: ModeInfo) {
@@ -959,6 +964,8 @@ class GroupFiSDKFacade {
           }
           
           const account = toChecksumAddress(rawAccount)
+
+          console.log('metamask connected', account)
           this._mode = DelegationMode
           this._address = account
           this._nodeId = undefined
