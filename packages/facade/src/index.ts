@@ -607,7 +607,7 @@ class GroupFiSDKFacade {
     }
   }
 
-  async mintProxyNicknameNft(name: string): Promise<{result: boolean}> {
+  async mintProxyNicknameNft(name: string) {
     this._ensureWalletConnected();
     if (this._pairX === undefined) {
       throw new Error('PairX is undefined')

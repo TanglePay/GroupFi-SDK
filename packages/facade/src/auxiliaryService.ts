@@ -70,7 +70,12 @@ export class AuxiliaryService {
     return resJson;
   }
 
-  async mintProxyNicknameNft(body: string) {
+  async mintProxyNicknameNft(body: string): Promise<{
+    result: boolean;
+    blockId?: string;
+    errCode?: number;
+    reason?: string;
+  }> {
     const res = await fetch(`https://${this._domain}/proxy/mint_nicknft`, {
       method: 'POST',
       headers: {
@@ -81,11 +86,14 @@ export class AuxiliaryService {
     const json = (await res.json()) as {
       result: boolean;
       block_id: string;
+      'err-msg'?: string;
+      'err-code'?: number;
     };
     if (!json.result) {
       return {
         result: false,
-        reason: 'unknown reason'
+        errCode: json['err-code'],
+        reason: json['err-msg'],
       } as { result: boolean; reason: string };
     }
     return {
