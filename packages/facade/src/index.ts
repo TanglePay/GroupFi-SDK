@@ -18,7 +18,7 @@ import {
   MessageResponseItem,
 } from 'iotacat-sdk-core';
 
-import { SimpleDataExtended, hexToBytes, objectId, sleep } from 'iotacat-sdk-utils';
+import { SimpleDataExtended, hexToBytes, objectId, sleep, generateSMRPair } from 'iotacat-sdk-utils';
 import { GroupfiSdkClient, IProxyModeRequest, MessageBody } from 'groupfi-sdk-client';
 import { Web3 } from 'web3'
 import smrPurchaseAbi from './contractAbi/smr-purchase'
@@ -82,6 +82,13 @@ class GroupFiSDKFacade {
 
   get currentGroupName() {
     return this._currentGroup?.groupName;
+  }
+
+  get currentMode() {
+    if (this._mode === undefined) {
+      throw new Error('Mode is undefined.')
+    }
+    return this._mode
   }
 
   get currentGroupId() {
@@ -334,6 +341,7 @@ class GroupFiSDKFacade {
 
   async _onAccountChanged({
     mode,
+    isAddressChanged,
   }: {
     address: string;
     nodeId?: number;
@@ -341,6 +349,10 @@ class GroupFiSDKFacade {
     isAddressChanged: boolean
   }) {
     this.switchClientAdapter(mode)
+    if (isAddressChanged) {
+      await this.initialAddress()
+    }
+    
     // this._address = newAddress;
     // this.clearAddress();
     // await this.initialAddress(nodeId);
@@ -764,6 +776,7 @@ class GroupFiSDKFacade {
     }
     
     this.switchClientAdapter(res.mode)
+    await this.initialAddress()
 
     // await Promise.all([
     //   this.fetchAddressQualifiedGroupConfigs({}),
@@ -833,18 +846,15 @@ class GroupFiSDKFacade {
     }
   }
 
-  async initialAddress(mode: Mode, modeInfo: ModeInfo) {
+  async initialAddress() {
     this._ensureWalletConnected();
     this._ensureMqttConnected();
 
     this.clearAddress();
 
-    let bech32Address: string | undefined = undefined;
-    let evmAddress: string | undefined = undefined;
-
     // shimmer mode, setup normally
-    if (mode === ShimmerMode) {
-      bech32Address = this._address;
+    if (this._mode === ShimmerMode) {
+      this._proxyAddress = this._address
       IotaCatSDKObj.switchMqttAddress(this._address!);
       await this.fetchAddressQualifiedGroupConfigs({});
       // this._client!.switchAddress(this._address!);
@@ -852,26 +862,55 @@ class GroupFiSDKFacade {
       //   bech32Address: this._address!,
       //   mode: ShimmerMode
       // })
-    } else {
-      evmAddress = this._address;
+    } else if (this._mode === ImpersonationMode){
+      const proxy = await this.getSMRProxyAccount()
+      if (proxy) {
+        this._proxyAddress = proxy.bech32Address
+      }
+      IotaCatSDKObj.switchMqttAddress(this._address!);
+      await this.fetchAddressQualifiedGroupConfigs({});
+    } else if (this._mode === DelegationMode) {
+      IotaCatSDKObj.switchMqttAddress(this._address!);
+      await this.fetchAddressQualifiedGroupConfigs({});
     }
-    const res = await initialClient({
-      mode,
-      modeInfo,
-      bech32Address,
-      evmAddress,
-      client: this._client!,
-    });
+    // const res = await initialClient({
+    //   mode,
+    //   modeInfo,
+    //   bech32Address,
+    //   evmAddress,
+    //   client: this._client!,
+    // });
 
-    console.log('===> initialClient end', res)
+    // console.log('===> initialClient end', res)
 
-    this._proxyAddress = res?.detail.account ?? this._address!
-    return res
-  }  
+    // this._proxyAddress = res?.detail.account ?? this._address!
+    // return res
+  }
+
+  setDelegationModeProxyAddress(address: string) {
+    this._proxyAddress = address
+  }
+
+  async registerPairX(modeInfo: ModeInfo) {
+    const pairX = modeInfo.pairX ?? generateSMRPair(); 
+    if (this._mode === ImpersonationMode) {
+      const adapter = this._client!.getRequestAdapter()  as ImpersonationModeRequestAdapter
+      const {bech32Address} = await adapter.getProxyAccount();
+      await this._client!.switchAddress(bech32Address, modeInfo.pairX);
+      await this._client!.registerTanglePayPairX({
+        evmAddress: this._address!,
+        pairX,
+      });
+      // import smr proxy account after registering pairX
+      adapter.importProxyAccount()
+    } else if (this._mode === DelegationMode) {
+      const adapter = this._client!.getRequestAdapter()  as DelegationModeRequestAdapter
+      const smrAddress = await adapter.registerPairX({pairX})
+      this._proxyAddress = smrAddress
+    }
+  }
 
   async getSMRProxyAccount(): Promise<{bech32Address: string, hexAddress: string} | undefined> {
-
-    
     if (this._mode !== ImpersonationMode) {
       return
     }
@@ -925,6 +964,8 @@ class GroupFiSDKFacade {
           }
           
           const account = toChecksumAddress(rawAccount)
+
+          console.log('metamask connected', account)
           this._mode = DelegationMode
           this._address = account
           this._nodeId = undefined
