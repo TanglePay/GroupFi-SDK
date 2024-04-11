@@ -70,6 +70,38 @@ export class AuxiliaryService {
     return resJson;
   }
 
+  async mintProxyNicknameNft(body: string): Promise<{
+    result: boolean;
+    blockId?: string;
+    errCode?: number;
+    reason?: string;
+  }> {
+    const res = await fetch(`https://${this._domain}/proxy/mint_nicknft`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: body,
+    });
+    const json = (await res.json()) as {
+      result: boolean;
+      block_id: string;
+      'err-msg'?: string;
+      'err-code'?: number;
+    };
+    if (!json.result) {
+      return {
+        result: false,
+        errCode: json['err-code'],
+        reason: json['err-msg'],
+      } as { result: boolean; reason: string };
+    }
+    return {
+      result: true,
+      blockId: json.block_id,
+    };
+  }
+
   async mintNicknameNFT(
     address: string,
     name: string
