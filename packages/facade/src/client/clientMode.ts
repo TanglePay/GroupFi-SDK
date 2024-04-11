@@ -276,12 +276,12 @@ export class DelegationModeRequestAdapter
       sign: bytesToHex(signatureBytes, true),
     });
 
-    const res = auxiliaryService.mintProxyNicknameNft(body);
+    const res = await auxiliaryService.mintProxyNicknameNft(body);
 
-    console.log('===> mint proxy name nft body:', body)
-    console.log('===> mint proxy name nft res:', res)
+    console.log('===> mint proxy name nft body:', body);
+    console.log('===> mint proxy name nft res:', res);
 
-    return res
+    return res;
   }
 
   //TODO，还未调试
