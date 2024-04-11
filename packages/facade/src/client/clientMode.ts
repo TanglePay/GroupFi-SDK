@@ -258,6 +258,32 @@ export class DelegationModeRequestAdapter
     return await decryptByPairX({ dataTobeDecrypted, pairX });
   }
 
+  async mintProxyNicknameNft(params: { name: string; pairX: PairX }) {
+    const { pairX, name } = params;
+
+    const ts = getCurrentEpochInSeconds();
+    const tsBytes = strToBytes(ts.toString());
+
+    const nameBytes = strToBytes(name);
+    const signedDataBytes = concatBytes(nameBytes, tsBytes);
+
+    const signatureBytes = Ed25519.sign(pairX.privateKey, signedDataBytes);
+
+    const body = JSON.stringify({
+      publickey: bytesToHex(pairX.publicKey, true),
+      data: name,
+      ts,
+      sign: bytesToHex(signatureBytes, true),
+    });
+
+    const res = auxiliaryService.mintProxyNicknameNft(body);
+
+    console.log('===> mint proxy name nft body:', body)
+    console.log('===> mint proxy name nft res:', res)
+
+    return res
+  }
+
   //TODO，还未调试
   async sendTransaction({
     pairX,
@@ -268,19 +294,17 @@ export class DelegationModeRequestAdapter
     }
 
     const ts = getCurrentEpochInSeconds();
-
     const tsBytes = strToBytes(ts.toString());
-    const dataTobeSignedUint8Array = concatBytes(essence, tsBytes);
 
-    const signatureUint8Array = Ed25519.sign(
-      pairX.privateKey,
-      dataTobeSignedUint8Array
-    );
+    const signedDataBytes = concatBytes(essence, tsBytes);
+
+    const signatureBytes = Ed25519.sign(pairX.privateKey, signedDataBytes);
 
     const body = JSON.stringify({
-      essence: bytesToHex(essence, true),
+      publickey: bytesToHex(pairX.publicKey, true),
+      data: bytesToHex(essence, true),
       ts,
-      sign: bytesToHex(signatureUint8Array, true),
+      sign: bytesToHex(signatureBytes, true),
     });
 
     const res = await auxiliaryService.sendTransaction(body);

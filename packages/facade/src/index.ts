@@ -18,7 +18,7 @@ import {
   MessageResponseItem,
 } from 'iotacat-sdk-core';
 
-import { SimpleDataExtended, hexToBytes, objectId, sleep, generateSMRPair } from 'iotacat-sdk-utils';
+import { SimpleDataExtended, strToBytes, objectId, sleep, generateSMRPair, bytesToHex, concatBytes, getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
 import { GroupfiSdkClient, IProxyModeRequest, MessageBody } from 'groupfi-sdk-client';
 import { Web3 } from 'web3'
 import smrPurchaseAbi from './contractAbi/smr-purchase'
@@ -61,10 +61,9 @@ const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 class GroupFiSDKFacade {
   private _address: string | undefined;
   private _proxyAddress: string | undefined;
-  private _walletType: WalletType | undefined;
   private _nodeId: number | undefined
-
   private _mode: Mode | undefined;
+  private _pairX: PairX | undefined
 
   private _mqttConnected: boolean = false;
 
@@ -608,6 +607,18 @@ class GroupFiSDKFacade {
     }
   }
 
+  async mintProxyNicknameNft(name: string): Promise<{result: boolean}> {
+    this._ensureWalletConnected();
+    if (this._pairX === undefined) {
+      throw new Error('PairX is undefined')
+    }
+    const adapter = this._client!.getRequestAdapter() as DelegationModeRequestAdapter
+    return await adapter.mintProxyNicknameNft({
+      pairX: this._pairX,
+      name
+    })
+  }
+
   async mintNicknameNFT(name: string): Promise<{
     result: boolean;
     blockId?: string;
@@ -619,13 +630,9 @@ class GroupFiSDKFacade {
     return await this._auxiliaryService.mintNicknameNFT(addr, name)
   }
 
+
   async fetchAddressNames(addressList: string[]) {
     return await IotaCatSDKObj.fetchAddressNames(addressList);
-  }
-
-  async checkIfhasOneNicknameNft() {
-    this._ensureWalletConnected();
-    return await this._client!.checkIfhasOneNicknameNft();
   }
 
   async hasUnclaimedNameNFT() {
@@ -753,7 +760,6 @@ class GroupFiSDKFacade {
     mode: Mode;
     nodeId: number | undefined
   }> {
-    this._walletType = walletType;
     this._client = new GroupfiSdkClient();
     await this._client!.setup();
 
@@ -863,6 +869,7 @@ class GroupFiSDKFacade {
     }
     this._proxyAddress = modeInfo.detail.account
     this._client!.switchAddress(this._proxyAddress, modeInfo.pairX)
+    this._pairX = modeInfo.pairX
   }
 
   async registerPairX(modeInfo: ModeInfo) {

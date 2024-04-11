@@ -1142,55 +1142,6 @@ export class GroupfiSdkClient {
         return owned ? {owned, locked} : {owned: false}
     }
 
-    async checkIfhasOneNicknameNft(): Promise<boolean> {
-        this._ensureClientInited()
-        this._ensureWalletInited()
-
-        const address = this._accountBech32Address;
-
-        try {
-            const {items: items1} = await this._indexer!.nfts({
-                addressBech32: address
-            })
-            const nftOutputIdsByAddressBech32 = items1.map(outputId => ({outputId, addressBech32: address}))
-
-            const {items: items2} = await this._indexer!.nfts({
-                expirationReturnAddressBech32: address
-            })
-
-            const nftOutputIdsByexpirationReturnAddressBech32 = items2.map(outputId => ({outputId, expirationReturnAddressBech32: address}))
-
-            const outputIds: {outputId: string, addressBech32?: string, expirationReturnAddressBech32?: string  }[] = [...nftOutputIdsByAddressBech32, ...nftOutputIdsByexpirationReturnAddressBech32]
-            
-            for(const {outputId, addressBech32, expirationReturnAddressBech32} of outputIds) {
-                const outputResponse = await this._client!.output(outputId) as {metadata: IOutputMetadataResponse,  output: INftOutput}
-                const { owned, locked } = this._checkIfSelfOwnedOutput<INftOutput>(outputResponse, {addressBech32, expirationReturnAddressBech32})
-                if(!owned) {
-                    continue
-                }
-                if(locked) {
-                    continue
-                }
-                const output = outputResponse.output
-                const { immutableFeatures } = output
-                if(immutableFeatures === undefined) {
-                    continue
-                }
-                const issuerFeature = immutableFeatures.find(feature => feature.type === 1) as (IIssuerFeature | undefined)
-                if(issuerFeature === undefined) {
-                    continue
-                }
-                if(issuerFeature.address.type === 16 && issuerFeature.address.nftId === '0xf45a533f41d52e8337a09aaa9f8456e8165a737e395f35d2d6af3467eb240533') {
-                    console.log('Nickname nft', outputId, output)
-                    return true
-                }
-            }
-            return false
-        }catch(error) {
-            return false
-        }
-    }
-
     async hasUnclaimedNameNFT(address: string): Promise<boolean> {
         this._ensureClientInited()
         this._ensureWalletInited()
