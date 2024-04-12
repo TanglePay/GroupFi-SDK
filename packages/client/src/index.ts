@@ -51,7 +51,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
     GROUPFICASHTAG,MessageGroupMeta
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair } from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex } from 'iotacat-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
@@ -165,7 +165,7 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://test.api.groupfi.ai",//"https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://test2.api.groupfi.ai",//"https://mainnet.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
@@ -215,7 +215,11 @@ export class GroupfiSdkClient {
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
     _pairX?: PairX
-
+    // get pairX publickey in hex
+    getPairXPublicKey():string|undefined{
+        if (!this._pairX) return
+        return bytesToHex(this._pairX.publicKey) 
+    }
     switchAdapter(params: {adapter: IRequestAdapter, mode: Mode}) {
         const { adapter, mode } = params 
         this._mode = mode
@@ -287,38 +291,48 @@ export class GroupfiSdkClient {
     // then pick all as inputs, and split to 3 equal amount outputs, and send, outputs will be used as remainder hint
     async prepareRemainderHint(){
         if (!this._prepareRemainderHintSwitch) return false
-        const timeElapsed = Date.now() - this._lastSendTimestamp
-        if (timeElapsed < this._remainderHintOutdatedTimeperiod && this._remainderHintSet.length > 0) return false
-        // log actually start prepare
-        console.log('Actually start prepare remainder hint');
-        const outputs = await this._getUnSpentOutputs({numbersWanted:100})
-        let amount = outputs.reduce((acc,output)=>acc.add(bigInt(output.output.amount)),bigInt(0))
-        const amountPerOutput = amount.divide(3)
-        const outputsToSend:IBasicOutput[] = []
-        outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
-        amount = amount.subtract(amountPerOutput)
-        outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
-        amount = amount.subtract(amountPerOutput)
-        outputsToSend.push(this._makeCashBasicOutput(amount));
-        const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0],this._protocolInfo!.rentStructure)
-        // check if first output is enough for deposit
-        if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
-            // log then return
-            console.log('First output is not enough for deposit');
+        try {
+            const timeElapsed = Date.now() - this._lastSendTimestamp
+            if (timeElapsed < this._remainderHintOutdatedTimeperiod && this._remainderHintSet.length > 0) return false
+            // log actually start prepare
+            console.log('Actually start prepare remainder hint');
+            const outputs = await this._getUnSpentOutputs({numbersWanted:100})
+            // log outputs
+            console.log('outputs', outputs);
+            if (outputs.length === 0) return false
+            let amount = outputs.reduce((acc,output)=>acc.add(bigInt(output.output.amount)),bigInt(0))
+            // log amount
+            console.log('amount', amount);
+            const amountPerOutput = amount.divide(3)
+            const outputsToSend:IBasicOutput[] = []
+            outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
+            amount = amount.subtract(amountPerOutput)
+            outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
+            amount = amount.subtract(amountPerOutput)
+            outputsToSend.push(this._makeCashBasicOutput(amount));
+            const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0],this._protocolInfo!.rentStructure)
+            // check if first output is enough for deposit
+            if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
+                // log then return
+                console.log('First output is not enough for deposit');
+                this._remainderHintSet = []
+                return false
+            }
+            // log outputsToSend and outputs in one line
+            console.log('outputsToSend', outputsToSend, 'outputs', outputs);
+            const {transactionId} = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs,outputsToSend)
             this._remainderHintSet = []
+            for (let idx =0;idx<outputsToSend.length;idx++) {
+                const output = outputsToSend[idx]
+                this._remainderHintSet.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx),timestamp:Date.now()})
+            }
+            // log remainderHintSet
+            console.log('remainderHintSet', this._remainderHintSet);
+            return true
+        } catch (error) {
+            console.log('prepareRemainderHint error', error);
             return false
         }
-        // log outputsToSend and outputs in one line
-        console.log('outputsToSend', outputsToSend, 'outputs', outputs);
-        const {transactionId} = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs,outputsToSend)
-        this._remainderHintSet = []
-        for (let idx =0;idx<outputsToSend.length;idx++) {
-            const output = outputsToSend[idx]
-            this._remainderHintSet.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx),timestamp:Date.now()})
-        }
-        // log remainderHintSet
-        console.log('remainderHintSet', this._remainderHintSet);
-        return true
     }
     async _getDltShimmer(){
         const url = 'https://dlt.green/api?dns=shimmer&id=tanglepay&token=egm9jvee56sfjrohylvs0tkc6quwghyo'
@@ -572,6 +586,8 @@ export class GroupfiSdkClient {
     async _getSaltForGroup(groupId:string, address:string,memberList?:{addr:string,publicKey:string}[]):Promise<{salt:string, outputId?:string, outputs?:IBasicOutput[],isHA:boolean}>{
         console.log(`_getSaltForGroup groupId:${groupId}, address:${address}`);
         const sharedOutputResp = await this._tryGetSharedOutputIdForGroup(groupId)
+        // log sharedOutputResp
+        console.log('sharedOutputResp', sharedOutputResp);
         let outputId:string|undefined
         let outputs:IBasicOutput[]|undefined
         if (sharedOutputResp) {
@@ -775,10 +791,6 @@ export class GroupfiSdkClient {
     }
     // _makeSharedOutputForEvmGroup
     async _makeSharedOutputForEvmGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{outputs:IBasicOutput[],salt:string}>{
-        // get group config
-        const selfEvmAddress = this._accountHexAddress
-        const selfPublicKey = await this.getPublicKey(selfEvmAddress!)
-        memberList?.push({addr:selfEvmAddress!,publicKey:selfPublicKey!})
         const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
         const addressToBeFiltered = memberList ? memberList.map(member=>member.addr) : []
         let filterParam = {
@@ -807,6 +819,8 @@ export class GroupfiSdkClient {
             const {addr} = pair
             return addressListFiltered.includes(addr)
         })
+        // log memberListFiltered
+        console.log('memberListFiltered', memberListFiltered);
         const qualifyOutput = await this._getEvmQualify(groupId,addressListFiltered,signature)
         const {output,salt} = await this._makeSharedOutputForGroupInternal({groupId,memberList:memberListFiltered})
         return {
@@ -1855,10 +1869,10 @@ export class GroupfiSdkClient {
         }
         const tasksRes = await Promise.all(tasks)
         const {outputWrapper,list} = tasksRes.shift() as {outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}
-        let sharedOutput
+        let extraOutputs
         if (isMakeSharedOutput) {
-            const sharedOutputRes = tasksRes.shift() as {output:IBasicOutput}
-            sharedOutput = sharedOutputRes.output
+            const sharedOutputRes = tasksRes.shift() as {outputs:IBasicOutput[]}
+            extraOutputs = sharedOutputRes.outputs
         }
         // log existing list
         console.log('existing list', list, outputWrapper);
@@ -1869,7 +1883,7 @@ export class GroupfiSdkClient {
         }
         list.push({groupId,timestamp:Date.now()})
         console.log('new list', list)
-        return await this._persistMarkedGroupIds({list,outputWrapper,sharedOutput})
+        return await this._persistMarkedGroupIds({list,outputWrapper,extraOutputs})
     }
     async unmarkGroup(groupId:string){
         this._ensureClientInited()
@@ -1883,14 +1897,14 @@ export class GroupfiSdkClient {
     async _persistMarkedGroupIds({
         list,
         outputWrapper,
-        sharedOutput
-    }:{list:IMUserMarkedGroupId[],sharedOutput?:IBasicOutput,outputWrapper?:BasicOutputWrapper}){
+        extraOutputs
+    }:{list:IMUserMarkedGroupId[],extraOutputs?:IBasicOutput[],outputWrapper?:BasicOutputWrapper}){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMARKTAG)}`
         const data = serializeUserMarkedGroupIds(list)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         console.log('created and consumed', basicOutput, toBeConsumed);
-        const createdOutputs = sharedOutput ? [basicOutput, sharedOutput] : [basicOutput]
+        const createdOutputs = extraOutputs ? [basicOutput, ...extraOutputs] : [basicOutput]
         return await this._sendBasicOutput(createdOutputs,toBeConsumed);
     }
     async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
@@ -2037,7 +2051,7 @@ export class GroupfiSdkClient {
     //TODO
     async _signAndSendTransactionEssence({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         // log enter _signAndSendTransactionEssence
-        console.log('===> enter _signAndSendTransactionEssence');
+        console.log('===> enter _signAndSendTransactionEssence',transactionEssence);
         const writeStream = new WriteStream();
         serializeTransactionEssence(writeStream, transactionEssence);
         const essenceFinal = writeStream.finalBytes();

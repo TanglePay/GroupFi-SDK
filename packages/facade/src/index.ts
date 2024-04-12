@@ -1087,6 +1087,10 @@ class GroupFiSDKFacade {
       (o) => o.addr === this._address!
     );
     if (isAlreadyInMemberList) return true;
+    if (this._mode !== ShimmerMode) {
+      // TODO
+      publicKey = this._client!.getPairXPublicKey()!;
+    }
     memberList.push({ addr: this._address!, publicKey });
     const res = (await this._client!.markGroup({ groupId, memberList })) as
       | TransactionRes
