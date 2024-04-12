@@ -276,7 +276,8 @@ class GroupFiSDKFacade {
       address: string;
       nodeId: number;
     }) => {
-      console.log('===>Ente rlistenningTPAccountChanged', accountChangeEvent)
+      // Uniformly convert EVM addresses to lowercase
+      accountChangeEvent.address = accountChangeEvent.address.toLowerCase()
       const { address, nodeId } = accountChangeEvent;
 
       const newMode = this.getTPMode(nodeId)
@@ -932,13 +933,13 @@ class GroupFiSDKFacade {
               });
             })) as string[];
           const rawAccount = accounts[0];
-          // MetaMask 返回的地址没有经过 toChecksumAddress
-          // toChecksumAddress 是将任意以太坊地址转换为符合EIP-55规范的校验和地址格式
+          
           if (!rawAccount) {
             throw new Error()
           }
           
-          const account = toChecksumAddress(rawAccount)
+          // Uniformly convert EVM addresses to lowercase
+          const account = rawAccount.toLowerCase()
 
           console.log('metamask connected', account)
           this._mode = DelegationMode
@@ -976,6 +977,10 @@ class GroupFiSDKFacade {
                 // expires: 3000000
               },
             })) as { address: string; nodeId: number };
+
+            // Uniformly convert EVM addresses to lowercase
+            res.address = res.address.toLowerCase()
+
             console.log('===>iota connect', res);
             this._lastTimeSdkRequestResultReceived = Date.now();
             this._address = res.address;
