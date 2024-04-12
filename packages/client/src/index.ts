@@ -1157,15 +1157,12 @@ export class GroupfiSdkClient {
     }
 
     async hasUnclaimedNameNFT(address: string): Promise<boolean> {
-        this._ensureClientInited()
-        this._ensureWalletInited()
-
         try {
             const {items}: IOutputsResponse = await this._indexer!.nfts({
                 addressBech32: address,
                 hasStorageDepositReturn: true,
                 hasExpiration: true,
-                tagHex: `0x${Converter.utf8ToHex('group-id')}`
+                tagHex: `0x${Converter.utf8ToHex('groupfi-id')}`
             })
             for (const outputId of items) {
                 const { output } = await this._client!.output(outputId) as {metadata: IOutputMetadataResponse,  output: INftOutput}
