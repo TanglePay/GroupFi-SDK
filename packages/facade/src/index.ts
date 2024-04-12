@@ -819,6 +819,7 @@ class GroupFiSDKFacade {
       registeredInfo.pairX = this._pairX
     } else {
       const pairX = await this._client!.decryptPairX({publicKey: res.publicKey, privateKeyEncrypted: res.privateKeyEncrypted})
+      this._pairX = pairX
       registeredInfo.pairX = pairX
     }
     return registeredInfo
