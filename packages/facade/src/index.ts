@@ -815,8 +815,12 @@ class GroupFiSDKFacade {
     if (isPairXPresent) {
       return registeredInfo
     }
-    const pairX = await this._client!.decryptPairX({publicKey: res.publicKey, privateKeyEncrypted: res.privateKeyEncrypted})
-    registeredInfo.pairX = pairX
+    if (this._pairX) {
+      registeredInfo.pairX = this._pairX
+    } else {
+      const pairX = await this._client!.decryptPairX({publicKey: res.publicKey, privateKeyEncrypted: res.privateKeyEncrypted})
+      registeredInfo.pairX = pairX
+    }
     return registeredInfo
   }
   
@@ -883,12 +887,14 @@ class GroupFiSDKFacade {
         evmAddress: this._address!,
         pairX,
       });
+      this._pairX = pairX
       // import smr proxy account after registering pairX
       adapter.importProxyAccount()
     } else if (this._mode === DelegationMode) {
       const adapter = this._client!.getRequestAdapter()  as DelegationModeRequestAdapter
       const smrAddress = await adapter.registerPairX({pairX})
       this._proxyAddress = smrAddress
+      this._pairX = pairX
     }
   }
 
@@ -907,6 +913,8 @@ class GroupFiSDKFacade {
 
   clearAddress() {
     this._muteMap = undefined;
+    this._pairX = undefined
+    this._proxyAddress = undefined
   }
 
   getTPMode(nodeId: number): Mode {
