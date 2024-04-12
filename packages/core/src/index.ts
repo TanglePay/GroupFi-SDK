@@ -824,7 +824,31 @@ class IotaCatSDK {
         ts:number,
     }):Promise<{addressList:string[],signature:string}>
     {
-        return {} as any
+        // post https://testapi.groupfi.ai/filter
+        const url = `https://testapi.groupfi.ai/group/filter`
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(param)
+        })
+        // log res
+        console.log('filterEvmGroupQualify res',res)
+        if (!res.ok) {
+            return {addressList:param.addresses,signature:'s'}
+        }
+        const json = await res.json() as {'err-code'?:number,indexes:number[]}
+        // log json
+        console.log('filterEvmGroupQualify json',json)
+        if (json['err-code'] != undefined) {
+            return {addressList:param.addresses,signature:'s'}
+        }
+        const indexes = json.indexes
+        // indexes are index of address that is not qualified
+        const addressList = param.addresses.filter((_,index)=>!indexes.includes(index))
+        const signature = '0x'+this._generateRandomStr(64)
+        return {addressList,signature}
     }
 
     // call /batchsmraddresstoevmaddress, method POST
