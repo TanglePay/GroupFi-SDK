@@ -20,10 +20,10 @@ import {
   utf8ToHex,
   concatBytes,
 } from 'iotacat-sdk-utils';
-import { decryptOneOfList } from 'ecies-ed25519-js';
+
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
-const tag = strToBytes(IOTACATTAG);
+
 export class ShimmerModeRequestAdapter implements IRequestAdapter {
   private _bech32Address: string;
   _nodeUrlHint: string;
