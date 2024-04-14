@@ -8,6 +8,7 @@ import {
 } from 'groupfi-sdk-client';
 import { Ed25519 } from '@iota/crypto.js';
 import { IotaCatSDKObj, IOTACATTAG } from 'iotacat-sdk-core';
+import GroupfiWalletEmbedded from 'groupfi-walletembed';
 import {
   strToBytes,
   createBlobURLFromUint8Array,
@@ -19,7 +20,7 @@ import {
   utf8ToHex,
   concatBytes,
 } from 'iotacat-sdk-utils';
-import { decryptOneOfList } from 'ecies-ed25519-js';
+
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
 
@@ -91,15 +92,19 @@ export class ImpersonationModeRequestAdapter
   }
 
   async getProxyAccount() {
-    return (await IotaSDK.request({
-      method: 'iota_im_get_eth_proxy_account',
-      params: {
-        content: {
-          addr: this._evmAddress,
-          nodeUrlHint: this._nodeUrlHint,
+    const res = await Promise.all([
+      IotaSDK.request({
+        method: 'iota_im_get_eth_proxy_account',
+        params: {
+          content: {
+            addr: this._evmAddress,
+            nodeUrlHint: this._nodeUrlHint,
+          },
         },
-      },
-    })) as { bech32Address: string; hexAddress: string };
+      }),
+      GroupfiWalletEmbedded.setup(this._nodeUrlHint)
+    ]);
+    return res[0] as { bech32Address: string; hexAddress: string };
   }
 
   async decryptPairX(params: { encryptedData: string }) {
@@ -146,6 +151,8 @@ export class ImpersonationModeRequestAdapter
     if (!pairX) {
       throw new Error('ImpersonationMode decrypt pairX is undefined');
     }
+
+    GroupfiWalletEmbedded.setupPair(pairX)
     return await decryptByPairX({ dataTobeDecrypted, pairX });
   }
 
@@ -255,6 +262,7 @@ export class DelegationModeRequestAdapter
     if (!pairX) {
       throw new Error('ImpersonationMode decrypt pairX is undefined');
     }
+    GroupfiWalletEmbedded.setupPair(pairX)
     return await decryptByPairX({ dataTobeDecrypted, pairX });
   }
 
@@ -321,20 +329,8 @@ async function decryptByPairX({
   dataTobeDecrypted: Uint8Array;
   pairX: PairX;
 }) {
-  const tag = strToBytes(IOTACATTAG);
-  const list = [{ dataTobeDecrypted }];
-  const decrypted = await decryptOneOfList({
-    receiverSecret: pairX.privateKey,
-    payloadList: list,
-    tag,
-    idx: 0,
-  });
-  let salt;
-  if (decrypted) {
-    salt = decrypted.payload;
-  }
-  if (!salt) throw IotaCatSDKObj.makeErrorForSaltNotFound();
-  return salt;
+  
+  return await GroupfiWalletEmbedded.decryptAesKeyFromPayload(dataTobeDecrypted)
 }
 
 async function sendTransactionByTanglePay({

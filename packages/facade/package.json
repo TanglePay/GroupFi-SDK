@@ -43,6 +43,7 @@
     "groupfi-sdk-client": "workspace:^",
     "iotacat-sdk-core": "workspace:^",
     "iotacat-sdk-utils": "workspace:^",
+    "groupfi-walletembed": "workspace:^",
     "tanglepaysdk-client": "^0.1.10",
     "web3": "^4.7.0"
   }
