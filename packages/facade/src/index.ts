@@ -716,15 +716,18 @@ class GroupFiSDKFacade {
     excludes?: string[];
   }) {
     this._ensureWalletConnected();
-
+    const isEvm = this._mode != ShimmerMode
     const res =
       await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
         address: this._address!,
         includes: includes?.map((g) => ({ groupName: g })),
         excludes: excludes?.map((g) => ({ groupName: g })),
-      });
-    return res
-      .map(({ groupName, qualifyType }) => ({
+      }) as MessageGroupMeta[]
+      let groups =  res
+      if (isEvm) {
+        groups = groups.filter(({chainName})=>chainName!='smr')
+      }
+      return groups.map(({ groupName, qualifyType }) => ({
         groupName,
         groupId: IotaCatSDKObj._groupToGroupId(groupName),
         qualifyType: qualifyType,

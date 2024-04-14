@@ -681,10 +681,12 @@ export class GroupfiSdkClient {
         if (sharedOutput) {
             recipients = this._getRecipientsFromSharedOutput(sharedOutput)
             idx = this._checkIfAddressInRecipient(address,recipients)
-            console.log('recipients', recipients);        
+            console.log('recipients', recipients,'idx', idx);      
         }
         if (idx === -1) {
             if (isHA && groupId) {
+                // log ha and groupid and memberList
+                console.log('isHA and groupId and memberList', isHA, groupId, memberList);
                 const {outputs,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
                 return {salt,outputs}
             } else {
@@ -1315,6 +1317,8 @@ export class GroupfiSdkClient {
         try {
             const {salt, outputId,outputs,isHA} = await this._getSaltForGroup(groupId,senderAddr,memberList)
             if (isHA) {
+                // log ha and groupid and memberList
+                console.log('isHA and groupId and memberList', isHA, groupId, memberList);
                 const {outputId:outputIdFromHA} = await this._sendBasicOutput(outputs!);
                 // set shared id and salt to cache
                 this._setSharedIdAndSaltToCache(outputIdFromHA,salt)
@@ -2076,7 +2080,8 @@ export class GroupfiSdkClient {
     }
     async _decryptAesKeyFromRecipientsWithPayload(recipientPayload:Uint8Array):Promise<string>{
         const res = this._requestAdapter!.decrypt({
-            dataTobeDecrypted: recipientPayload
+            dataTobeDecrypted: recipientPayload,
+            pairX:this._pairX
         })
         // const res = await this._sdkRequest({
         //     method: 'iota_im_decrypt_key',

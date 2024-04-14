@@ -231,6 +231,9 @@ importers:
       groupfi-sdk-client:
         specifier: workspace:^
         version: link:../client
+      groupfi-walletembed:
+        specifier: workspace:^
+        version: link:../walletembed
       iotacat-sdk-core:
         specifier: workspace:^
         version: link:../core

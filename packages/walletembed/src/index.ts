@@ -303,15 +303,19 @@ class GroupfiWalletEmbedded {
     switchAddressUsingPath(rawPath?:number){
         const path = rawPath??0
         const accountObj = this._SMRAccount
-        accountObj._walletKeyPair = this._getPair(accountObj._baseSeed!,path)
+        const pair = this._getPair(accountObj._baseSeed!,path)
+        this.setupPair(pair)
+        // log path and hex address and bech32 address, in one line, start with 4 # symbols
+        console.log(`#### Wallet Index ${path} Hex Address ${accountObj._accountHexAddress} Bech32 Address ${accountObj._accountBech32Address}`)
+    }
+    setupPair(pair:IKeyPair){
+        const accountObj = this._SMRAccount
+        accountObj._walletKeyPair = pair
         const genesisEd25519Address = new Ed25519Address(accountObj._walletKeyPair.publicKey);
         const genesisWalletAddress = genesisEd25519Address.toAddress();
         accountObj._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
         accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
-        // log path and hex address and bech32 address, in one line, start with 4 # symbols
-        console.log(`#### Wallet Index ${path} Hex Address ${accountObj._accountHexAddress} Bech32 Address ${accountObj._accountBech32Address}`)
     }
-    
     _getPair(baseSeed:Ed25519Seed, idx:number){
         const addressGeneratorAccountState = {
             accountIndex: idx,
@@ -341,6 +345,10 @@ class GroupfiWalletEmbedded {
     async decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{
         
         const payload = await retrieveUint8ArrayFromBlobURL(recipientPayloadUrl);
+        return await this.decryptAesKeyFromPayload(payload)
+    }
+    // decryptAesKeyFromPayload
+    async decryptAesKeyFromPayload(payload:Uint8Array):Promise<string>{
         const list = [{payload}]
         const decrypted = await decryptOneOfList({receiverSecret:this._SMRAccount._walletKeyPair!.privateKey,
             payloadList:list,tag,idx:0})
