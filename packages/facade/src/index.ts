@@ -19,10 +19,10 @@ import {
 } from 'iotacat-sdk-core';
 
 import { SimpleDataExtended, strToBytes, objectId, sleep, generateSMRPair, bytesToHex, concatBytes, getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
-import { GroupfiSdkClient, IProxyModeRequest, MessageBody } from 'groupfi-sdk-client';
+import { GroupfiSdkClient, IProxyModeRequest, MessageBody, AddressMappingStore } from 'groupfi-sdk-client';
 import { Web3 } from 'web3'
 import smrPurchaseAbi from './contractAbi/smr-purchase'
-import bigInt from "big-integer";
+
 
 import {
   WalletType,
@@ -188,6 +188,11 @@ class GroupFiSDKFacade {
         message: resUnwrapped.message.data,
         timestamp: resUnwrapped.message.timestamp,
       };
+
+      if (this._mode !== ShimmerMode) {
+        const evmAddress = await AddressMappingStore.getEvmAddress(message.sender)
+        message.sender = evmAddress
+      }
 
       console.log('*****Enter handlePushedMessage filter');
       const filtered = await this.filterMutedMessage(groupId, message.sender);
@@ -590,22 +595,6 @@ class GroupFiSDKFacade {
         method: 'eth_sendTransaction',
         params: options,
       })
-
-      await this.checkSMRPurchaseCompleted({
-        targetAmount,
-        targetAddress: proxyAddress.bech32Address
-      })
-  }
-
-  async checkSMRPurchaseCompleted({targetAddress,targetAmount}: {targetAmount: string, targetAddress: string}) {
-    for(;;) {
-      const balance = await IotaCatSDKObj.fetchAddressBalance(targetAddress);
-      console.log('===> checkSMRPurchaseCompleted balance', balance)
-      if (bigInt(balance).geq(bigInt(targetAmount))) {
-        return true
-      }
-      await sleep(1000)
-    }
   }
 
   async mintProxyNicknameNft(name: string) {
