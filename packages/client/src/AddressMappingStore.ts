@@ -46,6 +46,11 @@ class AddressMappingStore {
             }
         }
     }
+    async getEvmAddress(address: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            this.getMapping(address, resolve, reject)
+        })
+    }
     public getMapping(address: string, callback: (address: string) => void, errorCallBack: (error: Error) => void): void {
         // if the address is already in the store, call the callback immediately
         const key = this._getKey(address);

@@ -55,6 +55,7 @@ import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs,
 import AddressMappingStore from './AddressMappingStore';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
+export { AddressMappingStore }
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -961,6 +962,7 @@ export class GroupfiSdkClient {
         const senderAddressBytes_ = typeof senderAddressBytes === 'string' ? Converter.hexToBytes(senderAddressBytes) : senderAddressBytes
         const messageId = IotaCatSDKObj.getMessageId(data_, senderAddressBytes_)
         const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
+
         try {
             const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
                 //const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
