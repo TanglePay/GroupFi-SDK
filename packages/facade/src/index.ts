@@ -933,6 +933,7 @@ class GroupFiSDKFacade {
                 name: 'MetaMaskConnectFailed',
               });
             })) as string[];
+          console.log('connect metamask wallet accounts', accounts)
           const rawAccount = accounts[0];
           
           if (!rawAccount) {
