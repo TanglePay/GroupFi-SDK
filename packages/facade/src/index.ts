@@ -18,44 +18,76 @@ import {
   MessageResponseItem,
 } from 'iotacat-sdk-core';
 
-import { SimpleDataExtended, objectId } from 'iotacat-sdk-utils';
-import { GroupfiSdkClient, MessageBody } from 'groupfi-sdk-client';
+import { SimpleDataExtended, strToBytes, objectId, sleep, generateSMRPair, bytesToHex, concatBytes, getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
+import { GroupfiSdkClient, IProxyModeRequest, MessageBody, AddressMappingStore } from 'groupfi-sdk-client';
+import { Web3 } from 'web3'
+import smrPurchaseAbi from './contractAbi/smr-purchase'
+
+
+import {
+  WalletType,
+  TransactionRes,
+  RecommendGroup,
+  Mode,
+  ShimmerMode,
+  ImpersonationMode,
+  TanglePayWallet,
+  MetaMaskWallet,
+  DelegationMode,
+  RegisteredInfo,
+  ModeInfo,
+  PairX
+} from './types';
+import { initialClient } from './client';
+import { toChecksumAddress } from '@ethereumjs/util'
+
+import {
+  ShimmerModeRequestAdapter,
+  ImpersonationModeRequestAdapter,
+  DelegationModeRequestAdapter,
+} from './client/clientMode';
+
+import { AuxiliaryService, config } from './auxiliaryService'
 
 export { SimpleDataExtended };
+export * from './types';
 
 const NAMING_DOMAIN = 'api.groupfi.ai';
 
-export interface TransactionRes {
-  blockId: string;
-  outputId: string;
-}
-
-export interface RecommendGroup {
-  groupId: string;
-  groupName: string;
-  qualifyType: string;
-}
-
-const SHIMMER_MAINNET_ID = 102
-const SUPPORTED_CHAIN_ID_LIST = [SHIMMER_MAINNET_ID]
+const TP_SHIMMER_MAINNET_ID = 102;
+const TP_EVM_CHAIN_ID = 5;
+const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 
 class GroupFiSDKFacade {
   private _address: string | undefined;
+  private _proxyAddress: string | undefined;
+  private _nodeId: number | undefined
+  private _mode: Mode | undefined;
+  private _pairX: PairX | undefined
 
   private _mqttConnected: boolean = false;
 
   private _lastTimeSdkRequestResultSent: number = 0;
   private _lastTimeSdkRequestResultReceived: number = 0;
 
+  private _auxiliaryService = new AuxiliaryService()
+
   private _currentGroup:
     | {
         groupName: string;
         groupId: string;
       }
-    | undefined = undefined;  
+    | undefined = undefined;
 
   get currentGroupName() {
     return this._currentGroup?.groupName;
+  }
+
+  get currentMode() {
+    if (this._mode === undefined) {
+      throw new Error('Mode is undefined.')
+    }
+    return this._mode
   }
 
   get currentGroupId() {
@@ -63,7 +95,7 @@ class GroupFiSDKFacade {
   }
 
   checkIsChainSupported(nodeId: number) {
-    return SUPPORTED_CHAIN_ID_LIST.includes(nodeId)
+    return SUPPORTED_CHAIN_ID_LIST.includes(nodeId);
   }
 
   getObjectId(obj: Record<string, SimpleDataExtended>) {
@@ -157,6 +189,11 @@ class GroupFiSDKFacade {
         timestamp: resUnwrapped.message.timestamp,
       };
 
+      if (this._mode !== ShimmerMode) {
+        const evmAddress = await AddressMappingStore.getEvmAddress(message.sender)
+        message.sender = evmAddress
+      }
+
       console.log('*****Enter handlePushedMessage filter');
       const filtered = await this.filterMutedMessage(groupId, message.sender);
       console.log(
@@ -220,50 +257,110 @@ class GroupFiSDKFacade {
     this._mqttConnected = true;
   }
 
-  listenningAccountChanged(
-    callback: (params: { address: string; nodeId: number }) => void
+  listenningMetaMaskAccountChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
+    const listenner = async (accounts: string[]) => {
+      const {mode, address} = await this.connectMetaMaskWallet()
+      console.log('metamask account changed', mode, address)
+      const res = {
+        mode,
+        address,
+        nodeId: undefined,
+        isAddressChanged: true,
+      }
+      await this._onAccountChanged(res);
+      callback(res)
+    }
+    window.ethereum.on("accountsChanged", listenner);
+    return () => window.ethereum.removeListener("accountsChanged", listenner)
+  }
+
+  listenningTPAccountChanged(
+    callback: (params: { address: string; nodeId: number; mode: Mode, isAddressChanged: boolean }) => void
   ) {
     const listener = async (accountChangeEvent: {
       address: string;
       nodeId: number;
     }) => {
+      // Uniformly convert EVM addresses to lowercase
+      accountChangeEvent.address = accountChangeEvent.address.toLowerCase()
       const { address, nodeId } = accountChangeEvent;
-      // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
-      if (address === this._address) {
-        return;
-      }
-      console.log('accountsChanged', { address, nodeId });
-      // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
-      await IotaSDK.request({
-        method: 'iota_connect',
-        params: {
-          // expires: 3000000
-        },
-      });
-      console.log(
-        'accountsChanged and connect wallet using new address successfully',
-        address
-      );
 
-      await this._onAccountChanged({ address, nodeId });
-      callback({ address, nodeId });
+      const newMode = this.getTPMode(nodeId)
+
+      // 第一次连接钱包，也会触发这个函数, 这样避免第一次连接时处罚
+      if (this._address === address && this._mode === newMode && this._nodeId === nodeId) {
+        return
+      }
+
+
+      if (this._address !== address) {
+        // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
+        await IotaSDK.request({
+          method: 'iota_connect',
+          params: {
+            // expires: 3000000
+          },
+        });
+      }
+
+      console.log('===> this._address', this._address)
+      console.log('===> address', address)
+
+      const res = {
+        address,
+        nodeId,
+        mode: newMode,
+        isAddressChanged: this._address !== address
+      }
+
+      this._address = address
+      this._nodeId = nodeId
+      this._mode = newMode
+
+      await this._onAccountChanged(res);
+      callback(res);
+      // this._nodeId = nodeId
+      // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
+      // const newMode= this.getTPMode(nodeId);
+      // if (this._address === address && this._mode === newMode) {
+      //   return;
+      // }
+      // this._address = address;
+      // this._mode = newMode;
+      // console.log('accountsChanged', { address, nodeId, mode: this._mode });
+      // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
+      // await IotaSDK.request({
+      //   method: 'iota_connect',
+      //   params: {
+      //     // expires: 3000000
+      //   },
+      // });
+      // console.log(
+      //   'accountsChanged and connect wallet using new address successfully',
+      //   address
+      // );
     };
     IotaSDK.on('accountsChanged', listener);
     return () => IotaSDK.removeListener('accountsChanged', listener);
   }
 
   async _onAccountChanged({
-    address: newAddress,
-    nodeId,
+    mode,
+    isAddressChanged,
   }: {
     address: string;
-    nodeId: number;
+    nodeId?: number;
+    mode: Mode;
+    isAddressChanged: boolean
   }) {
-    this._address = newAddress;
-    this.clearAddress();
-
-    await this.initialAddress(nodeId);
-
+    this.switchClientAdapter(mode)
+    if (isAddressChanged) {
+      await this.initialAddress()
+    }
+    
+    // this._address = newAddress;
+    // this.clearAddress();
+    // await this.initialAddress(nodeId);
     // this._address = newAddress;
     // this._muteMap = undefined;
     // await this.fetchAddressQualifiedGroupConfigs({});
@@ -355,9 +452,16 @@ class GroupFiSDKFacade {
     const res = this._client!.disablePrepareRemainderHint();
     return res;
   }
-  async preloadGroupSaltCache(groupId: string, memberList?: { addr: string; publicKey: string }[]) {
+  async preloadGroupSaltCache(
+    groupId: string,
+    memberList?: { addr: string; publicKey: string }[]
+  ) {
     this._ensureWalletConnected();
-    const res = await this._client!.preloadGroupSaltCache(this._address!,groupId, memberList);
+    const res = await this._client!.preloadGroupSaltCache(
+      this._address!,
+      groupId,
+      memberList
+    );
     return res;
   }
   async fullfillMessageLiteList(
@@ -453,6 +557,58 @@ class GroupFiSDKFacade {
     return { itemList: fulfilledMessageList, nextToken: token };
   }
 
+  getTpNodeInfo(nodeId: number) {
+    return config.find(({tpNodeId}) => tpNodeId === nodeId)
+  }
+
+  async fetchSMRPrice(nodeId: number) {
+    const conf = config.find(c => c.tpNodeId === nodeId)
+    if (!conf) {
+      return undefined
+    }
+    const res = await this._auxiliaryService.fetchSMRPrice(conf.chainId)
+    return res
+  }
+
+  async buySMR(params: {targetAmount: string, principalAmount: string, nodeId: number, contract: string, web3: Web3}) {
+      const { web3, principalAmount, targetAmount, contract: contractAddress } = params
+      const proxyAddress = await this.getSMRProxyAccount()
+      if (proxyAddress === undefined) {
+        throw new Error('proxy account is undefined.')
+      }
+  
+      console.log('===> Enter buySMR', params)
+      console.log('===> proxyAddress', proxyAddress)
+  
+      const contract = new web3.eth.Contract(smrPurchaseAbi, params.contract)
+
+      const transaction = contract.methods.buySmr(proxyAddress.hexAddress, targetAmount)
+      
+      const options = {
+        from: this._address,
+        to: contractAddress,
+        data: transaction.encodeABI(),
+        value: principalAmount
+      }
+      
+      await IotaSDK.request({
+        method: 'eth_sendTransaction',
+        params: options,
+      })
+  }
+
+  async mintProxyNicknameNft(name: string) {
+    this._ensureWalletConnected();
+    if (this._pairX === undefined) {
+      throw new Error('PairX is undefined')
+    }
+    const adapter = this._client!.getRequestAdapter() as DelegationModeRequestAdapter
+    return await adapter.mintProxyNicknameNft({
+      pairX: this._pairX,
+      name
+    })
+  }
+
   async mintNicknameNFT(name: string): Promise<{
     result: boolean;
     blockId?: string;
@@ -460,40 +616,17 @@ class GroupFiSDKFacade {
     reason?: string;
   }> {
     this._ensureWalletConnected();
-    const res = await fetch(
-      `https://${NAMING_DOMAIN}/mint_nicknft?address=${this._address}&name=${name}`
-    );
-    const json = (await res.json()) as {
-      result: boolean;
-      block_id: string;
-      'err-msg'?: string;
-      'err-code'?: number;
-    };
-    if (!json.result) {
-      return {
-        result: false,
-        errCode: json['err-code'],
-        reason: json['err-msg'],
-      } as { result: boolean; reason: string };
-    }
-    // const blockMetadata = await IotaCatSDKObj.waitBlock(json.block_id!)
-    return {
-      result: true,
-      blockId: json.block_id,
-    };
+    const addr = this._proxyAddress ?? this._address!
+    return await this._auxiliaryService.mintNicknameNFT(addr, name)
   }
+
 
   async fetchAddressNames(addressList: string[]) {
     return await IotaCatSDKObj.fetchAddressNames(addressList);
   }
 
-  async checkIfhasOneNicknameNft() {
-    this._ensureWalletConnected();
-    return await this._client!.checkIfhasOneNicknameNft(this._address!);
-  }
-
   async hasUnclaimedNameNFT() {
-    return await this._client!.hasUnclaimedNameNFT(this._address!);
+    return await this._client!.hasUnclaimedNameNFT(this._proxyAddress!);
   }
 
   // get smr balance
@@ -541,7 +674,8 @@ class GroupFiSDKFacade {
   }
   async fetchAddressBalance() {
     this._ensureWalletConnected();
-    const balance = await IotaCatSDKObj.fetchAddressBalance(this._address!);
+    const addr = this._proxyAddress ?? this._address!
+    const balance = await IotaCatSDKObj.fetchAddressBalance(addr);
     return balance ?? 0;
   }
   _ensureWalletConnected() {
@@ -550,12 +684,18 @@ class GroupFiSDKFacade {
     }
   }
 
+  _ensureProxyAddressExisted() {
+    if (!this._proxyAddress) {
+      throw new Error('Proxy address is undefined.');
+    }
+  }
+
   _ensureMqttConnected() {
     if (!this._mqttConnected) {
       throw new Error('MQTT not connected');
     }
   }
-  
+
   // TODO: It's temporary, it will be adjusted later.
   async getRecommendGroups({
     includes,
@@ -565,14 +705,18 @@ class GroupFiSDKFacade {
     excludes?: string[];
   }) {
     this._ensureWalletConnected();
-
-    const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
-      address: this._address!,
-      includes: includes?.map((g) => ({ groupName: g })),
-      excludes: excludes?.map((g) => ({ groupName: g })),
-    });
-    return res
-      .map(({ groupName, qualifyType }) => ({
+    const isEvm = this._mode != ShimmerMode
+    const res =
+      await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
+        address: this._address!,
+        includes: includes?.map((g) => ({ groupName: g })),
+        excludes: excludes?.map((g) => ({ groupName: g })),
+      }) as MessageGroupMeta[]
+      let groups =  res
+      if (isEvm) {
+        groups = groups.filter(({chainName})=>chainName!='smr')
+      }
+      return groups.map(({ groupName, qualifyType }) => ({
         groupName,
         groupId: IotaCatSDKObj._groupToGroupId(groupName),
         qualifyType: qualifyType,
@@ -604,38 +748,222 @@ class GroupFiSDKFacade {
   }
 
   _client?: GroupfiSdkClient;
-  async bootstrap() {
+  async bootstrap(walletType: WalletType): Promise<{
+    address: string;
+    mode: Mode;
+    nodeId: number | undefined
+  }> {
     this._client = new GroupfiSdkClient();
-    const res = await this.waitWalletReadyAndConnectWallet();
     await this._client!.setup();
+
+    let res:
+      | {
+          address: string;
+          nodeId?: number;
+          mode?: Mode;
+        }
+      | undefined = undefined;
+    if (walletType === TanglePayWallet) {
+      // connect tanglepay wallet
+      res = await this.waitWalletReadyAndConnectTanglePayWallet();
+    } else if (walletType === MetaMaskWallet) {
+      res = await this.connectMetaMaskWallet()
+    }
+
+    if (!res?.mode) {
+      throw new Error('mode is undefined.');
+    }
+    
+    this.switchClientAdapter(res.mode)
+    await this.initialAddress()
+
     // await Promise.all([
     //   this.fetchAddressQualifiedGroupConfigs({}),
     //   this._client!.setup(),
     // ]);
     // this._client!.switchAddress(this._address!);
 
-    await this.initialAddress(res.nodeId);
-    return res;
+    // await this.initialAddress(res.mode);
+    return { address: res.address, mode: res.mode, nodeId: res.nodeId };
   }
 
-  async initialAddress(nodeId: number) {
+  async fetchRegisteredInfo(isPairXPresent: boolean): Promise<RegisteredInfo | undefined> {
+    const res = await IotaCatSDKObj.fetchAddressPairX(this._address!)
+    console.log('===>fetchRegisteredInfo res', res, isPairXPresent)
+    if (!res) {
+      return undefined
+    }
+    let registeredInfo: RegisteredInfo = {}
+    if (res.mmProxyAddress){
+      registeredInfo[DelegationMode] = {
+        account: res.mmProxyAddress
+      }
+    }
+    if (res.tpProxyAddress) {
+      registeredInfo[ImpersonationMode] = {
+        account: res.tpProxyAddress
+      }
+    }
+    if (isPairXPresent) {
+      return registeredInfo
+    }
+    if (this._pairX) {
+      registeredInfo.pairX = this._pairX
+    } else {
+      const pairX = await this._client!.decryptPairX({publicKey: res.publicKey, privateKeyEncrypted: res.privateKeyEncrypted})
+      this._pairX = pairX
+      registeredInfo.pairX = pairX
+    }
+    return registeredInfo
+  }
+  
+  switchClientAdapter(mode: Mode) {
+    const nodeUrlHint = this._client!.getCurrentNode().apiUrl;
+    switch(mode) {
+      case ShimmerMode: {
+        const adapter = new ShimmerModeRequestAdapter(this._address!, nodeUrlHint);
+        this._client!.switchAdapter({adapter, mode})
+        return
+      }
+      case ImpersonationMode: {
+        const adapter = new ImpersonationModeRequestAdapter(
+          this._address!,
+          nodeUrlHint
+        );
+        this._client!.switchAdapter({adapter, mode})
+        return
+      }
+      case DelegationMode: {
+        const adapter = new DelegationModeRequestAdapter(this._address!);
+        this._client!.switchAdapter({adapter, mode})
+        return
+      }
+    }
+  }
+
+  async initialAddress() {
     this._ensureWalletConnected();
     this._ensureMqttConnected();
 
-    if (this.checkIsChainSupported(nodeId)) {
-      IotaCatSDKObj.switchMqttAddress(this._address!);
-      await this.fetchAddressQualifiedGroupConfigs({});
+    this.clearAddress();
+
+    // shimmer mode, setup normally
+    if (this._mode === ShimmerMode) {
+      this._proxyAddress = this._address
       this._client!.switchAddress(this._address!);
+    } else if (this._mode === ImpersonationMode){
+      const proxy = await this.getSMRProxyAccount()
+      if (proxy) {
+        this._proxyAddress = proxy.bech32Address
+      }
     }
+    IotaCatSDKObj.switchMqttAddress(this._address!);
+    await this.fetchAddressQualifiedGroupConfigs({});
+  }
+
+  setProxyModeInfo(modeInfo: ModeInfo) {
+    if (!modeInfo.pairX || !modeInfo.detail) {
+      return
+    }
+    this._proxyAddress = modeInfo.detail.account
+    this._client!.switchAddress(this._proxyAddress, modeInfo.pairX)
+    this._pairX = modeInfo.pairX
+  }
+
+  async registerPairX(modeInfo: ModeInfo) {
+    const pairX = modeInfo.pairX ?? generateSMRPair(); 
+    if (this._mode === ImpersonationMode) {
+      const adapter = this._client!.getRequestAdapter()  as ImpersonationModeRequestAdapter
+      const {bech32Address} = await adapter.getProxyAccount();
+      await this._client!.switchAddress(bech32Address, pairX);
+      await this._client!.registerTanglePayPairX({
+        evmAddress: this._address!,
+        pairX,
+      });
+      this._pairX = pairX
+      // import smr proxy account after registering pairX
+      adapter.importProxyAccount()
+    } else if (this._mode === DelegationMode) {
+      const adapter = this._client!.getRequestAdapter()  as DelegationModeRequestAdapter
+      const smrAddress = await adapter.registerPairX({pairX})
+      this._proxyAddress = smrAddress
+      this._pairX = pairX
+    }
+  }
+
+  async getSMRProxyAccount(): Promise<{bech32Address: string, hexAddress: string} | undefined> {
+    if (this._mode !== ImpersonationMode) {
+      return
+    }
+    const adapter = this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter
+    return await adapter.getProxyAccount()
+  }
+
+  async importSMRProxyAccount() {
+    const adapter = this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter
+    return await adapter.importProxyAccount()
   }
 
   clearAddress() {
     this._muteMap = undefined;
+    this._pairX = undefined
+    this._proxyAddress = undefined
   }
 
-  async waitWalletReadyAndConnectWallet(): Promise<{
+  getTPMode(nodeId: number): Mode {
+    if (nodeId === TP_SHIMMER_MAINNET_ID) {
+      return ShimmerMode;
+    }
+    return ImpersonationMode
+  }
+
+  async connectMetaMaskWallet(): Promise<{address: string, mode: Mode}> {
+    return new Promise((resolve, reject) => {
+      if (typeof window.ethereum === undefined) {
+        reject({
+          name: 'MetaMaskUnintalled',
+        });
+      }
+      const connect = async () => {
+        try {
+          const accounts = (await window.ethereum
+            .request({ method: 'eth_requestAccounts' })
+            .catch(() => {
+              reject({
+                name: 'MetaMaskConnectFailed',
+              });
+            })) as string[];
+          const rawAccount = accounts[0];
+          
+          if (!rawAccount) {
+            throw new Error()
+          }
+          
+          // Uniformly convert EVM addresses to lowercase
+          const account = rawAccount.toLowerCase()
+
+          console.log('metamask connected', account)
+          this._mode = DelegationMode
+          this._address = account
+          this._nodeId = undefined
+          resolve({
+            mode: this._mode,
+            address: this._address,
+          })
+        }catch(err) {
+          reject({
+            name: 'MetaMaskConnectFailed',
+          })
+        }
+      };
+      connect();
+    });
+  }
+
+  async waitWalletReadyAndConnectTanglePayWallet(): Promise<{
     address: string;
     nodeId: number;
+    mode: Mode | undefined;
   }> {
     return new Promise((resolve, reject) => {
       const listener = async () => {
@@ -650,10 +978,20 @@ class GroupFiSDKFacade {
                 // expires: 3000000
               },
             })) as { address: string; nodeId: number };
-            console.log('****iota connect', res);
+
+            // Uniformly convert EVM addresses to lowercase
+            res.address = res.address.toLowerCase()
+
+            console.log('===>iota connect', res);
             this._lastTimeSdkRequestResultReceived = Date.now();
             this._address = res.address;
-            resolve(res);
+            this._nodeId = res.nodeId
+            const mode = this.getTPMode(res.nodeId);
+            this._mode = mode;
+            resolve({
+              ...res,
+              mode,
+            });
           } catch (error) {
             reject({
               name: 'TanglePayConnectFailed',
@@ -666,9 +1004,9 @@ class GroupFiSDKFacade {
         }
       };
       // TanglePay is ready
-      if(IotaSDK.isTanglePay && IotaSDK.tanglePayVersion !== '') {
-        listener()
-      }else {
+      if (IotaSDK.isTanglePay && IotaSDK.tanglePayVersion !== '') {
+        listener();
+      } else {
         IotaSDK._events.on('iota-ready', listener);
       }
     });
@@ -750,6 +1088,10 @@ class GroupFiSDKFacade {
       (o) => o.addr === this._address!
     );
     if (isAlreadyInMemberList) return true;
+    if (this._mode !== ShimmerMode) {
+      // TODO
+      publicKey = this._client!.getPairXPublicKey()!;
+    }
     memberList.push({ addr: this._address!, publicKey });
     const res = (await this._client!.markGroup({ groupId, memberList })) as
       | TransactionRes
@@ -769,6 +1111,12 @@ class GroupFiSDKFacade {
   getCurrentAddress() {
     this._ensureWalletConnected();
     return this._address!;
+  }
+  getCurrentNodeId() {
+    return this._nodeId
+  }
+  getCurrentMode() {
+    return this._mode;
   }
   async isQualified(groupId: string) {
     this._ensureWalletConnected();
@@ -846,11 +1194,13 @@ class GroupFiSDKFacade {
     const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
       address ?? this._address!
     );
-    const groups = groupIds.map((groupId) => ({
-      groupId,
-      groupName: this.groupIdToGroupName(groupId),
-    })).filter(({groupName}) => groupName !== undefined )
-    return groups as {groupId: string; groupName: string;}[]
+    const groups = groupIds
+      .map((groupId) => ({
+        groupId,
+        groupName: this.groupIdToGroupName(groupId),
+      }))
+      .filter(({ groupName }) => groupName !== undefined);
+    return groups as { groupId: string; groupName: string }[];
   }
 
   groupNameToGroupId(groupName: string) {
@@ -864,7 +1214,7 @@ class GroupFiSDKFacade {
 
   async loadAddressPublicKey() {
     this._ensureWalletConnected();
-    return await IotaCatSDKObj.fetchAddressPublicKey(this._address!);
+    return await IotaCatSDKObj.fetchAddressPublicKey(this._proxyAddress!);
   }
   async sendAnyOneToSelf() {
     // log

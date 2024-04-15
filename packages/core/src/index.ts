@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -13,6 +13,7 @@ export * from './types';
 export * from './codec_mark';
 export * from './codec_mute';
 export * from './codec_vote';
+export * from './codec_evm_qualify';
 const SHA256_LEN = 32
 class IotaCatSDK {
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
@@ -389,6 +390,23 @@ class IotaCatSDK {
             return acc;
         }, {} as Record<string, MessageGroupMeta>);
         return this._ensureList(json);
+    }
+
+    async fetchAddressPairX(evmAddress: string) {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addresspairx?address=${evmAddress}`
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+        })
+        const json = await res.json() as {
+            publicKey: string,
+            privateKeyEncrypted: string
+            mmProxyAddress: string
+            tpProxyAddress: string 
+        } | null
+        return json
     }
 
     // TODO: It's temporary, it will be adjusted later.
@@ -788,6 +806,74 @@ class IotaCatSDK {
             payload:hexPayload
         }
     }
+/*
+{
+    "chain": 148,
+    "addresses" : ["address1","address2"],
+    "contract" : "group contract address",
+    "threshold" : 1,
+    "erc" : 721,
+    "ts" : 1712647238
+}*/
+    async filterEvmGroupQualify(param:{
+        addresses:string[], 
+        chain:number,
+        contract:string,
+        threshold?:number,
+        erc:20|721,
+        ts:number,
+    }):Promise<{addressList:string[],signature:string}>
+    {
+        // post https://testapi.groupfi.ai/filter
+        const url = `https://testapi.groupfi.ai/group/filter`
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(param)
+        })
+        // log res
+        console.log('filterEvmGroupQualify res',res)
+        if (!res.ok) {
+            return {addressList:param.addresses,signature:'s'}
+        }
+        const json = await res.json() as {'err-code'?:number,indexes:number[]}
+        // log json
+        console.log('filterEvmGroupQualify json',json)
+        if (json['err-code'] != undefined) {
+            return {addressList:param.addresses,signature:'s'}
+        }
+        const indexes = json.indexes
+        // indexes are index of address that is not qualified
+        const addressList = param.addresses.filter((_,index)=>!indexes.includes(index))
+        const signature = '0x'+this._generateRandomStr(64)
+        return {addressList,signature}
+    }
+
+    // call /batchsmraddresstoevmaddress, method POST
+    async batchSmrAddressToEvmAddress(addresses:string[]):Promise<{[key:string]:string}>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/batchsmraddresstoevmaddress`
+        try {
+            
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(addresses)
+            })
+            const convertedAddressed = await res.json() as string[]
+            const map: {[key: string]: string} = {}
+            addresses.forEach((address, index) => {
+                map[address] = convertedAddressed[index]
+            })
+            return map
+        } catch (error) {
+            console.log('error',error)
+            return {}
+        }
+    }
 }
 
 const instance = new IotaCatSDK
@@ -798,6 +884,8 @@ export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
+export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV1'
+export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
 export const IotaCatSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

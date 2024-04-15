@@ -35,9 +35,15 @@
     "url": "https://github.com/TanglePay/GroupFi-SDK/issues"
   },
   "dependencies": {
+    "@ethereumjs/util": "^9.0.3",
+    "@iota/crypto.js": "^1.8.6",
+    "@iota/iota.js": "2.0.0-rc.4",
+    "@metamask/sdk": "^0.18.1",
     "groupfi-sdk-client": "workspace:^",
     "iotacat-sdk-core": "workspace:^",
     "iotacat-sdk-utils": "workspace:^",
-    "tanglepaysdk-client": "^0.1.10"
+    "groupfi-walletembed": "workspace:^",
+    "tanglepaysdk-client": "^0.1.10",
+    "web3": "^4.7.0"
   }
 }
