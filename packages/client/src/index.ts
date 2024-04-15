@@ -244,6 +244,7 @@ export class GroupfiSdkClient {
         this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
         this._remainderHintSet = []
         this._lastSendTimestamp = 0;
+        this._sharedSaltCache = {}
     }
     
     _queuePromise:Promise<any>|undefined;
@@ -346,7 +347,7 @@ export class GroupfiSdkClient {
     }
 
 
-    _outputIdToMessagePipe: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined> | undefined;
+    _outputIdToMessagePipe?: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message?:IMessage,outputId:string,status:number}>;
     _makeOutputIdToMessagePipe(){
         const processor = async (
             {outputId,token,address,type}:{outputId:string,address:string,type:number,token:string},
@@ -567,14 +568,41 @@ export class GroupfiSdkClient {
     async ensureGroupHaveSharedOutput(groupId:string){
         this._ensureClientInited()
         try {
+            // log entering
+            console.log('ensureGroupHaveSharedOutput', groupId);
             const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
+            // log res
+            console.log('ensureGroupHaveSharedOutput InxApi res', res);
+            let isMake = false
             if (!res) {
+                isMake = true    
+            } else {
+                const {outputId} = res
+                try {
+                    const output = await this._client!.output(outputId)
+                    // log output
+                    console.log('ensureGroupHaveSharedOutput output', output);
+                    if (!output) {
+                        isMake = true
+                    }
+                } catch (error) {
+                    if (error instanceof ClientError) {
+                        if (error.httpStatus === 404) {
+                            isMake = true
+                        }
+                    }
+                }
+            }
+            if (isMake) {
+                // log make shared output
+                console.log('ensureGroupHaveSharedOutput make shared output', groupId);
                 const res = await this._makeSharedOutputForGroup({groupId})
                 if (!res) return
                 const {outputs} = res
                 const {blockId,outputId} = await this._sendBasicOutput(outputs);
                 return {outputId,outputs};
             }
+
         } catch (error) {
             if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                 console.log('GroupMemberTooMany,public for now', error);
@@ -599,9 +627,17 @@ export class GroupfiSdkClient {
         if (outputId) {
             const saltFromCache = this._getSharedIdAndSaltFromCache(outputId)
             if (saltFromCache) return {salt:saltFromCache,outputId,isHA:false}
-
-            const outputsResponse = await this._client!.output(outputId)
-            outputs = [outputsResponse.output as IBasicOutput]
+            try {
+                const outputsResponse = await this._client!.output(outputId)
+                outputs = [outputsResponse.output as IBasicOutput]
+            } catch (error) {
+                if (error instanceof ClientError) {
+                    if (error.httpStatus == 404) {
+                        const {outputs:outputsCreated,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
+                        return {salt, outputId,outputs:outputsCreated,isHA:true}
+                    }
+                }
+            }
         }
         const {salt,outputs:outputUnwrapped} = await this._getSaltFromSharedOutput({sharedOutput:outputs?outputs[0]:undefined, address,isHA:true,groupId,memberList})
         const isHA = !!outputUnwrapped
@@ -691,7 +727,7 @@ export class GroupfiSdkClient {
                 const {outputs,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
                 return {salt,outputs}
             } else {
-                throw new Error('Address not found in shared output')
+                throw new Error(`Address not found in shared output, address:${address},sharedOutputId:${sharedOutputId}`)
             }
         } else {
             // move idx recipient to first, and prepare ephemeral public key at start, adjust idx to 0
@@ -758,6 +794,8 @@ export class GroupfiSdkClient {
             console.log('cache miss fetch from network', outputId);
             const outputsResponse = await this._client!.output(outputId)
             const output = outputsResponse.output as IBasicOutput
+            // log
+            console.log('cache miss fetch from network,output fetched', output);
             const {salt} = await this._getSaltFromSharedOutput({sharedOutputId:outputId, sharedOutput:output, address, isHA:false})
             // check if in waiting cache
             const waiting = this._sharedSaltWaitingCache[outputId]

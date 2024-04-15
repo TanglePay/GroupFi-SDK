@@ -392,10 +392,10 @@ class GroupFiSDKFacade {
   }
   // registerMessageCallback
   registerMessageCallback(
-    callback: (param: { message: IMessage; outputId: string }) => void
+    callback: (param: { message?: IMessage; outputId: string, status:number }) => void
   ) {
     const listener = (
-      param: { message: IMessage; outputId: string } | undefined
+      param: { message?: IMessage; outputId: string, status:number }
     ) => {
       if (param) {
         callback(param);
