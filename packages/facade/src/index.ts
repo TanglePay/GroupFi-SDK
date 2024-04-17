@@ -21,6 +21,7 @@ import {
 import { SimpleDataExtended, strToBytes, objectId, sleep, generateSMRPair, bytesToHex, concatBytes, getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
 import { GroupfiSdkClient, IProxyModeRequest, MessageBody, AddressMappingStore } from 'groupfi-sdk-client';
 import { Web3 } from 'web3'
+import EventEmitter from "events";
 import smrPurchaseAbi from './contractAbi/smr-purchase'
 
 
@@ -58,12 +59,16 @@ const TP_SHIMMER_MAINNET_ID = 102;
 const TP_EVM_CHAIN_ID = 5;
 const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 
+const MetaMaskAccountsChangedEventKey = 'metamask-accounts-changed'
+
 class GroupFiSDKFacade {
   private _address: string | undefined;
   private _proxyAddress: string | undefined;
   private _nodeId: number | undefined
   private _mode: Mode | undefined;
   private _pairX: PairX | undefined
+
+  private _event: EventEmitter = new EventEmitter();
 
   private _mqttConnected: boolean = false;
 
@@ -257,21 +262,72 @@ class GroupFiSDKFacade {
     this._mqttConnected = true;
   }
 
-  listenningMetaMaskAccountChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
-    const listenner = async (accounts: string[]) => {
-      const {mode, address} = await this.connectMetaMaskWallet()
-      console.log('metamask account changed', mode, address)
+  emitMetaMaskAccountsChanged(data: {account: string}) {
+    this._event.emit(MetaMaskAccountsChangedEventKey, data)
+  }
+
+  listenningMetaMaskAccountsChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
+    const listenner = async ({account}: {account: string}) => {
+      console.log('===>trollbox metamask account changed', account)
+      // const wallet_getPermissions = await window.ethereum
+      //   .request({ method: 'wallet_getPermissions' })
+
+      // const eth_accounts = (await window.ethereum
+      //   .request({ method: 'eth_accounts' }))
+
+      // if (!accounts.includes(account)) {
+        await window.ethereum.request({
+          "method": "wallet_requestPermissions",
+          "params": [
+            {
+              "eth_accounts": {}
+            }
+          ]
+        });
+        console.log('===> trollbox metamask')
+      // }
+
+      this._nodeId = undefined
+      this._address = account
+      this._mode = DelegationMode
+
       const res = {
-        mode,
-        address,
+        mode: this._mode,
+        address: this._address,
         nodeId: undefined,
         isAddressChanged: true,
       }
+      console.log('===> trollbox metamask res', res)
+
       await this._onAccountChanged(res);
       callback(res)
+
+      // this._nodeId = undefined
+      // const res = {
+      //   mode: DelegationMode,
+      //   address: account,
+        
+      // }
+      // console.log('metamask account changed start')
+      // const {mode, address} = await this.connectMetaMaskWallet()
+      // if (address === this._address && mode === this._mode) return
+      // console.log('metamask account changed end', mode, address)
+      // const res = {
+      //   mode,
+      //   address,
+      //   nodeId: undefined,
+      //   isAddressChanged: true,
+      // }
+      // await this._onAccountChanged(res);
+      // callback(res)
     }
-    window.ethereum.on("accountsChanged", listenner);
-    return () => window.ethereum.removeListener("accountsChanged", listenner)
+
+    window.ethereum.on("accountsChanged", (accounts: string) => {
+      console.log('===> Trollbox Domain listen to accountsChanged', accounts)
+    });
+
+    this._event.on(MetaMaskAccountsChangedEventKey, listenner)
+    return () => this._event.off(MetaMaskAccountsChangedEventKey, listenner)
   }
 
   listenningTPAccountChanged(
@@ -749,7 +805,7 @@ class GroupFiSDKFacade {
 
   _client?: GroupfiSdkClient;
   async bootstrap(walletType: WalletType): Promise<{
-    address: string;
+    address?: string;
     mode: Mode;
     nodeId: number | undefined
   }> {
@@ -758,7 +814,7 @@ class GroupFiSDKFacade {
 
     let res:
       | {
-          address: string;
+          address?: string;
           nodeId?: number;
           mode?: Mode;
         }
@@ -767,7 +823,10 @@ class GroupFiSDKFacade {
       // connect tanglepay wallet
       res = await this.waitWalletReadyAndConnectTanglePayWallet();
     } else if (walletType === MetaMaskWallet) {
-      res = await this.connectMetaMaskWallet()
+      res = {
+        mode: DelegationMode
+      }
+      // res = await this.connectMetaMaskWallet()
     }
 
     if (!res?.mode) {
@@ -775,7 +834,9 @@ class GroupFiSDKFacade {
     }
     
     this.switchClientAdapter(res.mode)
-    await this.initialAddress()
+    if (res.address) {
+      await this.initialAddress()
+    }
 
     // await Promise.all([
     //   this.fetchAddressQualifiedGroupConfigs({}),
@@ -834,7 +895,7 @@ class GroupFiSDKFacade {
         return
       }
       case DelegationMode: {
-        const adapter = new DelegationModeRequestAdapter(this._address!);
+        const adapter = new DelegationModeRequestAdapter(this._address!, nodeUrlHint);
         this._client!.switchAdapter({adapter, mode})
         return
       }

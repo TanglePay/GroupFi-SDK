@@ -174,8 +174,12 @@ export class DelegationModeRequestAdapter
 {
   private _evmAddress: string;
 
-  constructor(evmAddress: string) {
+  private _nodeUrlHint: string;
+
+  constructor(evmAddress: string, nodeUrlHint: string) {
     this._evmAddress = evmAddress;
+    this._nodeUrlHint = nodeUrlHint
+    GroupfiWalletEmbedded.setup(this._nodeUrlHint)
   }
 
   async decryptPairX(params: { encryptedData: string }) {
@@ -293,7 +297,6 @@ export class DelegationModeRequestAdapter
     return res;
   }
 
-  //TODO，还未调试
   async sendTransaction({
     pairX,
     essence,
@@ -316,8 +319,10 @@ export class DelegationModeRequestAdapter
       sign: bytesToHex(signatureBytes, true),
     });
 
+    console.log('===> proxy send transactin body', body)
+
     const res = await auxiliaryService.sendTransaction(body);
-    console.log('==>proxy send transaction res', res);
+    console.log('===> proxy send transaction res', res);
 
     return res;
   }
