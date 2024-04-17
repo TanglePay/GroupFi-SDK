@@ -19,6 +19,7 @@ import {
   getCurrentEpochInSeconds,
   utf8ToHex,
   concatBytes,
+  hexToBytes,
 } from 'iotacat-sdk-utils';
 
 import IotaSDK from 'tanglepaysdk-client';
@@ -304,7 +305,7 @@ export class DelegationModeRequestAdapter
     const ts = getCurrentEpochInSeconds();
     const tsBytes = strToBytes(ts.toString());
 
-    const signedDataBytes = concatBytes(essence, tsBytes);
+    const signedDataBytes = strToBytes(bytesToHex(essence, true) + ts)
 
     const signatureBytes = Ed25519.sign(pairX.privateKey, signedDataBytes);
 
