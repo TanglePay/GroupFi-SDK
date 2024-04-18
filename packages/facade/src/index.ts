@@ -752,6 +752,9 @@ class GroupFiSDKFacade {
     }
   }
 
+  _isEvm() {
+    return this._mode !== ShimmerMode
+  }
   // TODO: It's temporary, it will be adjusted later.
   async getRecommendGroups({
     includes,
@@ -761,7 +764,7 @@ class GroupFiSDKFacade {
     excludes?: string[];
   }) {
     this._ensureWalletConnected();
-    const isEvm = this._mode != ShimmerMode
+    const isEvm = this._isEvm()
     const res =
       await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
         address: this._address!,
@@ -1182,6 +1185,10 @@ class GroupFiSDKFacade {
   }
   async isQualified(groupId: string) {
     this._ensureWalletConnected();
+    const isEvm = this._isEvm()
+    if (isEvm) {
+      return await this._isEvmQualified(groupId)
+    }
     const ipfsOrigins = await IotaCatSDKObj.fetchIpfsOrigins(this._address!);
     const qualifiedGroups = await IotaCatSDKObj.fetchAddressQualifiedGroups(
       this._address!,
@@ -1192,6 +1199,11 @@ class GroupFiSDKFacade {
         qualifiedGroup.groupId === IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     );
   }
+  async _isEvmQualified(groupId: string) {
+    const address = this._address!
+    return await IotaCatSDKObj.isEvmAddressQualifiedForGroup(address, groupId)
+  }
+
   // _addHexPrefixIfAbsent
   addHexPrefixIfAbsent(str: string) {
     return IotaCatSDKObj._addHexPrefixIfAbsent(str);

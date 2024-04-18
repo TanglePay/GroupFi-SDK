@@ -806,16 +806,11 @@ class IotaCatSDK {
             payload:hexPayload
         }
     }
-/*
-{
-    "chain": 148,
-    "addresses" : ["address1","address2"],
-    "contract" : "group contract address",
-    "threshold" : 1,
-    "erc" : 721,
-    "ts" : 1712647238
-}*/
-    async filterEvmGroupQualify(param:{
+    async filterEvmGroupQualify(addresses:string[], groupId:string):Promise<{addressList:string[],signature:string}>{
+        const filterParam = this._prepareEvmFilterPayload(addresses,groupId)
+        return await this._callFilterEvmGroupQualify(filterParam)
+    }
+    async _callFilterEvmGroupQualify(param:{
         addresses:string[], 
         chain:number,
         contract:string,
@@ -850,6 +845,42 @@ class IotaCatSDK {
         const signature = '0x'+this._generateRandomStr(64)
         return {addressList,signature}
     }
+    _chainNameToChainId(chainName:string):number{
+        if (chainName === 'shimmer-evm') return 148;
+        return 0
+    }
+    // is evm address qualified for a group
+    async isEvmAddressQualifiedForGroup(address:string,groupId:string):Promise<boolean>{
+        const filterParam = this._prepareEvmFilterPayload([address],groupId)
+        const {addressList} = await this._callFilterEvmGroupQualify(filterParam)
+        return addressList.length > 0
+    }
+    _prepareEvmFilterPayload(addresses:string[], groupId:string) {
+        const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
+        let filterParam = {
+            addresses,
+            chain:this._chainNameToChainId(groupConfig.chainName),
+            contract:'',
+            erc:20 as 20|721,
+            ts:getCurrentEpochInSeconds()
+        }
+        if (groupConfig.qualifyType === 'nft'){
+            filterParam = Object.assign(filterParam,{
+                contract:groupConfig.collectionIds[0],
+                erc:721
+            })
+        } else {
+            const thresFloat = parseFloat(groupConfig.tokenThres)
+            const thresInt = Math.round(thresFloat * 1000000)
+            filterParam = Object.assign(filterParam,{
+                contract:groupConfig.tokenId,
+                erc:20,
+                threshold: thresInt
+            })
+        }
+        return filterParam
+    }
+
 
     // call /batchsmraddresstoevmaddress, method POST
     async batchSmrAddressToEvmAddress(addresses:string[]):Promise<{[key:string]:string}>{
