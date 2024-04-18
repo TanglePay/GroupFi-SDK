@@ -53,13 +53,9 @@ import { AuxiliaryService, config } from './auxiliaryService'
 export { SimpleDataExtended };
 export * from './types';
 
-const NAMING_DOMAIN = 'api.groupfi.ai';
-
 const TP_SHIMMER_MAINNET_ID = 102;
 const TP_EVM_CHAIN_ID = 5;
 const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
-
-const MetaMaskAccountsChangedEventKey = 'metamask-accounts-changed'
 
 class GroupFiSDKFacade {
   private _address: string | undefined;
@@ -67,8 +63,6 @@ class GroupFiSDKFacade {
   private _nodeId: number | undefined
   private _mode: Mode | undefined;
   private _pairX: PairX | undefined
-
-  private _event: EventEmitter = new EventEmitter();
 
   private _mqttConnected: boolean = false;
 
@@ -262,72 +256,23 @@ class GroupFiSDKFacade {
     this._mqttConnected = true;
   }
 
-  emitMetaMaskAccountsChanged(data: {account: string}) {
-    this._event.emit(MetaMaskAccountsChangedEventKey, data)
-  }
-
   listenningMetaMaskAccountsChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
-    const listenner = async ({account}: {account: string}) => {
-      console.log('===>trollbox metamask account changed', account)
-      // const wallet_getPermissions = await window.ethereum
-      //   .request({ method: 'wallet_getPermissions' })
-
-      // const eth_accounts = (await window.ethereum
-      //   .request({ method: 'eth_accounts' }))
-
-      // if (!accounts.includes(account)) {
-        await window.ethereum.request({
-          "method": "wallet_requestPermissions",
-          "params": [
-            {
-              "eth_accounts": {}
-            }
-          ]
-        });
-        console.log('===> trollbox metamask')
-      // }
-
-      this._nodeId = undefined
-      this._address = account
-      this._mode = DelegationMode
-
+    const listenner = async () => {
+      const {mode, address} = await this.connectMetaMaskWallet()
+      console.log('trollbox metamask account changed', mode, address)
       const res = {
-        mode: this._mode,
-        address: this._address,
+        mode,
+        address,
         nodeId: undefined,
         isAddressChanged: true,
       }
-      console.log('===> trollbox metamask res', res)
-
       await this._onAccountChanged(res);
       callback(res)
-
-      // this._nodeId = undefined
-      // const res = {
-      //   mode: DelegationMode,
-      //   address: account,
-        
-      // }
-      // console.log('metamask account changed start')
-      // const {mode, address} = await this.connectMetaMaskWallet()
-      // if (address === this._address && mode === this._mode) return
-      // console.log('metamask account changed end', mode, address)
-      // const res = {
-      //   mode,
-      //   address,
-      //   nodeId: undefined,
-      //   isAddressChanged: true,
-      // }
-      // await this._onAccountChanged(res);
-      // callback(res)
     }
 
-    window.ethereum.on("accountsChanged", (accounts: string) => {
-      console.log('===> Trollbox Domain listen to accountsChanged', accounts)
-    });
+    window.ethereum.on("accountsChanged", listenner);
 
-    this._event.on(MetaMaskAccountsChangedEventKey, listenner)
-    return () => this._event.off(MetaMaskAccountsChangedEventKey, listenner)
+    return () => window.ethereum.removeListener("accountsChanged", listenner)
   }
 
   listenningTPAccountChanged(
@@ -752,6 +697,9 @@ class GroupFiSDKFacade {
     }
   }
 
+  _isEvm() {
+    return this._mode !== ShimmerMode
+  }
   // TODO: It's temporary, it will be adjusted later.
   async getRecommendGroups({
     includes,
@@ -761,7 +709,7 @@ class GroupFiSDKFacade {
     excludes?: string[];
   }) {
     this._ensureWalletConnected();
-    const isEvm = this._mode != ShimmerMode
+    const isEvm = this._isEvm()
     const res =
       await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
         address: this._address!,
@@ -805,7 +753,7 @@ class GroupFiSDKFacade {
 
   _client?: GroupfiSdkClient;
   async bootstrap(walletType: WalletType): Promise<{
-    address?: string;
+    address: string;
     mode: Mode;
     nodeId: number | undefined
   }> {
@@ -814,19 +762,17 @@ class GroupFiSDKFacade {
 
     let res:
       | {
-          address?: string;
+          address: string;
           nodeId?: number;
           mode?: Mode;
         }
       | undefined = undefined;
+
     if (walletType === TanglePayWallet) {
       // connect tanglepay wallet
       res = await this.waitWalletReadyAndConnectTanglePayWallet();
     } else if (walletType === MetaMaskWallet) {
-      res = {
-        mode: DelegationMode
-      }
-      // res = await this.connectMetaMaskWallet()
+      res = await this.connectMetaMaskWallet()
     }
 
     if (!res?.mode) {
@@ -834,9 +780,7 @@ class GroupFiSDKFacade {
     }
     
     this.switchClientAdapter(res.mode)
-    if (res.address) {
-      await this.initialAddress()
-    }
+    await this.initialAddress()
 
     // await Promise.all([
     //   this.fetchAddressQualifiedGroupConfigs({}),
@@ -994,7 +938,7 @@ class GroupFiSDKFacade {
                 name: 'MetaMaskConnectFailed',
               });
             })) as string[];
-          console.log('connect metamask wallet accounts', accounts)
+          console.log('trollbox connect metamask wallet accounts', accounts)
           const rawAccount = accounts[0];
           
           if (!rawAccount) {
@@ -1004,7 +948,6 @@ class GroupFiSDKFacade {
           // Uniformly convert EVM addresses to lowercase
           const account = rawAccount.toLowerCase()
 
-          console.log('metamask connected', account)
           this._mode = DelegationMode
           this._address = account
           this._nodeId = undefined
@@ -1182,6 +1125,10 @@ class GroupFiSDKFacade {
   }
   async isQualified(groupId: string) {
     this._ensureWalletConnected();
+    const isEvm = this._isEvm()
+    if (isEvm) {
+      return await this._isEvmQualified(groupId)
+    }
     const ipfsOrigins = await IotaCatSDKObj.fetchIpfsOrigins(this._address!);
     const qualifiedGroups = await IotaCatSDKObj.fetchAddressQualifiedGroups(
       this._address!,
@@ -1192,6 +1139,11 @@ class GroupFiSDKFacade {
         qualifiedGroup.groupId === IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     );
   }
+  async _isEvmQualified(groupId: string) {
+    const address = this._address!
+    return await IotaCatSDKObj.isEvmAddressQualifiedForGroup(address, groupId)
+  }
+
   // _addHexPrefixIfAbsent
   addHexPrefixIfAbsent(str: string) {
     return IotaCatSDKObj._addHexPrefixIfAbsent(str);

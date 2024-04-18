@@ -826,36 +826,12 @@ export class GroupfiSdkClient {
         }
         
     }
-    _chainNameToChainId(chainName:string):number{
-        if (chainName === 'shimmer-evm') return 148;
-        return 0
-    }
+
     // _makeSharedOutputForEvmGroup
     async _makeSharedOutputForEvmGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{outputs:IBasicOutput[],salt:string}>{
-        const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
         const addressToBeFiltered = memberList ? memberList.map(member=>member.addr) : []
-        let filterParam = {
-            addresses:addressToBeFiltered,
-            chain:this._chainNameToChainId(groupConfig.chainName),
-            contract:'',
-            erc:20 as 20|721,
-            ts:getCurrentEpochInSeconds()
-        }
-        if (groupConfig.qualifyType === 'nft'){
-            filterParam = Object.assign(filterParam,{
-                contract:groupConfig.collectionIds[0],
-                erc:721
-            })
-        } else {
-            const thresFloat = parseFloat(groupConfig.tokenThres)
-            const thresInt = Math.round(thresFloat * 1000000)
-            filterParam = Object.assign(filterParam,{
-                contract:groupConfig.tokenId,
-                erc:20,
-                threshold: thresInt
-            })
-        }
-        const {addressList:addressListFiltered,signature} = await IotaCatSDKObj.filterEvmGroupQualify(filterParam)
+        
+        const {addressList:addressListFiltered,signature} = await IotaCatSDKObj.filterEvmGroupQualify(addressToBeFiltered,groupId)
         const memberListFiltered = memberList?.filter((pair)=>{
             const {addr} = pair
             return addressListFiltered.includes(addr)
