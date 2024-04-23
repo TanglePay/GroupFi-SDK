@@ -711,6 +711,10 @@ class GroupFiSDKFacade {
       let groups =  res
       if (isEvm) {
         groups = groups.filter(({chainName})=>chainName!='smr')
+      } else {
+        // Actually, there is no need to write the logic. 
+        // To fix test bug
+        groups = groups.filter(({chainName}) => chainName === 'smr')
       }
       return groups.map(({ groupName, qualifyType }) => ({
         groupName,
