@@ -5,6 +5,8 @@ import { MessageCurrentSchemaVersion } from "./types";
 export function serializeEvmQualify(groupId: string, addressList: string[], signature: string): Uint8Array {
     const signatureBytes = Converter.hexToBytes(signature);
     const signatureBytesLength = signatureBytes.length;
+    // log the signatureBytesLength
+    console.log("signatureBytesLength: ", signatureBytesLength);
     const groupIdBytes = Converter.hexToBytes(groupId);
     const addressListBytes = addressList.map((val)=>Converter.hexToBytes(val));
     const writer = new WriteStream();

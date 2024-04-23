@@ -842,7 +842,7 @@ class IotaCatSDK {
         const indexes = json.indexes
         // indexes are index of address that is not qualified
         const addressList = param.addresses.filter((_,index)=>!indexes.includes(index))
-        const signature = '0x'+this._generateRandomStr(64)
+        const signature = 's'
         return {addressList,signature}
     }
     _chainNameToChainId(chainName:string):number{
