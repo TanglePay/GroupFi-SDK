@@ -1180,6 +1180,7 @@ export class GroupfiSdkClient {
                 addressBech32: address,
                 hasStorageDepositReturn: true,
                 hasExpiration: true,
+                expiresAfter: Math.floor(Date.now() / 1000),
                 tagHex: `0x${Converter.utf8ToHex('groupfi-id')}`
             })
             for (const outputId of items) {
