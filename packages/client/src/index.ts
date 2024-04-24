@@ -865,6 +865,7 @@ export class GroupfiSdkClient {
         }
 
         console.log('_makeSharedOutputForGroup recipients', recipients);
+        recipients = recipients.filter((recipient)=>!!recipient.mkey)
         const salt = IotaCatSDKObj._generateRandomStr(32)
         const payloadList:EncryptingPayload[] = recipients.map((pair)=>({addr:pair.addr,publicKey:Converter.hexToBytes(pair.mkey), content:salt}))
 
