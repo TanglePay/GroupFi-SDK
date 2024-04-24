@@ -870,8 +870,7 @@ class IotaCatSDK {
                 erc:721
             })
         } else {
-            const thresFloat = parseFloat(groupConfig.tokenThres)
-            const thresInt = Math.round(thresFloat * 1000000)
+            const thresInt = parseInt(groupConfig.tokenThres)
             filterParam = Object.assign(filterParam,{
                 contract:groupConfig.tokenId,
                 erc:20,
