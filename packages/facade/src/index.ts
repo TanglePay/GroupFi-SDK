@@ -21,7 +21,6 @@ import {
 import { SimpleDataExtended, strToBytes, objectId, sleep, generateSMRPair, bytesToHex, concatBytes, getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
 import { GroupfiSdkClient, IProxyModeRequest, MessageBody, AddressMappingStore } from 'groupfi-sdk-client';
 import { Web3 } from 'web3'
-import EventEmitter from "events";
 import smrPurchaseAbi from './contractAbi/smr-purchase'
 
 
@@ -240,40 +239,33 @@ class GroupFiSDKFacade {
     return () => IotaCatSDKObj.off('inbox', listener);
   }
 
-  // async setupMqttConnection(connect: any) {
-  //   IotaCatSDKObj.setupMqttConnection(connect);
-  //   IotaCatSDKObj.switchMqttAddress(this._address!);
-  //   // log switchMqttAddress
-  //   console.log('switchMqttAddress', this._address);
-  //   this._mqttConnected = true;
-  // }
-
   async setupMqttConnection(connect: any) {
     IotaCatSDKObj.setupMqttConnection(connect);
-    // IotaCatSDKObj.switchMqttAddress(this._address!);
-    // // log switchMqttAddress
-    // console.log('switchMqttAddress', this._address);
     this._mqttConnected = true;
   }
 
-  listenningMetaMaskAccountsChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
-    const listenner = async () => {
-      const {mode, address} = await this.connectMetaMaskWallet()
-      console.log('trollbox metamask account changed', mode, address)
-      const res = {
-        mode,
-        address,
-        nodeId: undefined,
-        isAddressChanged: true,
-      }
-      await this._onAccountChanged(res);
-      callback(res)
-    }
-
-    window.ethereum.on("accountsChanged", listenner);
-
-    return () => window.ethereum.removeListener("accountsChanged", listenner)
+  onMetaMaskAccountChanged(account: string) {
+    this.connectMetaMaskAccount(account)
   }
+
+  // listenningMetaMaskAccountsChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
+  //   const listenner = async () => {
+  //     const {mode, address} = await this.connectMetaMaskWallet()
+  //     console.log('trollbox metamask account changed', mode, address)
+  //     const res = {
+  //       mode,
+  //       address,
+  //       nodeId: undefined,
+  //       isAddressChanged: true,
+  //     }
+  //     await this._onAccountChanged(res);
+  //     callback(res)
+  //   }
+
+  //   window.ethereum.on("accountsChanged", listenner);
+
+  //   return () => window.ethereum.removeListener("accountsChanged", listenner)
+  // }
 
   listenningTPAccountChanged(
     callback: (params: { address: string; nodeId: number; mode: Mode, isAddressChanged: boolean }) => void
@@ -719,6 +711,10 @@ class GroupFiSDKFacade {
       let groups =  res
       if (isEvm) {
         groups = groups.filter(({chainName})=>chainName!='smr')
+      } else {
+        // Actually, there is no need to write the logic. 
+        // To fix test bug
+        groups = groups.filter(({chainName}) => chainName === 'smr')
       }
       return groups.map(({ groupName, qualifyType }) => ({
         groupName,
@@ -752,7 +748,14 @@ class GroupFiSDKFacade {
   }
 
   _client?: GroupfiSdkClient;
-  async bootstrap(walletType: WalletType): Promise<{
+
+  _dappClient: any
+
+  setDappClient(dappClient: any) {
+    this._dappClient = dappClient
+  }
+
+  async bootstrap(walletType: WalletType, metaMaskAccountFromDapp: string | undefined): Promise<{
     address: string;
     mode: Mode;
     nodeId: number | undefined
@@ -771,8 +774,9 @@ class GroupFiSDKFacade {
     if (walletType === TanglePayWallet) {
       // connect tanglepay wallet
       res = await this.waitWalletReadyAndConnectTanglePayWallet();
-    } else if (walletType === MetaMaskWallet) {
-      res = await this.connectMetaMaskWallet()
+    } else if (walletType === MetaMaskWallet && metaMaskAccountFromDapp !== undefined) {
+      res = this.connectMetaMaskAccount(metaMaskAccountFromDapp)
+      // res = await this.connectMetaMaskWallet()
     }
 
     if (!res?.mode) {
@@ -839,7 +843,7 @@ class GroupFiSDKFacade {
         return
       }
       case DelegationMode: {
-        const adapter = new DelegationModeRequestAdapter(this._address!, nodeUrlHint);
+        const adapter = new DelegationModeRequestAdapter(this._address!, nodeUrlHint, this._dappClient);
         this._client!.switchAdapter({adapter, mode})
         return
       }
@@ -920,6 +924,14 @@ class GroupFiSDKFacade {
       return ShimmerMode;
     }
     return ImpersonationMode
+  }
+
+  connectMetaMaskAccount(metaMaskAccountFromDapp: string) {
+    this._mode = DelegationMode
+    this._address = metaMaskAccountFromDapp
+    this._nodeId = undefined
+
+    return {mode: this._mode, address: this._address}
   }
 
   async connectMetaMaskWallet(): Promise<{address: string, mode: Mode}> {

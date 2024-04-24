@@ -176,17 +176,26 @@ export class DelegationModeRequestAdapter
 
   private _nodeUrlHint: string;
 
-  constructor(evmAddress: string, nodeUrlHint: string) {
+  private _dappClient: any
+
+  constructor(evmAddress: string, nodeUrlHint: string, dappClient: any) {
     this._evmAddress = evmAddress;
     this._nodeUrlHint = nodeUrlHint
+    this._dappClient = dappClient
     GroupfiWalletEmbedded.setup(this._nodeUrlHint)
   }
 
   async decryptPairX(params: { encryptedData: string }) {
-    return (await window.ethereum.request({
+    const res = await this._dappClient.request({
       method: 'eth_decrypt',
-      params: [params.encryptedData, this._evmAddress!],
-    })) as string;
+      params: [params.encryptedData, this._evmAddress!]
+    })
+    console.log('===> Groupfi facade res', res)
+    return res
+    // return (await window.ethereum.request({
+    //   method: 'eth_decrypt',
+    //   params: [params.encryptedData, this._evmAddress!],
+    // })) as string;
   }
 
   async registerPairX(params: { pairX: PairX }): Promise<string> {
@@ -247,18 +256,27 @@ export class DelegationModeRequestAdapter
   }
 
   async ethSign(params: { dataToBeSignedHex: string }): Promise<string> {
-    const res = await window.ethereum.request({
+    const res = await this._dappClient.request({
       method: 'personal_sign',
-      params: [params.dataToBeSignedHex, this._evmAddress!],
-    });
-    return res;
+      params: [params.dataToBeSignedHex, this._evmAddress!]
+    })
+    return res
+    // const res = await window.ethereum.request({
+    //   method: 'personal_sign',
+    //   params: [params.dataToBeSignedHex, this._evmAddress!],
+    // });
+    // return res;
   }
 
   async getEncryptionPublicKey(): Promise<string> {
-    const res = (await window.ethereum.request({
+    const res = (await this._dappClient.request({
       method: 'eth_getEncryptionPublicKey',
       params: [this._evmAddress],
     })) as string;
+    // const res = (await window.ethereum.request({
+    //   method: 'eth_getEncryptionPublicKey',
+    //   params: [this._evmAddress],
+    // })) as string;
     console.log('===> metamask getEncryptionPublicKey', res);
     return res;
   }
