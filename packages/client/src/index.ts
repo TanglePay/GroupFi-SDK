@@ -355,6 +355,11 @@ export class GroupfiSdkClient {
             stream:ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined>
         )=>{
             const res = await this.getMessageFromOutputId({outputId,address,type})
+            if (!res) {
+                stream.push({outputId,status:-1})
+                callback()
+                return
+            }
             const message = res
             ? {
                 type: ImInboxEventTypeNewMessage,
