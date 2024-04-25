@@ -318,6 +318,7 @@ export class DelegationModeRequestAdapter
   async sendTransaction({
     pairX,
     essence,
+    essenceOutputsLength
   }: IRequestAdapterSendTransationParams) {
     if (!pairX) {
       throw new Error('DelegationMode sendTransation pairX is undefined');
@@ -337,12 +338,16 @@ export class DelegationModeRequestAdapter
       sign: bytesToHex(signatureBytes, true),
     });
 
-    console.log('===> proxy send transactin body', body)
+    const {blockId, transactionId} = await auxiliaryService.sendTransaction(body);
 
-    const res = await auxiliaryService.sendTransaction(body);
-    console.log('===> proxy send transaction res', res);
+    const { outputId, remainderOutputId } = GroupfiWalletEmbedded.getMetadataFromTransactionId(transactionId, essenceOutputsLength)
 
-    return res;
+    return {
+      blockId,
+      transactionId,
+      outputId,
+      remainderOutputId
+    }
   }
 }
 

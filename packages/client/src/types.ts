@@ -28,6 +28,7 @@ export interface IRequestAdapterDecryptParams {
 export interface IRequestAdapterSendTransationParams {
   essence: Uint8Array;
   pairX?: PairX;
+  essenceOutputsLength: number
 }
 
 export interface IRequestAdapter {
