@@ -602,6 +602,16 @@ class GroupfiWalletEmbedded {
         return {transactionId,outputId:messageOutputId,remainderOutputId}
     }
 
+    // Before figuring out the relationship between getTransactionPayloadHash and transactionId, keep this function.
+    getMetadataFromTransactionId(transactionId: string, essenceOutputsLength: number) {
+        const messageOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,0)
+        let remainderOutputId:string|undefined
+        if (essenceOutputsLength > 1) {
+            remainderOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,essenceOutputsLength-1)
+        }
+        return {outputId:messageOutputId,remainderOutputId}
+    }
+
     ethDecrypt(encryptedData: string): string | undefined {
         if (this._EVMAccount._wallet === undefined) {
             return undefined
