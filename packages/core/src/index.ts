@@ -176,7 +176,8 @@ class IotaCatSDK {
     // subscribe to a addressSha256Hash inbox/addressSha256Hash
     subscribeToAddressSha256Hash(address: string) {
         this._ensureMqttClient()
-        const addressSha256Hash = this._sha256Hash(address.toLowerCase())
+        let addressSha256Hash = this._sha256Hash(address.toLowerCase())
+        addressSha256Hash = this._addHexPrefixIfAbsent(addressSha256Hash)
         console.log('===> subscribeToAddressSha256Hash',address, addressSha256Hash)
         this._mqttClient!.subscribe(`inbox/${addressSha256Hash}`)
     }
@@ -775,8 +776,9 @@ class IotaCatSDK {
     // value = one byte type 
     parsePushedValue(value:Buffer):PushedValue|undefined{
         // type to number
-        console.log('parsePushedValue',value.toString('hex'))
         const type = value[0]
+        console.log('parsePushedValue',value.toString('hex'),
+            'type',type)
         if (type === ImInboxEventTypeNewMessage) {
             const sender = value.slice(2,34).toString('hex')
             const meta = value.slice(34).toString('hex')
@@ -795,8 +797,8 @@ class IotaCatSDK {
             return {type, groupId, timestamp:milestoneTimestamp, isNewMember, address}
         } else if (type === ImInboxEventTypeMarkChanged) {
             const groupId = value.slice(1,33).toString('hex')
-            const milestoneTimestamp = value.slice(37,41).readUInt32BE(0)
-            const isNewMark = value[41] === 1
+            const milestoneTimestamp = value.slice(33,37).readUInt32BE(0)
+            const isNewMark = value[37] === 1
             return {type, groupId, timestamp: milestoneTimestamp, isNewMark}
         }
         
