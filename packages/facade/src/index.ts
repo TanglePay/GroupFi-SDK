@@ -244,8 +244,9 @@ class GroupFiSDKFacade {
     this._mqttConnected = true;
   }
 
-  onMetaMaskAccountChanged(account: string) {
-    this.connectMetaMaskAccount(account)
+  async onMetaMaskAccountChanged(account: string) {
+    const res = this.connectMetaMaskAccount(account)
+    await this._onAccountChanged({...res,nodeId: undefined, isAddressChanged: true});
   }
 
   // listenningMetaMaskAccountsChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {

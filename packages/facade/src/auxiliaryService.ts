@@ -41,7 +41,11 @@ export class AuxiliaryService {
     return json.data[chainId];
   }
 
-  async sendTransaction(body: string) {
+  async sendTransaction(body: string): Promise<{
+    blockId: string,
+    result: boolean,
+    transactionId: string
+  }> {
     const res = await fetch(`https://${this._domain}/proxy/send`, {
       method: 'POST',
       headers: {
@@ -49,8 +53,12 @@ export class AuxiliaryService {
       },
       body: body,
     });
-    const json = await res.json();
-    return json;
+    const json = await res.json() as {result: boolean, blockid: string, transactionid: string}
+    return {
+      result: json.result,
+      blockId: json.blockid,
+      transactionId: json.transactionid
+    }
   }
 
   async register(body: string) {

@@ -355,6 +355,11 @@ export class GroupfiSdkClient {
             stream:ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined>
         )=>{
             const res = await this.getMessageFromOutputId({outputId,address,type})
+            if (!res) {
+                stream.push({outputId,status:-1})
+                callback()
+                return
+            }
             const message = res
             ? {
                 type: ImInboxEventTypeNewMessage,
@@ -1629,7 +1634,6 @@ export class GroupfiSdkClient {
     }
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
     async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:OutputWrapper[],createdOutputs:OutputTypes[]){
-        console.log('===>Enter _sendTransactionWithConsumedOutputsAndCreatedOutputs')
         this._ensureClientInited()
         this._ensureWalletInited()
         const inputArray:IUTXOInput[] = []
@@ -2076,9 +2080,13 @@ export class GroupfiSdkClient {
         const essenceFinal = writeStream.finalBytes();
         // const transactionEssenceUrl = createBlobURLFromUint8Array(essenceFinal);
         const res = await this._requestAdapter!.sendTransaction({
-                essence: essenceFinal,
-                pairX: this._pairX,
-            })
+            essence: essenceFinal,
+            pairX: this._pairX,
+            essenceOutputsLength: transactionEssence.outputs.length
+        })
+
+        
+        // console.log('===> Test send res', res)
         // console.log('===>start iota_im_sign_and_send_transaction_to_self')
         // const res = await this._sdkRequest({
         //     method: 'iota_im_sign_and_send_transaction_to_self',
