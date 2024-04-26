@@ -16,6 +16,7 @@ import {
   ImInboxEventTypeGroupMemberChanged,
   InboxItemResponse,
   MessageResponseItem,
+  ImInboxEventTypeMarkChanged,
 } from 'iotacat-sdk-core';
 
 import { SimpleDataExtended, strToBytes, objectId, sleep, generateSMRPair, bytesToHex, concatBytes, getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
@@ -222,7 +223,6 @@ class GroupFiSDKFacade {
     //   throw new Error('MQTT not connected');
     // }
     // log listenningNewEventItem
-    console.log('***Enter listenningNewEventItem');
     const listener = async (pushed: PushedValue) => {
       console.log('pushed', pushed);
       let item: EventItemFromFacade | undefined = undefined;
@@ -230,6 +230,9 @@ class GroupFiSDKFacade {
         item = await this.handlePushedMessage(pushed);
       } else if (pushed.type == ImInboxEventTypeGroupMemberChanged) {
         item = pushed;
+      } else if (pushed.type === ImInboxEventTypeMarkChanged) {
+        console.log('===> mqtt event ImInboxEventTypeMarkChanged, pushed:', pushed)
+        item = pushed
       }
       if (item) {
         callback(item);

@@ -1584,6 +1584,7 @@ export class GroupfiSdkClient {
             console.log("Remainder Basic Output: ", remainderBasicOutput);
         }
         const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(extraOutputsToBeConsumed, createdOutputs)
+        console.log('===> send transaction res', res)
         const {blockId,outputId,transactionId,remainderOutputId} = res
         this._setRemainderHint(remainderBasicOutput,remainderOutputId)
         return res
