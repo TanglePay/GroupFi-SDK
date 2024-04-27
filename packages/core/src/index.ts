@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -156,6 +156,9 @@ class IotaCatSDK {
     }
     async switchMqttAddress(address:string){
         this._ensureMqttClient()
+        
+        this.subscribeToAddressSha256Hash(address)
+
         const groupIds = await this._fetchAddressGroupIds(address)
         // log address groupIds
         console.log('switchMqttAddress address groupIds',address,groupIds)
@@ -168,6 +171,15 @@ class IotaCatSDK {
     subscribeToGroupId(groupId:string){
         this._ensureMqttClient()
         this._mqttClient!.subscribe(`inbox/${groupId}`)
+    }
+
+    // subscribe to a addressSha256Hash inbox/addressSha256Hash
+    subscribeToAddressSha256Hash(address: string) {
+        this._ensureMqttClient()
+        let addressSha256Hash = this._sha256Hash(address.toLowerCase())
+        addressSha256Hash = this._addHexPrefixIfAbsent(addressSha256Hash)
+        console.log('===> subscribeToAddressSha256Hash',address, addressSha256Hash)
+        this._mqttClient!.subscribe(`inbox/${addressSha256Hash}`)
     }
 
     async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
@@ -764,8 +776,9 @@ class IotaCatSDK {
     // value = one byte type 
     parsePushedValue(value:Buffer):PushedValue|undefined{
         // type to number
-        console.log('parsePushedValue',value.toString('hex'))
         const type = value[0]
+        console.log('parsePushedValue',value.toString('hex'),
+            'type',type)
         if (type === ImInboxEventTypeNewMessage) {
             const sender = value.slice(2,34).toString('hex')
             const meta = value.slice(34).toString('hex')
@@ -782,6 +795,11 @@ class IotaCatSDK {
             // @ts-ignore
             const address = String.fromCharCode.apply(null, buf)
             return {type, groupId, timestamp:milestoneTimestamp, isNewMember, address}
+        } else if (type === ImInboxEventTypeMarkChanged) {
+            const groupId = value.slice(1,33).toString('hex')
+            const milestoneTimestamp = value.slice(33,37).readUInt32BE(0)
+            const isNewMark = value[37] === 1
+            return {type, groupId, timestamp: milestoneTimestamp, isNewMark}
         }
         
     }
