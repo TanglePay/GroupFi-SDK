@@ -1,7 +1,7 @@
 import { GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, MessageCurrentSchemaVersion } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { unixSecondsToBytes, bytesToUnixSeconds } from 'iotacat-sdk-utils'
-
+import { serializeCommonHeader, deserializeCommonHeader } from "./codec_common";
 export function serializeUserMarkedGroupIds(list:IMUserMarkedGroupId[]) : Uint8Array {
     const stream = new WriteStream();
     const listIntermediate:IMUserMarkedGroupIdIntermediate[] = list.map(umg => ({
