@@ -46,6 +46,7 @@ export class AuxiliaryService {
     result: boolean,
     transactionId: string
   }> {
+    console.log('send proxy tx body:', body)
     const res = await fetch(`https://${this._domain}/proxy/send`, {
       method: 'POST',
       headers: {
@@ -54,6 +55,7 @@ export class AuxiliaryService {
       body: body,
     });
     const json = await res.json() as {result: boolean, blockid: string, transactionid: string}
+    console.log('send proxy tx res:', json)
     return {
       result: json.result,
       blockId: json.blockid,
