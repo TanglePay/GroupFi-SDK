@@ -1876,17 +1876,17 @@ export class GroupfiSdkClient {
         const output = outputResponse.output as IBasicOutput
         return {outputId,output}
     }
-    async getMarkedGroupIds(){
+    async getMarkedGroupIds(userAddress: string){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const {list} = await this._getMarkedGroupIds()
+        const {list} = await this._getMarkedGroupIds(userAddress)
         return list
     }
     // memberList should contain self if already qualified
-    async markGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}){
+    async markGroup({groupId,memberList, userAddress}:{groupId:string,memberList?:{addr:string,publicKey:string}[], userAddress: string}){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const tasks:Promise<any>[] = [this._getMarkedGroupIds()]
+        const tasks:Promise<any>[] = [this._getMarkedGroupIds(userAddress)]
         const isMakeSharedOutput = memberList && memberList.length > 0
         if (isMakeSharedOutput) {
             tasks.push(this._makeSharedOutputForGroup({groupId,memberList}))
@@ -1909,12 +1909,15 @@ export class GroupfiSdkClient {
         console.log('new list', list)
         return await this._persistMarkedGroupIds({list,outputWrapper,extraOutputs})
     }
-    async unmarkGroup(groupId:string){
+    async unmarkGroup(groupId:string, userAddress: string){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const {outputWrapper,list} = await this._getMarkedGroupIds()
+        const {outputWrapper,list} = await this._getMarkedGroupIds(userAddress)
         const idx = list.findIndex(id=>id.groupId === groupId)
-        if (idx === -1) return
+        if (idx === -1) {
+            console.log('already unmark')
+            return
+        }
         list.splice(idx,1)
         return await this._persistMarkedGroupIds({list,outputWrapper})
     }
@@ -1931,16 +1934,28 @@ export class GroupfiSdkClient {
         const createdOutputs = extraOutputs ? [basicOutput, ...extraOutputs] : [basicOutput]
         return await this._sendBasicOutput(createdOutputs,toBeConsumed);
     }
-    async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
+    // async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
+    //     const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
+    //     console.log('_getMarkedGroupIds existing', existing);
+    //     if (!existing) return {list:[]}
+    //     const {output} = existing
+    //     const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
+    //     if (!meta) return {list:[]}
+    //     const data = Converter.hexToBytes(meta.data)
+    //     const groupIds = deserializeUserMarkedGroupIds(data)
+    //     return {outputWrapper:existing,list:groupIds}
+    // }
+    async _getMarkedGroupIds(userAddress: string):Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
-        console.log('_getMarkedGroupIds existing', existing);
-        if (!existing) return {list:[]}
-        const {output} = existing
-        const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
-        if (!meta) return {list:[]}
-        const data = Converter.hexToBytes(meta.data)
-        const groupIds = deserializeUserMarkedGroupIds(data)
-        return {outputWrapper:existing,list:groupIds}
+        const markedGroups = await IotaCatSDKObj.fetchAddressMarkGroupDetails(userAddress)
+        // console.log('_getMarkedGroupIds existing', existing);
+        // if (!existing) return {list:[]}
+        // const {output} = existing
+        // const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
+        // if (!meta) return {list:[]}
+        // const data = Converter.hexToBytes(meta.data)
+        // const groupIds = deserializeUserMarkedGroupIds(data)
+        return {outputWrapper:existing,list:markedGroups}
     }
 
     async _dataAndTagToBasicOutput(data:Uint8Array,tag:string):Promise<IBasicOutput>{
