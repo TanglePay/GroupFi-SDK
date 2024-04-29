@@ -307,6 +307,13 @@ class IotaCatSDK {
         const json = await res.json()
         return json
     }
+    async fetchAddressVotes(address: string): Promise<{groupId: string, vote: number}[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressvotes?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        const jsonList = this._ensureList(json)
+        return jsonList.map(list => ({groupId: list.groupId, vote: list.vote})) 
+    }
     // fetch group blacklist for a group, /groupblacklist
     async fetchGroupBlacklist(groupId:string):Promise<string[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupblacklist?groupId=0x${groupId}`
@@ -327,6 +334,12 @@ class IotaCatSDK {
     // fetch address mark groups for an address, /addressmarkgroups
     async fetchAddressMarkGroups(address:string):Promise<string[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmarkgroups?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return this._ensureList(json)
+    }
+    async fetchAddressMarkGroupDetails(address:string): Promise<{groupId: string, timestamp: number}[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmarkgroupdetails?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)

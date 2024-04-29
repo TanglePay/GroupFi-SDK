@@ -1045,7 +1045,8 @@ class GroupFiSDKFacade {
 
   async voteGroup(groupId: string, vote: number) {
     this._ensureWalletConnected();
-    const res = (await this._client!.voteGroup(groupId, vote)) as
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    const res = (await this._client!.voteGroup(groupId, vote, this._address!)) as
       | TransactionRes
       | undefined;
     if (res === undefined) {
@@ -1057,7 +1058,8 @@ class GroupFiSDKFacade {
 
   async unvoteGroup(groupId: string) {
     this._ensureWalletConnected();
-    const res = (await this._client!.unvoteGroup(groupId)) as
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    const res = (await this._client!.unvoteGroup(groupId, this._address!)) as
       | TransactionRes
       | undefined;
     if (res === undefined) {
@@ -1079,7 +1081,9 @@ class GroupFiSDKFacade {
     return allUserGroup;
   }
   async getGroupVoteRes(groupId: string) {
-    const allGroupVotes = (await this._client!.getAllGroupVotes()) as Array<{
+    this._ensureWalletConnected()
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    const allGroupVotes = (await this._client!.getAllGroupVotes(this._address!)) as Array<{
       groupId: string;
       vote: number;
     }>;
@@ -1088,8 +1092,9 @@ class GroupFiSDKFacade {
   }
 
   async markGroup(groupId: string) {
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     this._ensureWalletConnected();
-    const res = (await this._client!.markGroup({ groupId })) as
+    const res = (await this._client!.markGroup({ groupId, userAddress: this._address! })) as
       | TransactionRes
       | undefined;
     return res;
@@ -1104,6 +1109,7 @@ class GroupFiSDKFacade {
     publicKey: string;
     memberList: { addr: string; publicKey: string }[];
   }) {
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     this._ensureWalletConnected();
     const isAlreadyInMemberList = memberList.find(
       (o) => o.addr === this._address!
@@ -1114,15 +1120,16 @@ class GroupFiSDKFacade {
       publicKey = this._client!.getPairXPublicKey()!;
     }
     memberList.push({ addr: this._address!, publicKey });
-    const res = (await this._client!.markGroup({ groupId, memberList })) as
+    const res = (await this._client!.markGroup({ groupId, memberList, userAddress: this._address! })) as
       | TransactionRes
       | undefined;
     return res;
   }
 
   async leaveOrUnMarkGroup(groupId: string) {
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     this._ensureWalletConnected();
-    const res = (await this._client!.unmarkGroup(groupId)) as
+    const res = (await this._client!.unmarkGroup(groupId, this._address!)) as
       | TransactionRes
       | undefined;
     return res;
