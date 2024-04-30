@@ -1911,9 +1911,9 @@ export class GroupfiSdkClient {
         if (list.find(id=>id.groupId === groupId)) {
             // already marked, log
             console.log('already marked', groupId);
-            return
+        } else {
+            list.push({groupId,timestamp:Date.now()})
         }
-        list.push({groupId,timestamp:Date.now()})
         console.log('new list', list)
         return await this._persistMarkedGroupIds({list,outputWrapper,extraOutputs})
     }
