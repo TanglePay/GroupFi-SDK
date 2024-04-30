@@ -258,7 +258,15 @@ class IotaCatSDK {
     }
     // fetch qualified addresses for a group, /groupqualifiedaddresses
     async fetchGroupQualifiedAddresses(groupId:string):Promise<string[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresses?groupId=0x${groupId}`
+        const fullfilled = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresses?groupId=${fullfilled}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // fetch qualified addresse,pubkey for a group, /groupqualifiedaddresspublickeypairs
+    async fetchGroupQualifiedAddressPublicKeyPairs(groupId:string):Promise<{ownerAddress:string,publicKey:string}[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresspublickeypairs?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()
         return json
