@@ -1112,8 +1112,9 @@ class GroupFiSDKFacade {
       // TODO
       publicKey = this._client!.getPairXPublicKey()!;
     }
-    memberList.push({ addr: this._address!, publicKey });
-    const res = (await this._client!.markGroup({ groupId, memberList, userAddress: this._address! })) as
+    const memberSelf = { addr: this._address!, publicKey }
+    memberList.push(memberSelf);
+    const res = (await this._client!.markGroup({ groupId, memberList, userAddress: this._address!,memberSelf })) as
       | TransactionRes
       | undefined;
     return res;
