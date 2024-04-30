@@ -258,6 +258,7 @@ class IotaCatSDK {
     }
     // fetch qualified addresses for a group, /groupqualifiedaddresses
     async fetchGroupQualifiedAddresses(groupId:string):Promise<string[]>{
+        const groupId = 
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresses?groupId=0x${groupId}`
         const res = await fetch(url)
         const json = await res.json()
@@ -506,7 +507,8 @@ class IotaCatSDK {
         const decompressed = LZString.decompressFromUint8Array(bytes)
         message.data = decompressed
     }
-    async serializeMessage(message:IMMessage, extra:{encryptUsingPublicKey?:(key:string,data:string)=>Promise<Uint8Array>, groupSaltResolver?:(groupId:string)=>Promise<string>}):Promise<Uint8Array>{
+    async serializeMessage(message:IMMessage, extra:{ isActAsSelf:boolean,
+        encryptUsingPublicKey?:(key:string,data:string)=>Promise<Uint8Array>, groupSaltResolver?:(groupId:string)=>Promise<string>}):Promise<Uint8Array>{
         const {encryptUsingPublicKey,groupSaltResolver} = extra
         const groupSha256Hash = message.groupId
         const groupBytes = hexToBytes(groupSha256Hash)
@@ -537,7 +539,7 @@ class IotaCatSDK {
         
         const message_ = this._compileMessage(message)
         const ws = new WriteStream()
-        serializeIMMessage(ws,message_)
+        serializeIMMessage(ws,message_,{isActAsSelf:extra.isActAsSelf?1:0})
         const msgBytes = ws.finalBytes()
         return msgBytes
     }
@@ -589,7 +591,9 @@ class IotaCatSDK {
     }
     
 
-    serializeRecipientList(recipients:IMRecipient[], groupId:string):Uint8Array{
+    serializeRecipientList(recipients:IMRecipient[], groupId:string,
+        ctx:{[key:string]:any}
+    ):Uint8Array{
         const groupBytes = hexToBytes(groupId)
         const recipientIntermediateList = recipients.map(recipient=>this._compileRecipient(recipient))
         const ws = new WriteStream()
@@ -597,7 +601,7 @@ class IotaCatSDK {
             schemaVersion: MessageCurrentSchemaVersion,
             groupId: groupBytes,
             list: recipientIntermediateList,
-        })
+        },ctx)
         const pl = ws.finalBytes()
         return pl;
     }

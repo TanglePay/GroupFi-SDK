@@ -39,7 +39,7 @@ describe('codec test', () => {
     test('test recipient list serialization and deserialization', () => {
         const recipientList:IMRecipient[] = [{addr:'0x01',mkey:'03'},{addr:'0x02',mkey:'04'}]
         const groupId = IotaCatSDKObj._groupToGroupId('iceberg')
-        const payload = IotaCatSDKObj.serializeRecipientList(recipientList, groupId!)
+        const payload = IotaCatSDKObj.serializeRecipientList(recipientList, groupId!,{})
         const recipientList2 = IotaCatSDKObj.deserializeRecipientList(payload)
         const recipientList3 = recipientList.map(r => ({addr:IotaCatSDKObj.getAddressHashStr(r.addr),mkey:r.mkey}))
         expect(recipientList2).toEqual(recipientList3)
@@ -60,7 +60,7 @@ describe('codec test', () => {
         }
         const messageIntermediate = IotaCatSDKObj._compileMessage(message)
         const ws = new WriteStream()
-        serializeIMMessage(ws, messageIntermediate)
+        serializeIMMessage(ws, messageIntermediate,{})
         const bytes = ws.finalBytes()
         const rs = new ReadStream(bytes)
         const messageIntermediate2 = deserializeIMMessage(rs)

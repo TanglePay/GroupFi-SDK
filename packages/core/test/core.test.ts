@@ -93,12 +93,13 @@ describe('core test', () => {
     })
     test('test serializeMessage for RecipientInMessageMsg', async () => {
         await prepareRecipientInMessageMsg(basicMsg)
-        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{encryptUsingPublicKey})
+        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{isActAsSelf:false,
+            encryptUsingPublicKey})
         expect(msgBytes).toBeDefined()
     })
     test('test serializeMessage for RecipientOnChainMsg', async () => {
         await prepareRecipientOnChainMsg(basicMsg)
-        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{groupSaltResolver:async (groupId:string)=>sharedSalt})
+        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{isActAsSelf:false,groupSaltResolver:async (groupId:string)=>sharedSalt})
         expect(msgBytes).toBeDefined()
     })
     /*
@@ -112,7 +113,7 @@ describe('core test', () => {
     */
     test('test deserializeMessage for RecipientOnChainMsg', async () => {
         await prepareRecipientOnChainMsg(basicMsg)
-        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{groupSaltResolver:async (groupId:string)=>sharedSalt})
+        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{isActAsSelf:false,groupSaltResolver:async (groupId:string)=>sharedSalt})
         const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,{sharedOutputSaltResolver:async (outputId:string)=>sharedSalt})
         expect(msgObject2).toBeDefined()
         expect(msgObject2!.data).toBe(basicMsg)
@@ -135,7 +136,7 @@ describe('core test', () => {
         // TODO remove
         // manually set publickey
         //IotaCatSDKObj.setPublicKeyForPreparedMessage(msgObject!,{[publicAddr]:publicAddr})
-        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{groupSaltResolver:async (groupId:string)=>sharedSalt})
+        const msgBytes = await IotaCatSDKObj.serializeMessage(msgObject!,{isActAsSelf:false,groupSaltResolver:async (groupId:string)=>sharedSalt})
         const msgObject2 = await IotaCatSDKObj.deserializeMessage(msgBytes,publicAddr,{sharedOutputSaltResolver:async (outputId:string)=>sharedSalt})
         expect(msgObject2).toBeDefined()
         expect(msgObject2!.data).toBe(randomStr)
