@@ -567,9 +567,6 @@ class GroupFiSDKFacade {
         throw new Error('proxy account is undefined.')
       }
   
-      console.log('===> Enter buySMR', params)
-      console.log('===> proxyAddress', proxyAddress)
-  
       const contract = new web3.eth.Contract(smrPurchaseAbi, params.contract)
 
       const transaction = contract.methods.buySmr(proxyAddress.hexAddress, targetAmount)
@@ -689,6 +686,19 @@ class GroupFiSDKFacade {
   _isEvm() {
     return this._mode !== ShimmerMode
   }
+
+  async filterEvmGroups(groupId: string): Promise<boolean> {
+    const isGroupPublic = await this.isGroupPublic(groupId)
+    if (isGroupPublic) {
+      return true
+    }
+    const isQualified = await this._isEvmQualified(groupId)
+    if (isQualified) {
+      return true
+    }
+    return false
+  }
+
   // TODO: It's temporary, it will be adjusted later.
   async getRecommendGroups({
     includes,
@@ -713,12 +723,26 @@ class GroupFiSDKFacade {
         // To fix test bug
         groups = groups.filter(({chainName}) => chainName === 'smr')
       }
-      return groups.map(({ groupName, qualifyType }) => ({
+      const recommendGroups = groups.map(({ groupName, qualifyType }) => ({
         groupName,
         groupId: IotaCatSDKObj._groupToGroupId(groupName),
         qualifyType: qualifyType,
       }))
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
+
+      if (!this._isEvm) {
+        return recommendGroups
+      }
+
+      const evmQualifiedGroups = []
+      for(const group of recommendGroups) {
+        const isOk = await this.filterEvmGroups(group.groupId)
+        if (isOk) {
+          evmQualifiedGroups.push(group)
+        }
+      }
+      
+      return evmQualifiedGroups
   }
 
   async fetchAddressQualifiedGroupConfigs({
