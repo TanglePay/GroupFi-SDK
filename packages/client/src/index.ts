@@ -1988,18 +1988,18 @@ export class GroupfiSdkClient {
         return basicOutput
     }
 
-    async muteGroupMember(groupId:string,addrSha256Hash:string){
+    async muteGroupMember(groupId:string,addrSha256Hash:string, userAddress: string){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const {outputWrapper,list} = await this._getUserMuteGroupMembers()
+        const {outputWrapper,list} = await this._getUserMuteGroupMembers(userAddress)
         if (list.find(id=>id.groupId === groupId && id.addrSha256Hash === addrSha256Hash)) return
         list.push({groupId,addrSha256Hash})
         return await this._persistUserMuteGroupMembers(list,outputWrapper)
     }
-    async unmuteGroupMember(groupId:string,addrSha256Hash:string){
+    async unmuteGroupMember(groupId:string,addrSha256Hash:string, userAddress: string){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const {outputWrapper,list} = await this._getUserMuteGroupMembers()
+        const {outputWrapper,list} = await this._getUserMuteGroupMembers(userAddress)
         const idx = list.findIndex(id=>id.groupId === groupId && id.addrSha256Hash === addrSha256Hash)
         if (idx === -1) return
         list.splice(idx,1)
@@ -2013,20 +2013,31 @@ export class GroupfiSdkClient {
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
 
-    async _getUserMuteGroupMembers():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
+    // async _getUserMuteGroupMembers():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
+    //     const existing = await this._getOneOutputWithTag(GROUPFIMUTETAG)
+    //     if (!existing) return {list:[]}
+    //     const {output} = existing
+    //     const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
+    //     if (!meta) return {list:[]}
+    //     const data = Converter.hexToBytes(meta.data)
+    //     const groupIds = deserializeUserMuteGroupMembers(data)
+    //     return {outputWrapper:existing,list:groupIds}
+    // }
+    async _getUserMuteGroupMembers(userAddress: string):Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIMUTETAG)
-        if (!existing) return {list:[]}
-        const {output} = existing
-        const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
-        if (!meta) return {list:[]}
-        const data = Converter.hexToBytes(meta.data)
-        const groupIds = deserializeUserMuteGroupMembers(data)
-        return {outputWrapper:existing,list:groupIds}
+        const muteGroups = await IotaCatSDKObj.fetchAddressMutes(userAddress)
+        // if (!existing) return {list:[]}
+        // const {output} = existing
+        // const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
+        // if (!meta) return {list:[]}
+        // const data = Converter.hexToBytes(meta.data)
+        // const groupIds = deserializeUserMuteGroupMembers(data)
+        return {outputWrapper:existing,list:muteGroups}
     }
-    async getAllUserMuteGroupMembers(){
+    async getAllUserMuteGroupMembers(userAddress: string){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const {list} = await this._getUserMuteGroupMembers()
+        const {list} = await this._getUserMuteGroupMembers(userAddress)
         return list
     }
     // get group votes
