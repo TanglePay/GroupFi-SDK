@@ -833,7 +833,15 @@ export class GroupfiSdkClient {
     }
 
     // _makeSharedOutputForEvmGroup
-    async _makeSharedOutputForEvmGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{outputs:IBasicOutput[],salt:string}>{
+    async _makeSharedOutputForEvmGroup({groupId,memberList,memberSelf}:{groupId:string,memberList?:{addr:string,publicKey:string}[],memberSelf?:{addr:string,publicKey:string}}):Promise<{outputs:IBasicOutput[],salt:string}>{
+        memberList = (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)).map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))
+        // add memberSelf to memberList, if memberSelf exist and memberSelf is not in memberList
+        if (memberSelf) {
+            const idx = memberList!.findIndex((pair)=>pair.addr === memberSelf.addr)
+            if (idx === -1) {
+                memberList!.push(memberSelf)
+            }
+        }
         const addressToBeFiltered = memberList ? memberList.map(member=>member.addr) : []
         
         const {addressList:addressListFiltered,signature} = await IotaCatSDKObj.filterEvmGroupQualify(addressToBeFiltered,groupId)
@@ -851,10 +859,10 @@ export class GroupfiSdkClient {
         }
     }
 
-    async _makeSharedOutputForGroup({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{outputs:IBasicOutput[],salt:string}>{
+    async _makeSharedOutputForGroup({groupId,memberList,memberSelf}:{groupId:string,memberList?:{addr:string,publicKey:string}[],memberSelf?:{addr:string,publicKey:string}}):Promise<{outputs:IBasicOutput[],salt:string}>{
         const isEvm = this._mode != ShimmerMode 
         if (isEvm) {
-            return this._makeSharedOutputForEvmGroup({groupId,memberList})
+            return this._makeSharedOutputForEvmGroup({groupId,memberList,memberSelf})
         } else {
             const {output,salt} = await this._makeSharedOutputForGroupInternal({groupId,memberList})
             return {outputs:[output],salt}
@@ -1883,13 +1891,13 @@ export class GroupfiSdkClient {
         return list
     }
     // memberList should contain self if already qualified
-    async markGroup({groupId,memberList, userAddress}:{groupId:string,memberList?:{addr:string,publicKey:string}[], userAddress: string}){
+    async markGroup({groupId,memberList, userAddress,memberSelf}:{groupId:string,memberList?:{addr:string,publicKey:string}[], userAddress: string,memberSelf?:{addr:string,publicKey:string}}){
         this._ensureClientInited()
         this._ensureWalletInited()
         const tasks:Promise<any>[] = [this._getMarkedGroupIds(userAddress)]
         const isMakeSharedOutput = memberList && memberList.length > 0
         if (isMakeSharedOutput) {
-            tasks.push(this._makeSharedOutputForGroup({groupId,memberList}))
+            tasks.push(this._makeSharedOutputForGroup({groupId,memberList,memberSelf}))
         }
         const tasksRes = await Promise.all(tasks)
         const {outputWrapper,list} = tasksRes.shift() as {outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}
