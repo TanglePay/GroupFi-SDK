@@ -39,8 +39,6 @@ import {
   ModeInfo,
   PairX
 } from './types';
-import { initialClient } from './client';
-import { toChecksumAddress } from '@ethereumjs/util'
 
 import {
   ShimmerModeRequestAdapter,
