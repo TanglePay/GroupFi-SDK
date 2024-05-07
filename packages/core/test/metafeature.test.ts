@@ -1,21 +1,20 @@
-import { beforeEach, describe, expect, test, beforeAll, jest } from '@jest/globals';
-import { IotaCatSDKObj, IMMessage, ShimmerBech32Addr, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, IMRecipient } from '../src';
-import { generateRandomString } from '../../../jest.base';
-import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, encryptPayloadList, decryptOneOfList,EncryptingPayload,EncryptedPayload } from 'ecies-ed25519-js';
+import { describe, expect, test } from '@jest/globals';
+import { IotaCatSDKObj, IMRecipient } from '../src';
+import { setCryptoJS, setHkdf, setIotaCrypto, encryptPayloadList, EncryptingPayload, EncryptedPayload } from 'ecies-ed25519-js';
 import { Bip39, Ed25519, Sha512, Bip32Path } from '@iota/crypto.js';
 import { Converter } from '@iota/util.js';
-import { Ed25519Seed, generateBip44Address, COIN_TYPE_SHIMMER,Ed25519Address,Bech32Helper,ED25519_ADDRESS_TYPE } from '@iota/iota.js';
+import { Ed25519Seed, generateBip44Address, COIN_TYPE_SHIMMER, Ed25519Address, Bech32Helper, ED25519_ADDRESS_TYPE } from '@iota/iota.js';
+import hkdf from 'js-crypto-hkdf';
+import CryptoJS from 'crypto-js';
 setIotaCrypto({
     Bip39,
     Ed25519,
     Sha512
 })
-import hkdf from 'js-crypto-hkdf';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
 })
-import CryptoJS from 'crypto-js';
 setCryptoJS(CryptoJS)
 describe('metafeature size test', () => {
     const generatePublicKeyAndAddressPair = () => {
@@ -55,7 +54,7 @@ describe('metafeature size test', () => {
 
         const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
         const preparedRecipients:IMRecipient[] = encryptedPayloadList.map((payload)=>({addr:payload.addr,mkey:Converter.bytesToHex(payload.payload)}))
-        const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId!)
+        const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId!,{})
         return pl
     }
     test('test 20 recipients metafeature size', async () => {

@@ -885,7 +885,7 @@ export class GroupfiSdkClient {
         const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
         const preparedRecipients:IMRecipient[] = encryptedPayloadList.map((payload)=>({addr:payload.addr,mkey:Converter.bytesToHex(payload.payload)}))
         console.log('preparedRecipients', preparedRecipients,preparedRecipients.map(r => ({addr:IotaCatSDKObj.getAddressHashStr(r.addr),mkey:r.mkey})));
-        const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId)
+        const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId,this._getCommonHeaderCtx())
         const tagFeature: ITagFeature = {
             type: 3,
             tag: `0x${Converter.utf8ToHex(IOTACATSHAREDTAG)}`
@@ -1410,11 +1410,12 @@ export class GroupfiSdkClient {
                 }
             }
             console.log('MessageWithPublicKeys', message);
-            const pl = await IotaCatSDKObj.serializeMessage(message,{encryptUsingPublicKey:async (key,data)=>{
+            const headerCtx = this._getCommonHeaderCtx()
+            const pl = await IotaCatSDKObj.serializeMessage(message,Object.assign({},headerCtx,{encryptUsingPublicKey:async (key:string,data:string)=>{
                 const publicKey = Converter.hexToBytes(key)
                 const encrypted = await encrypt(publicKey, data, tag)
                 return encrypted.payload
-            },groupSaltResolver})
+            },groupSaltResolver}))
             console.log('MessagePayload', pl);
             
             const tagFeature: ITagFeature = {
@@ -1935,7 +1936,7 @@ export class GroupfiSdkClient {
         extraOutputs
     }:{list:IMUserMarkedGroupId[],extraOutputs?:IBasicOutput[],outputWrapper?:BasicOutputWrapper}){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMARKTAG)}`
-        const data = serializeUserMarkedGroupIds(list)
+        const data = serializeUserMarkedGroupIds(list,this._getCommonHeaderCtx())
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         console.log('created and consumed', basicOutput, toBeConsumed);
@@ -2015,7 +2016,7 @@ export class GroupfiSdkClient {
     }
     async _persistUserMuteGroupMembers(list:IMUserMuteGroupMember[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMUTETAG)}`
-        const data = serializeUserMuteGroupMembers(list)
+        const data = serializeUserMuteGroupMembers(list,this._getCommonHeaderCtx())
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
@@ -2085,7 +2086,7 @@ export class GroupfiSdkClient {
 
     async _persistUserVoteGroups(list:IMUserVoteGroup[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFIVOTETAG)}`
-        const data = serializeUserVoteGroups(list)
+        const data = serializeUserVoteGroups(list,this._getCommonHeaderCtx())
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
@@ -2114,7 +2115,7 @@ export class GroupfiSdkClient {
     // _persistEvmQualify
     async _getEvmQualify(groupId:string,addressList:string[],signature:string):Promise<IBasicOutput>{
         const tag = `0x${Converter.utf8ToHex(GROUPFIQUALIFYTAG)}`
-        const data = serializeEvmQualify(groupId,addressList,signature)
+        const data = serializeEvmQualify(groupId,addressList,signature,this._getCommonHeaderCtx())
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const twoWeekSecs =  60 * 60 * 24 * 14
         this._addTimeUnlockToBasicOutput(basicOutput, twoWeekSecs)
@@ -2171,6 +2172,11 @@ export class GroupfiSdkClient {
         //   }) as string;
         // releaseBlobUrl(recipientPayloadUrl) 
         return res
+    }
+    _getCommonHeaderCtx(){
+        return {
+            isActAsSelf:this._mode == ShimmerMode
+        }
     }
     async _sdkRequest(call: (...args: any[]) => Promise<any>) {
         this._queuePromise = this._queuePromise!.then(call, call)

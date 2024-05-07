@@ -1,5 +1,6 @@
 import { AddressHashLength, GroupIDLength, IMMessageIntermediate, IMRecipientIntermediate, IMRecipientIntermediateList, MessageAuthSchemeRecipeintInMessage, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, OutputIDLength } from "./types";
 import { WriteStream, ReadStream } from "@iota/util.js";
+import { serializeCommonHeader, deserializeCommonHeader } from "./codec_common";
 
 export function serializeRecipient(writer: WriteStream, recipient: IMRecipientIntermediate): void {
     if (recipient.addr.byteLength !== AddressHashLength) {
@@ -51,9 +52,11 @@ export function deserializeRecipientArray(reader: ReadStream): IMRecipientInterm
 }
 
 
-export function serializeRecipientList(writer: WriteStream,list:IMRecipientIntermediateList) {
-    // first write schema version
-    writer.writeUInt8("schema_version", list.schemaVersion);
+export function serializeRecipientList(writer: WriteStream,list:IMRecipientIntermediateList,
+    ctx:{[key:string]:any}
+) {
+    // common header
+    serializeCommonHeader(writer, ctx);
     // check if list.groupId is 32 bytes
     if (list.groupId.byteLength !== GroupIDLength) {
         throw new Error(`groupId length is not ${GroupIDLength} bytes`);
@@ -65,7 +68,7 @@ export function serializeRecipientList(writer: WriteStream,list:IMRecipientInter
 }
 
 export function deserializeRecipientList(reader: ReadStream): IMRecipientIntermediateList {
-    const schemaVersion = reader.readUInt8("schema_version");
+    const { schemaVersion } = deserializeCommonHeader(reader);
     const groupId = reader.readBytes("groupId", GroupIDLength);
     const list = deserializeRecipientArray(reader);
     
@@ -77,9 +80,11 @@ export function deserializeRecipientList(reader: ReadStream): IMRecipientInterme
 }
 
 
-export function serializeIMMessage(writer: WriteStream, message: IMMessageIntermediate): void {
-    // Write schema_version as Int8
-    writer.writeUInt8("schema_version", message.schemaVersion);
+export function serializeIMMessage(writer: WriteStream, message: IMMessageIntermediate,
+    ctx:{[key:string]:any}
+): void {
+    // common header
+    serializeCommonHeader(writer, ctx);
     // Validate and write groupId (fixed 32 bytes length) first
     if (message.groupId.byteLength !== GroupIDLength) {
         throw new Error("groupId length is not 32 bytes");
@@ -126,7 +131,7 @@ export function serializeIMMessage(writer: WriteStream, message: IMMessageInterm
 }
 
 export function deserializeIMMessage(reader: ReadStream): IMMessageIntermediate {
-    const schemaVersion = reader.readUInt8("schema_version");
+    const { schemaVersion } = deserializeCommonHeader(reader);
     const groupId = reader.readBytes("groupId", GroupIDLength);
     const messageType = reader.readUInt8("message_type");
     const authScheme = reader.readUInt8("auth_scheme");
