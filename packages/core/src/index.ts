@@ -258,8 +258,15 @@ class IotaCatSDK {
     }
     // fetch qualified addresses for a group, /groupqualifiedaddresses
     async fetchGroupQualifiedAddresses(groupId:string):Promise<string[]>{
-        const groupId = 
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresses?groupId=0x${groupId}`
+        const fullfilled = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresses?groupId=${fullfilled}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+    // fetch qualified addresse,pubkey for a group, /groupqualifiedaddresspublickeypairs
+    async fetchGroupQualifiedAddressPublicKeyPairs(groupId:string):Promise<{ownerAddress:string,publicKey:string}[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresspublickeypairs?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -308,6 +315,23 @@ class IotaCatSDK {
         const json = await res.json()
         return json
     }
+    async fetchAddressVotes(address: string): Promise<{groupId: string, vote: number}[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressvotes?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        const jsonList = this._ensureList(json)
+        return jsonList.map(list => ({groupId: list.groupId, vote: list.vote})) 
+    }
+    async fetchAddressMutes(address: string): Promise<{groupId: string,addrSha256Hash: string}[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmutes?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json() 
+        const jsonList = this._ensureList(json) as {groupId:string,mutedAddressSha256Hash:string}[]
+        return jsonList.map(list => ({
+            groupId: list.groupId,
+            addrSha256Hash: list.mutedAddressSha256Hash
+        }))
+    }
     // fetch group blacklist for a group, /groupblacklist
     async fetchGroupBlacklist(groupId:string):Promise<string[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupblacklist?groupId=0x${groupId}`
@@ -328,6 +352,12 @@ class IotaCatSDK {
     // fetch address mark groups for an address, /addressmarkgroups
     async fetchAddressMarkGroups(address:string):Promise<string[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmarkgroups?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return this._ensureList(json)
+    }
+    async fetchAddressMarkGroupDetails(address:string): Promise<{groupId: string, timestamp: number}[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmarkgroupdetails?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
