@@ -889,6 +889,10 @@ class GroupFiSDKFacade {
     await this.fetchAddressQualifiedGroupConfigs({});
   }
 
+  unsubscribeToAllTopics() {
+    IotaCatSDKObj.unsubscribeToAllTopics()
+  }
+
   setProxyModeInfo(modeInfo: ModeInfo) {
     if (!modeInfo.pairX || !modeInfo.detail) {
       return
