@@ -186,7 +186,7 @@ class IotaCatSDK {
         filteredTopics.forEach(topic=>this._subscribedTopics.delete(topic))
     }
     // unsubscribe to all topics
-    _unsubscribeToAllTopics(){
+    unsubscribeToAllTopics(){
         this._unsubscribeToTopics(Array.from(this._subscribedTopics))
     }
     async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
