@@ -156,32 +156,39 @@ class IotaCatSDK {
     }
     async switchMqttAddress(address:string){
         this._ensureMqttClient()
-        
-        this.subscribeToAddressSha256Hash(address)
-
-        const groupIds = await this._fetchAddressGroupIds(address)
-        // log address groupIds
-        console.log('switchMqttAddress address groupIds',address,groupIds)
-        // loop through groupIds then subscribe to inbox/groupId
-        for (const groupId of groupIds) {
-            this.subscribeToGroupId(groupId)
-        }
-    }
-    // subscribe to a groupId inbox/groupId
-    subscribeToGroupId(groupId:string){
-        this._ensureMqttClient()
-        this._mqttClient!.subscribe(`inbox/${groupId}`)
-    }
-
-    // subscribe to a addressSha256Hash inbox/addressSha256Hash
-    subscribeToAddressSha256Hash(address: string) {
-        this._ensureMqttClient()
+        const topics = []
         let addressSha256Hash = this._sha256Hash(address.toLowerCase())
         addressSha256Hash = this._addHexPrefixIfAbsent(addressSha256Hash)
         console.log('===> subscribeToAddressSha256Hash',address, addressSha256Hash)
-        this._mqttClient!.subscribe(`inbox/${addressSha256Hash}`)
+        topics.push(`inbox/${addressSha256Hash}`)
+        const groupIds = await this._fetchAddressGroupIds(address)
+        // log address groupIds
+        console.log('switchMqttAddress address groupIds',address,groupIds)
+        groupIds.forEach(groupId=>{
+            const groupId_ = this._addHexPrefixIfAbsent(groupId)
+            topics.push(`inbox/${groupId_}`)
+        })
+        this._subscribeToTopics(topics)
     }
 
+    
+    _subscribedTopics:Set<string> = new Set()
+    // subscribe to a topic
+    _subscribeToTopics(topics:string[]){
+        const filteredTopics = topics.filter(topic=>!this._subscribedTopics.has(topic))
+        this._mqttClient!.subscribe(filteredTopics)
+        filteredTopics.forEach(topic=>this._subscribedTopics.add(topic))
+    }
+    // unsubscribe to a topic
+    _unsubscribeToTopics(topics:string[]){
+        const filteredTopics = topics.filter(topic=>this._subscribedTopics.has(topic))
+        this._mqttClient!.unsubscribe(filteredTopics)
+        filteredTopics.forEach(topic=>this._subscribedTopics.delete(topic))
+    }
+    // unsubscribe to all topics
+    _unsubscribeToAllTopics(){
+        this._unsubscribeToTopics(Array.from(this._subscribedTopics))
+    }
     async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
         const meta = this._groupNameToGroupMeta(group)
         if (!meta) return undefined
