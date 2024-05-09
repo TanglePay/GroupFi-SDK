@@ -885,8 +885,13 @@ class GroupFiSDKFacade {
         this._proxyAddress = proxy.bech32Address
       }
     }
-    IotaCatSDKObj.switchMqttAddress(this._address!);
+    // IotaCatSDKObj.switchMqttAddress(this._address!);
     await this.fetchAddressQualifiedGroupConfigs({});
+  }
+
+  subscribeToAllTopics() {
+    this._ensureWalletConnected()
+    IotaCatSDKObj.switchMqttAddress(this._address!)
   }
 
   unsubscribeToAllTopics() {
