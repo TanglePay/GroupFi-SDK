@@ -834,6 +834,8 @@ export class GroupfiSdkClient {
 
     // _makeSharedOutputForEvmGroup
     async _makeSharedOutputForEvmGroup({groupId,memberList,memberSelf}:{groupId:string,memberList?:{addr:string,publicKey:string}[],memberSelf?:{addr:string,publicKey:string}}):Promise<{outputs:IBasicOutput[],salt:string}>{
+        // log entering
+        console.log(`_makeSharedOutputForEvmGroup groupId:${groupId}, memberList:${memberList}, memberSelf:${memberSelf}`);
         try {
             memberList = (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)).map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))
             // add memberSelf to memberList, if memberSelf exist and memberSelf is not in memberList
@@ -865,6 +867,8 @@ export class GroupfiSdkClient {
     }
 
     async _makeSharedOutputForGroup({groupId,memberList,memberSelf}:{groupId:string,memberList?:{addr:string,publicKey:string}[],memberSelf?:{addr:string,publicKey:string}}):Promise<{outputs:IBasicOutput[],salt:string}>{
+        // log entering
+        console.log(`_makeSharedOutputForGroup groupId:${groupId}, memberList:${memberList}, memberSelf:${memberSelf}`);
         const isEvm = this._mode != ShimmerMode 
         if (isEvm) {
             return this._makeSharedOutputForEvmGroup({groupId,memberList,memberSelf})
@@ -874,6 +878,8 @@ export class GroupfiSdkClient {
         }
     }
     async _makeSharedOutputForGroupInternal({groupId,memberList}:{groupId:string,memberList?:{addr:string,publicKey:string}[]}):Promise<{output:IBasicOutput,salt:string}>{
+        // log entering
+        console.log(`_makeSharedOutputForGroupInternal groupId:${groupId}, memberList:${memberList}`);
         let recipients
         if (memberList) {
             recipients = memberList.map((member)=>({addr:member.addr,mkey:member.publicKey}))
@@ -1965,16 +1971,16 @@ export class GroupfiSdkClient {
     //     return {outputWrapper:existing,list:groupIds}
     // }
     async _getMarkedGroupIds(userAddress: string):Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
-        const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
-        const markedGroups = await IotaCatSDKObj.fetchAddressMarkGroupDetails(userAddress)
-        // console.log('_getMarkedGroupIds existing', existing);
-        // if (!existing) return {list:[]}
-        // const {output} = existing
-        // const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
-        // if (!meta) return {list:[]}
-        // const data = Converter.hexToBytes(meta.data)
-        // const groupIds = deserializeUserMarkedGroupIds(data)
-        return {outputWrapper:existing,list:markedGroups}
+        // log enter _getMarkedGroupIds
+        console.log('enter _getMarkedGroupIds');
+        try {
+            const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
+            const markedGroups = await IotaCatSDKObj.fetchAddressMarkGroupDetails(userAddress)
+            return {outputWrapper:existing,list:markedGroups}
+        } catch (error) {
+            console.log('getMarkedGroupIds error', error);
+            throw error
+        }
     }
 
     async _dataAndTagToBasicOutput(data:Uint8Array,tag:string):Promise<IBasicOutput>{
