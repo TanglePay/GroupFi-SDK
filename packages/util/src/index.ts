@@ -219,18 +219,3 @@ export function getSMRPairBySeed(baseSeed: Ed25519Seed) {
   const addressKeyPair = addressSeed.keyPair();
   return addressKeyPair;
 }
-// compare two hex strings bytewise
-export function compareHex(a: string, b: string): number {
-    // use byte comparison
-    return compareBytes(hexToBytes(a), hexToBytes(b));
-}
-export function compareBytes(a: Uint8Array, b: Uint8Array): number {
-    const minLength = Math.min(a.length, b.length);
-    for (let i = 0; i < minLength; i++) {
-        if (a[i] < b[i]) return -1;
-        if (a[i] > b[i]) return 1;
-    }
-    if (a.length < b.length) return -1;
-    if (a.length > b.length) return 1;
-    return 0;
-}
