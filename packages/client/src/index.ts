@@ -837,7 +837,9 @@ export class GroupfiSdkClient {
         // log entering
         console.log(`_makeSharedOutputForEvmGroup groupId:${groupId}, memberList:${memberList}, memberSelf:${memberSelf}`);
         try {
-            memberList = (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)).map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))
+            //TODO move to group meta domain
+            let previouslyQualified =  (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? []
+            memberList = previouslyQualified.map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))
             // add memberSelf to memberList, if memberSelf exist and memberSelf is not in memberList
             if (memberSelf) {
                 const idx = memberList!.findIndex((pair)=>pair.addr === memberSelf.addr)
