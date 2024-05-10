@@ -40,7 +40,12 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     EncryptedHexPayload
 
 } from "iotacat-sdk-core";
-import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL} from 'iotacat-sdk-utils';
+import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL, EthDecrypt, tpEncrypt, tpDecrypt} from 'iotacat-sdk-utils';
+
+import { hdkey, Wallet } from '@ethereumjs/wallet'
+import { hashPersonalMessage, ecsign, toRpcSig } from '@ethereumjs/util'
+import tweetnacl from 'tweetnacl'
+import naclUtil from 'tweetnacl-util'
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -148,18 +153,114 @@ class GroupfiWalletEmbedded {
     _indexer?: IndexerPluginClient;
     _nodeInfo?: INodeInfo;
     _protocolInfo?: INodeInfoProtocol;
-    _baseSeed?: Ed25519Seed;
-    _walletKeyPair?: IKeyPair;
-    _accountHexAddress?:string;
-    _accountBech32Address?:string;
+    // _baseSeed?: Ed25519Seed;
+    // _walletKeyPair?: IKeyPair;
+    // _accountHexAddress?:string;
+    // _accountBech32Address?:string;
     _pubKeyCache?:LRUCache<string>;
     _storage?:StorageFacade;
-    _hexSeed?:string;
+    // _hexSeed?:string;
     _networkId?:string;
     _events:EventEmitter = new EventEmitter();
     //TODO simple cache
     _saltCache:Record<string,string> = {};
     _currentNodeUrl?:string;
+
+
+    _SMRAccount: {
+        _baseSeed?: Ed25519Seed;
+        _walletKeyPair?: IKeyPair;
+        _accountHexAddress?:string;
+        _accountBech32Address?:string;
+        _hexSeed?:string;
+    } = {}
+
+    _EVMAccount: {
+        _wallet?: Wallet,
+        _hexAddress?: string
+    } = {}
+
+    setEVMAccount(hexSeed: string, password: string, rawPath?: string) {
+        try {
+            let wallet: Wallet | undefined = undefined
+            // When An EVM account imported through a private key
+            // the hexSeed is composed of the private key and a password
+            let hexPassword = Converter.utf8ToHex(password, false)
+            if (hexPassword.length % 2) {
+                hexPassword += '0'
+            }
+            const regexp = new RegExp(hexPassword + '$')
+            if (regexp.test(hexSeed)) {
+                const hexPrivateKey = '0x' + hexSeed.replace(regexp, '')
+                const privateKeyBytes = Converter.hexToBytes(hexPrivateKey)
+                wallet = Wallet.fromPrivateKey(privateKeyBytes)
+            } else {
+                const uint8arr = Converter.hexToBytes(hexSeed)
+                const hdwallet = hdkey.EthereumHDKey.fromMasterSeed(uint8arr);
+                const path = rawPath ?? "m/44'/60'/0'/0/0" 
+                wallet = hdwallet.derivePath(path).getWallet();
+            }
+            console.log("setEVMAccount wallet", wallet)
+            this._EVMAccount._wallet = wallet
+            this._EVMAccount._hexAddress = wallet.getChecksumAddressString()
+            console.log('===> setEVMAccount _hexAddress', this._EVMAccount)
+
+            console.log('private Key uint8Array', this._EVMAccount._wallet!.getPrivateKey())
+            console.log('private Key str', this._EVMAccount._wallet!.getPrivateKeyString())
+
+            const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
+            this._setSMRProxyAccount(smrBaseSeed)
+        } catch(error) {
+            console.log('===>setEVMAccount error ', error)
+        }
+    }
+
+    getSMRProxyAccount() {
+        if (!this._SMRAccount._accountBech32Address) {
+            throw new Error('proxy account is undefined')
+        }
+        return  {
+            bech32Address: this._SMRAccount._accountBech32Address,
+            hexAddress: this._SMRAccount._accountHexAddress
+        }
+    }
+
+
+    importSMRProxyAccount(password: string) {
+        // if (this._EVMAccount._wallet === undefined) {
+        //     throw new Error('Evm account wallet is undefined.')
+        // }
+        // // Generate SMR seed from EVM private key
+        // const smrBaseSeed = new Ed25519Seed(this._EVMAccount._wallet!.getPrivateKey())
+        
+        // // Set SMR account baseSeed
+        // this._setSMRProxyAccount(smrBaseSeed)
+        if (!this._SMRAccount._baseSeed) {
+            throw new Error('smr baseSeed is undefined.')
+        }
+        
+        const hexSeed = Converter.bytesToHex(this._SMRAccount._baseSeed.toBytes())
+        return {
+            path: 0,
+            password,
+            address: this._SMRAccount._accountBech32Address,
+            seed: tpEncrypt(hexSeed, password),
+            publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true)
+        }
+    }
+
+    _setSMRProxyAccount(baseSeed: Ed25519Seed) {
+        this._SMRAccount._baseSeed = baseSeed
+        // Set SMR account additional info
+        const path = 0
+        this.switchAddressUsingPath(path)
+    }
+
+    async setSMRAccount(seed: string, rawPath?: number) {
+        await this.setHexSeed(seed)
+        this.switchAddressUsingPath(rawPath)
+    }
+
     async setup(nodeUrlHint?:string){
         if (this._currentNodeUrl && (!nodeUrlHint || nodeUrlHint === this._currentNodeUrl)) return
         if (!nodeUrlHint) {
@@ -192,23 +293,29 @@ class GroupfiWalletEmbedded {
         return domain
     }
     async setHexSeed(hexSeed:string){
+        const accountObj = this._SMRAccount
         this._ensureClientInited()
-        if (this._hexSeed == hexSeed) return
-        this._hexSeed = hexSeed
+        if (accountObj._hexSeed == hexSeed) return
+        accountObj._hexSeed = hexSeed
         const baseSeed = this._hexSeedToEd25519Seed(hexSeed);
-        this._baseSeed = baseSeed;
+        accountObj._baseSeed = baseSeed;
     }
     switchAddressUsingPath(rawPath?:number){
         const path = rawPath??0
-        this._walletKeyPair = this._getPair(this._baseSeed!,path)
-        const genesisEd25519Address = new Ed25519Address(this._walletKeyPair.publicKey);
-        const genesisWalletAddress = genesisEd25519Address.toAddress();
-        this._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
-        this._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
+        const accountObj = this._SMRAccount
+        const pair = this._getPair(accountObj._baseSeed!,path)
+        this.setupPair(pair)
         // log path and hex address and bech32 address, in one line, start with 4 # symbols
-        console.log(`#### Wallet Index ${path} Hex Address ${this._accountHexAddress} Bech32 Address ${this._accountBech32Address}`)
+        console.log(`#### Wallet Index ${path} Hex Address ${accountObj._accountHexAddress} Bech32 Address ${accountObj._accountBech32Address}`)
     }
-    
+    setupPair(pair:IKeyPair){
+        const accountObj = this._SMRAccount
+        accountObj._walletKeyPair = pair
+        const genesisEd25519Address = new Ed25519Address(accountObj._walletKeyPair.publicKey);
+        const genesisWalletAddress = genesisEd25519Address.toAddress();
+        accountObj._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
+        accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
+    }
     _getPair(baseSeed:Ed25519Seed, idx:number){
         const addressGeneratorAccountState = {
             accountIndex: idx,
@@ -229,7 +336,7 @@ class GroupfiWalletEmbedded {
         if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
     }
     _ensureWalletInited(){
-        if (!this._walletKeyPair) throw new Error('Wallet not initialized')
+        if (!this._SMRAccount._walletKeyPair) throw new Error('Wallet not initialized')
     }
     _ensureStorageInited(){
         if (!this._storage) throw new Error('Storage not initialized')
@@ -238,8 +345,12 @@ class GroupfiWalletEmbedded {
     async decryptAesKeyFromRecipientsWithPayload(recipientPayloadUrl:string):Promise<string>{
         
         const payload = await retrieveUint8ArrayFromBlobURL(recipientPayloadUrl);
+        return await this.decryptAesKeyFromPayload(payload)
+    }
+    // decryptAesKeyFromPayload
+    async decryptAesKeyFromPayload(payload:Uint8Array):Promise<string>{
         const list = [{payload}]
-        const decrypted = await decryptOneOfList({receiverSecret:this._walletKeyPair!.privateKey,
+        const decrypted = await decryptOneOfList({receiverSecret:this._SMRAccount._walletKeyPair!.privateKey,
             payloadList:list,tag,idx:0})
         let salt
         if(decrypted) {
@@ -254,9 +365,9 @@ class GroupfiWalletEmbedded {
         const address = addressUnlockCondition.address;
         if (!address || address.type !== ED25519_ADDRESS_TYPE) return false
         const ed25519Address = address as IEd25519Address;
-        if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._accountHexAddress) return true
+        if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._SMRAccount._accountHexAddress) return true
         // log not self unlock condition
-        console.log('Not self unlock condition',addressUnlockCondition,this._accountHexAddress)
+        console.log('Not self unlock condition',addressUnlockCondition,this._SMRAccount._accountHexAddress)
         return false
     }
     // check if transactionEssence is sending to self
@@ -285,6 +396,15 @@ class GroupfiWalletEmbedded {
                 const addressUnlockcondition = nftOutput.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
                 const isToSelf = this._isAddressUnlockConditionToSelf(addressUnlockcondition)
                 if (!isToSelf) return false;
+                // It is possible for NFT outputs to carry a "GROUPFI-" tag, such as the PairX nft output
+                const tagFeature = nftOutput.features?.find(feature=>feature.type === 3) as ITagFeature
+                if (tagFeature) {
+                    const tagUtf8 = Converter.hexToUtf8(tagFeature.tag)
+                    // if starts with GROUPFI
+                    if (tagUtf8.startsWith('GROUPFI')) {
+                        isHasGroupfiTag = true
+                    }
+                }
             } else {
                 return false
             }
@@ -342,8 +462,13 @@ class GroupfiWalletEmbedded {
                     const amount = token.amount
                     addToMap(outputsAssetMap,tokenId,amount)
                 }
-            } else {
-                throw new Error('outputs not basic output')
+            } else if(output.type === NFT_OUTPUT_TYPE) {
+                const nftOutput = output as INftOutput
+                const cashAmount = nftOutput.amount
+                addToMap(outputsAssetMap, cashKey, cashAmount)
+            }else {
+                // throw new Error('outputs not basic output')
+                throw new Error('outputs not basic output or nft output')
             }
         }
         // check inputs and outputs asset match
@@ -351,10 +476,12 @@ class GroupfiWalletEmbedded {
         return true
     }
     async signAndSendTransactionToSelf({transactionEssenceUrl}:{transactionEssenceUrl: string}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
+        console.log('===> Enter walletembed signAndSendTransactionToSelf')
         this._ensureClientInited()
         const payload = await retrieveUint8ArrayFromBlobURL(transactionEssenceUrl);
         const rs = new ReadStream(payload);
         const transactionEssence = deserializeTransactionEssence(rs)
+        console.log('===> Enter walletembed transactionEssence', transactionEssence)
         const isSendingToSelf = this._isTransactionEssenceSendingToSelf(transactionEssence)
         if (!isSendingToSelf) {
             // log
@@ -406,8 +533,8 @@ class GroupfiWalletEmbedded {
             type: SIGNATURE_UNLOCK_TYPE,
             signature: {
                 type: ED25519_SIGNATURE_TYPE,
-                publicKey: Converter.bytesToHex(this._walletKeyPair!.publicKey, true),
-                signature: Converter.bytesToHex(Ed25519.sign(this._walletKeyPair!.privateKey, essenceHash), true)
+                publicKey: Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true),
+                signature: Converter.bytesToHex(Ed25519.sign(this._SMRAccount._walletKeyPair!.privateKey, essenceHash), true)
             }
         };
         const referenceUnlockCondition: UnlockTypes = {
@@ -453,8 +580,6 @@ class GroupfiWalletEmbedded {
             throw e
         }
     }
-
-    
     
 
     getTransactionPayloadHash(transactionPayload:ITransactionPayload){
@@ -477,36 +602,43 @@ class GroupfiWalletEmbedded {
         return {transactionId,outputId:messageOutputId,remainderOutputId}
     }
 
-
-
-    tpGetKeyAndIvV2(password:string) {
-        // @ts-ignore
-        const md5 = CryptoJS.MD5(password, 16).toString()
-        const kdf1 = CryptoJS.PBKDF2(md5, md5, { keySize: 16, iterations: 1000 })
-        const kdf2 = CryptoJS.PBKDF2(kdf1.toString(), kdf1.toString(), { keySize: 16, iterations: 1000 })
-        return [kdf1, kdf2]
+    // Before figuring out the relationship between getTransactionPayloadHash and transactionId, keep this function.
+    getMetadataFromTransactionId(transactionId: string, essenceOutputsLength: number) {
+        const messageOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,0)
+        let remainderOutputId:string|undefined
+        if (essenceOutputsLength > 1) {
+            remainderOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,essenceOutputsLength-1)
+        }
+        return {outputId:messageOutputId,remainderOutputId}
     }
-    tpGetKeyAndIv(password:string) {
-        // @ts-ignore
-        let key = CryptoJS.MD5(password, 16).toString().toLocaleUpperCase()
-        let iv = CryptoJS.MD5(password.slice(0, parseInt('' + (password.length / 2))))
-            .toString()
-            .toLocaleUpperCase()
-        const keyArray = CryptoJS.enc.Utf8.parse(key)
-        const ivArray = CryptoJS.enc.Utf8.parse(iv)
-        return [keyArray, ivArray]
+
+    ethDecrypt(encryptedData: string): string | undefined {
+        if (this._EVMAccount._wallet === undefined) {
+            return undefined
+        }
+        return EthDecrypt({encryptedData, privateKey: this._EVMAccount._wallet.getPrivateKey()})
     }
+
+    getEthEncryptionPublicKey(): string | undefined {
+        if (this._EVMAccount._wallet === undefined) {
+            return undefined
+        }
+        const uint8arr = this._EVMAccount._wallet.getPrivateKey()
+        const encryptionPublicKey = tweetnacl.box.keyPair.fromSecretKey(uint8arr).publicKey
+        return naclUtil.encodeBase64(encryptionPublicKey);
+    }
+
+    EthPersonalSign(dataToBeSignedHex: string) {
+        const messageBytes = Converter.hexToBytes(dataToBeSignedHex)
+        const messageHash = hashPersonalMessage(messageBytes)
+        const signature = ecsign(messageHash, this._EVMAccount._wallet!.getPrivateKey())
+        const serializedSignature = toRpcSig(signature.v, signature.r, signature.s)
+        console.log('===> serializedSignature', serializedSignature)
+        return serializedSignature
+    }
+
     tpDecrypt(seed:string, password:string, forceV2 = false){
-        const V2_FLAG = 'TanglePayV2'
-        const reg = new RegExp(`${V2_FLAG}$`)
-        let isV2 = reg.test(seed) || forceV2 ? true : false
-        seed = seed.replace(reg, '')
-        const [key, iv] = isV2 ? this.tpGetKeyAndIvV2(password) : this.tpGetKeyAndIv(password)
-        let encryptedHexStr = CryptoJS.enc.Hex.parse(seed)
-        let srcs = CryptoJS.enc.Base64.stringify(encryptedHexStr)
-        let decrypt = CryptoJS.AES.decrypt(srcs, key, { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 })
-        let decryptedStr = decrypt.toString(CryptoJS.enc.Utf8)
-        return decryptedStr.toString()
+        return tpDecrypt(seed, password, forceV2)
     }
 }
 
