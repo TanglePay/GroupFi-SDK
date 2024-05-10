@@ -1894,28 +1894,34 @@ export class GroupfiSdkClient {
     async markGroup({groupId,memberList, userAddress,memberSelf}:{groupId:string,memberList?:{addr:string,publicKey:string}[], userAddress: string,memberSelf?:{addr:string,publicKey:string}}){
         this._ensureClientInited()
         this._ensureWalletInited()
-        const tasks:Promise<any>[] = [this._getMarkedGroupIds(userAddress)]
-        const isMakeSharedOutput = memberList && memberList.length > 0
-        if (isMakeSharedOutput) {
-            tasks.push(this._makeSharedOutputForGroup({groupId,memberList,memberSelf}))
+        // log markGroup, groupId, memberList, userAddress, memberSelf
+        console.log('markGroup', groupId, memberList, userAddress, memberSelf);
+        try {
+            const tasks:Promise<any>[] = [this._getMarkedGroupIds(userAddress)]
+            const isMakeSharedOutput = memberList && memberList.length > 0
+            if (isMakeSharedOutput) {
+                tasks.push(this._makeSharedOutputForGroup({groupId,memberList,memberSelf}))
+            }
+            const tasksRes = await Promise.all(tasks)
+            const {outputWrapper,list} = tasksRes.shift() as {outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}
+            let extraOutputs
+            if (isMakeSharedOutput) {
+                const sharedOutputRes = tasksRes.shift() as {outputs:IBasicOutput[]}
+                extraOutputs = sharedOutputRes.outputs
+            }
+            // log existing list
+            console.log('existing list', list, outputWrapper);
+            if (list.find(id=>id.groupId === groupId)) {
+                // already marked, log
+                console.log('already marked', groupId);
+                return
+            }
+            list.push({groupId,timestamp:Date.now()})
+            console.log('new list', list)
+            return await this._persistMarkedGroupIds({list,outputWrapper,extraOutputs})
+        } catch (error) {
+            console.log('markGroup error',error)
         }
-        const tasksRes = await Promise.all(tasks)
-        const {outputWrapper,list} = tasksRes.shift() as {outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}
-        let extraOutputs
-        if (isMakeSharedOutput) {
-            const sharedOutputRes = tasksRes.shift() as {outputs:IBasicOutput[]}
-            extraOutputs = sharedOutputRes.outputs
-        }
-        // log existing list
-        console.log('existing list', list, outputWrapper);
-        if (list.find(id=>id.groupId === groupId)) {
-            // already marked, log
-            console.log('already marked', groupId);
-            return
-        }
-        list.push({groupId,timestamp:Date.now()})
-        console.log('new list', list)
-        return await this._persistMarkedGroupIds({list,outputWrapper,extraOutputs})
     }
     async unmarkGroup(groupId:string, userAddress: string){
         this._ensureClientInited()
