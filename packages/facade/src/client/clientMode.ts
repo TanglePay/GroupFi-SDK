@@ -240,8 +240,10 @@ export class DelegationModeRequestAdapter
       });
 
       console.log('===> mm register PairX body', body);
+      const start = Date.now()
 
       const res = await auxiliaryService.register(body);
+      console.log('register service cost:', Date.now() - start)
 
       console.log('mm register PairX resJson', res);
 
@@ -307,9 +309,12 @@ export class DelegationModeRequestAdapter
       sign: bytesToHex(signatureBytes, true),
     });
 
-    const res = await auxiliaryService.mintProxyNicknameNft(body);
-
     console.log('===> mint proxy name nft body:', body);
+    const start = Date.now()
+    const res = await auxiliaryService.mintProxyNicknameNft(body);
+    console.log('mintproxyname cost:', Date.now() - start)
+    console.log('mintproxyname end', Date.now())
+    
     console.log('===> mint proxy name nft res:', res);
 
     return res;
