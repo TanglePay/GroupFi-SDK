@@ -227,3 +227,8 @@ export const GROUPFIReservedTags = [
     GROUPFIVOTETAG,
     'PARTICIPANTION',
 ]
+
+export interface IIncludesAndExcludes {
+    groupName: string
+    chainId?: number
+}
