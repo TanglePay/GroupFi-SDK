@@ -744,7 +744,7 @@ class GroupFiSDKFacade {
       return evmQualifiedGroups
   }
 
-  async fetchAddressQualifiedGroupConfigs({
+  async initialAddressQualifiedGroupConfigs({
     includes,
     excludes,
   }: {
@@ -759,6 +759,7 @@ class GroupFiSDKFacade {
       excludes,
       ifSaveGroupConfigMap: true
     });
+    console.log('initial Address Qualified Group Configs success')
     return res
       .map(({ groupName, qualifyType }) => ({
         groupName,
@@ -888,7 +889,7 @@ class GroupFiSDKFacade {
       }
     }
     // IotaCatSDKObj.switchMqttAddress(this._address!);
-    await this.fetchAddressQualifiedGroupConfigs({});
+    // await this.initialAddressQualifiedGroupConfigs({});
   }
 
   subscribeToAllTopics() {
