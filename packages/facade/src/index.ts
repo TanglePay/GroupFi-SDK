@@ -17,6 +17,7 @@ import {
   InboxItemResponse,
   MessageResponseItem,
   ImInboxEventTypeMarkChanged,
+  IIncludesAndExcludes
 } from 'iotacat-sdk-core';
 
 import { SimpleDataExtended, strToBytes, objectId, sleep, generateSMRPair, bytesToHex, concatBytes, getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
@@ -701,21 +702,21 @@ class GroupFiSDKFacade {
     return false
   }
 
-  // TODO: It's temporary, it will be adjusted later.
   async getRecommendGroups({
     includes,
     excludes,
   }: {
-    includes?: string[];
-    excludes?: string[];
+    includes?: IIncludesAndExcludes[];
+    excludes?: IIncludesAndExcludes[];
   }) {
     this._ensureWalletConnected();
     const isEvm = this._isEvm()
     const res =
-      await IotaCatSDKObj.fetchAddressQualifiedGroupConfigsWithoutSetting({
+      await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
         address: this._address!,
-        includes: includes?.map((g) => ({ groupName: g })),
-        excludes: excludes?.map((g) => ({ groupName: g })),
+        includes,
+        excludes,
+        ifSaveGroupConfigMap: false
       }) as MessageGroupMeta[]
       let groups =  res
       if (isEvm) {
@@ -747,20 +748,22 @@ class GroupFiSDKFacade {
       return evmQualifiedGroups
   }
 
-  async fetchAddressQualifiedGroupConfigs({
+  async initialAddressQualifiedGroupConfigs({
     includes,
     excludes,
   }: {
-    includes?: string[];
-    excludes?: string[];
+    includes?: IIncludesAndExcludes[];
+    excludes?: IIncludesAndExcludes[];
   }) {
     this._ensureWalletConnected();
 
     const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
       address: this._address!,
-      includes: includes?.map((g) => ({ groupName: g })),
-      excludes: excludes?.map((g) => ({ groupName: g })),
+      includes,
+      excludes,
+      ifSaveGroupConfigMap: true
     });
+    console.log('initial Address Qualified Group Configs success')
     return res
       .map(({ groupName, qualifyType }) => ({
         groupName,
@@ -890,7 +893,7 @@ class GroupFiSDKFacade {
       }
     }
     // IotaCatSDKObj.switchMqttAddress(this._address!);
-    await this.fetchAddressQualifiedGroupConfigs({});
+    // await this.initialAddressQualifiedGroupConfigs({});
   }
 
   subscribeToAllTopics() {
