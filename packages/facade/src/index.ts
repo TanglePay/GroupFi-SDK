@@ -442,11 +442,10 @@ class GroupFiSDKFacade {
     const res = this._client!.disablePrepareRemainderHint();
     return res;
   }
-  async preloadGroupSaltCache({groupId, memberList, memberSelf}:
+  async preloadGroupSaltCache({groupId, memberList}:
     {
     groupId: string,
-    memberList?: { addr: string; publicKey: string }[],
-    memberSelf?: { addr: string; publicKey: string }
+    memberList?: { addr: string; publicKey: string }[]
   }) {
     this._ensureWalletConnected();
     const res = await this._client!.preloadGroupSaltCache({
