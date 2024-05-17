@@ -48,6 +48,7 @@ import {
 } from './client/clientMode';
 
 import { AuxiliaryService, config } from './auxiliaryService'
+import { IBasicOutput } from '@iota/iota.js';
 
 export { SimpleDataExtended };
 export * from './types';
@@ -441,16 +442,18 @@ class GroupFiSDKFacade {
     const res = this._client!.disablePrepareRemainderHint();
     return res;
   }
-  async preloadGroupSaltCache(
+  async preloadGroupSaltCache({groupId, memberList}:
+    {
     groupId: string,
     memberList?: { addr: string; publicKey: string }[]
-  ) {
+  }) {
     this._ensureWalletConnected();
-    const res = await this._client!.preloadGroupSaltCache(
-      this._address!,
+    const res = await this._client!.preloadGroupSaltCache({
+      senderAddr:this._address!,
       groupId,
       memberList
-    );
+    }
+  );
     return res;
   }
   async fullfillMessageLiteList(
@@ -1131,10 +1134,12 @@ class GroupFiSDKFacade {
     groupId,
     memberList,
     publicKey,
+    qualifyList,
   }: {
     groupId: string;
     publicKey: string;
     memberList: { addr: string; publicKey: string }[];
+    qualifyList?: { addr: string; publicKey: string }[];
   }) {
     groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     this._ensureWalletConnected();
@@ -1148,12 +1153,32 @@ class GroupFiSDKFacade {
     }
     const memberSelf = { addr: this._address!, publicKey }
     memberList.push(memberSelf);
-    const res = (await this._client!.markGroup({ groupId, memberList, userAddress: this._address!,memberSelf })) as
+    const res = (await this._client!.markGroup({ groupId, memberList, userAddress: this._address!,memberSelf,qualifyList })) as
       | TransactionRes
       | undefined;
     return res;
   }
-
+// getGroupEvmQualifiedList
+  async getGroupEvmQualifiedList(groupId: string) {
+    this._ensureWalletConnected();
+    const memberSelf = { addr: this._address!, publicKey:this._client!.getPairXPublicKey()! }
+    return await this._client!.getEvmQualifyList(groupId,memberSelf)
+  }
+  // sendAdHocOutput
+  async sendAdHocOutput(output: IBasicOutput) {
+    this._ensureWalletConnected();
+    return await this._client!._sendBasicOutput([output]);
+  }
+  // getPluginGroupEvmQualifiedList
+  async getPluginGroupEvmQualifiedList(groupId: string) {
+    this._ensureWalletConnected();
+    return await this._client!.getPluginEvmQualifyList(groupId)
+  }
+  // async _getEvmQualify(groupId:string,addressList:string[],signature:string):Promise<IBasicOutput>{
+    async getEvmQualify(groupId: string, addressList: string[], signature: string) : Promise<IBasicOutput> {
+    this._ensureWalletConnected();
+    return await this._client!._getEvmQualify(groupId, addressList, signature)
+  }
   async leaveOrUnMarkGroup(groupId: string) {
     groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
     this._ensureWalletConnected();

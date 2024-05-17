@@ -149,7 +149,45 @@ export const bytesToUnixSeconds = (bytes: Uint8Array): number => {
   }
   return (bytes[0] << 24) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3];
 };
-
+// bytesToUint32, big endian
+export const bytesToUint32 = (bytes: Uint8Array): number => {
+  if (bytes.length !== 4) {
+    throw new Error(`bytes length is not 4`);
+  }
+  return (bytes[0] << 24) + (bytes[1] << 16) + (bytes[2] << 8) + bytes[3];
+};
+// bytesToUint16, big endian
+export const bytesToUint16 = (bytes: Uint8Array): number => {
+  if (bytes.length !== 2) {
+    throw new Error(`bytes length is not 2`);
+  }
+  return (bytes[0] << 8) + bytes[1];
+};
+// uint16ToBytes, big endian
+export const uint16ToBytes = (num: number): Uint8Array => {
+  const bytes = new Uint8Array(2);
+  bytes[0] = (num >> 8) & 0xff;
+  bytes[1] = num & 0xff;
+  return bytes;
+};
+// read uint16 from reader, big endian
+export const readUint16 = (reader: ReadStream, fieldName: string): number => {
+  return bytesToUint16(reader.readBytes(fieldName, 2));
+};
+// read uint32 from reader, big endian
+export const readUint32 = (reader: ReadStream, fieldName: string): number => {
+  return bytesToUint32(reader.readBytes(fieldName, 4));
+};
+//
+// uint32ToBytes, big endian
+export const uint32ToBytes = (num: number): Uint8Array => {
+  const bytes = new Uint8Array(4);
+  bytes[0] = (num >> 24) & 0xff;
+  bytes[1] = (num >> 16) & 0xff;
+  bytes[2] = (num >> 8) & 0xff;
+  bytes[3] = num & 0xff;
+  return bytes;
+};
 export function getCurrentEpochInSeconds() {
   return Math.floor(Date.now() / 1000);
 }
