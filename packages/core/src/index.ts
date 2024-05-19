@@ -864,6 +864,10 @@ class IotaCatSDK {
         if (chainName === 'shimmer-evm') return 148;
         return 0
     }
+    _chainIdToChainName(chainId:number):string{
+        if (chainId === 148) return 'shimmer-evm';
+        return 'shimmer-mainnet'
+    }
     // is evm address qualified for a group
     async isEvmAddressQualifiedForGroup(address:string,groupId:string):Promise<boolean>{
         const filterParam = this._prepareEvmFilterPayload([address],groupId)
@@ -874,14 +878,14 @@ class IotaCatSDK {
         const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
         let filterParam = {
             addresses,
-            chain:this._chainNameToChainId(groupConfig.chainName),
+            chain:groupConfig.chainId,
             contract:'',
             erc:20 as 20|721,
             ts:getCurrentEpochInSeconds()
         }
         if (groupConfig.qualifyType === 'nft'){
             filterParam = Object.assign(filterParam,{
-                contract:groupConfig.collectionIds[0],
+                contract:groupConfig.collectionId,
                 erc:721
             })
         } else {

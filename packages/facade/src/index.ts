@@ -719,11 +719,11 @@ class GroupFiSDKFacade {
       }) as MessageGroupMeta[]
       let groups =  res
       if (isEvm) {
-        groups = groups.filter(({chainName})=>chainName!='smr')
+        groups = groups.filter(({chainId})=>chainId == 0)
       } else {
         // Actually, there is no need to write the logic. 
         // To fix test bug
-        groups = groups.filter(({chainName}) => chainName === 'smr')
+        groups = groups.filter(({chainId})=>chainId != 0)
       }
       const recommendGroups = groups.map(({ groupName, qualifyType }) => ({
         groupName,

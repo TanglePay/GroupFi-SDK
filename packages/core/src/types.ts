@@ -82,10 +82,10 @@ export interface MessageGroupMeta {
     messageType:typeof MessageTypePrivate | typeof MessageTypePublic,
     authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain,
     qualifyType: GroupQualifyTypeStr,
-    chainName: string,
+    chainId: number,
     tokenThres: string,
     tokenId: string,
-    collectionIds: string[],
+    collectionId: string,
 }
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
 export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, address:string}
