@@ -719,11 +719,11 @@ class GroupFiSDKFacade {
       }) as MessageGroupMeta[]
       let groups =  res
       if (isEvm) {
-        groups = groups.filter(({chainId})=>chainId == 0)
+        groups = groups.filter(({chainId})=>chainId != 0)
       } else {
         // Actually, there is no need to write the logic. 
         // To fix test bug
-        groups = groups.filter(({chainId})=>chainId != 0)
+        groups = groups.filter(({chainId})=>chainId == 0)
       }
       const recommendGroups = groups.map(({ groupName, qualifyType }) => ({
         groupName,
@@ -772,6 +772,18 @@ class GroupFiSDKFacade {
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
   }
 
+  // fetchPublicGroupConfigs
+  async fetchPublicGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}) {
+    const res = await IotaCatSDKObj.fetchPublicGroupConfigs({includes, excludes})
+    return res
+  }
+
+  // fetchAddressMarkedGroupConfigs
+  async fetchAddressMarkedGroupConfigs() {
+    this._ensureWalletConnected();
+    const res = await IotaCatSDKObj.fetchAddressMarkedGroupConfigs(this._address!);
+    return res;
+  }
   _client?: GroupfiSdkClient;
 
   _dappClient: any
