@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -421,6 +421,11 @@ class IotaCatSDK {
             return {outputId:''}
         }
     }
+    // message group meta to group config
+    _messageGroupMetaToGroupConfig(meta:MessageGroupMeta):GroupConfig{
+        const groupId = this._groupMetaToGroupId(meta)
+        return {...meta,groupId}
+    }
     // addressqualifiedgroupconfigs
     async fetchAddressQualifiedGroupConfigs({address, includes, excludes, ifSaveGroupConfigMap}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[], ifSaveGroupConfigMap: boolean}): Promise<MessageGroupMeta[]> {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;
@@ -445,6 +450,36 @@ class IotaCatSDK {
         return this._ensureList(json);
     }
 
+    // fetch public group configs
+    async fetchPublicGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfig[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/publicgroupconfigs`;
+        const body = {
+            includes,
+            excludes
+        };
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        const json = await res.json() as MessageGroupMeta[];
+        const groupConfig = (json ?? []).reduce((acc, group) => {
+            acc[group.groupName] = group;
+            return acc;
+        }, {} as Record<string, MessageGroupMeta>);
+        // merge groupConfig with this._groupConfigMap
+        this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
+        return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group));
+    }
+// fetch address marked group configs
+    async fetchAddressMarkedGroupConfigs(address:string):Promise<GroupConfig[]>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/markedgroupconfigs?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group))
+    }
     async fetchAddressPairX(evmAddress: string) {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addresspairx?address=${evmAddress}`
         const res = await fetch(url, {

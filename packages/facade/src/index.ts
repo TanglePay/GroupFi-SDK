@@ -772,6 +772,18 @@ class GroupFiSDKFacade {
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
   }
 
+  // fetchPublicGroupConfigs
+  async fetchPublicGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}) {
+    const res = await IotaCatSDKObj.fetchPublicGroupConfigs({includes, excludes})
+    return res
+  }
+
+  // fetchAddressMarkedGroupConfigs
+  async fetchAddressMarkedGroupConfigs() {
+    this._ensureWalletConnected();
+    const res = await IotaCatSDKObj.fetchAddressMarkedGroupConfigs(this._address!);
+    return res;
+  }
   _client?: GroupfiSdkClient;
 
   _dappClient: any
