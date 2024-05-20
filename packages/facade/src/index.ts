@@ -908,12 +908,15 @@ class GroupFiSDKFacade {
   }
 
   subscribeToAllTopics() {
-    this._ensureWalletConnected()
     IotaCatSDKObj.switchMqttAddress(this._address!)
   }
 
   unsubscribeToAllTopics() {
     IotaCatSDKObj.unsubscribeToAllTopics()
+  }
+
+  syncAllTopics(newAllTopics: string[]) {
+    IotaCatSDKObj.syncAllTopics(newAllTopics)
   }
 
   setProxyModeInfo(modeInfo: ModeInfo) {

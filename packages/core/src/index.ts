@@ -180,6 +180,16 @@ class IotaCatSDK {
         this._mqttClient!.subscribe(filteredTopics)
         filteredTopics.forEach(topic=>this._subscribedTopics.add(topic))
     }
+
+    // sync topics
+    syncAllTopics(newTopics:string[]){
+        const previousTopics = Array.from(this._subscribedTopics)
+        const shouldSubscribe = newTopics.filter(topic=>!previousTopics.includes(topic))
+        this._subscribeToTopics(shouldSubscribe)
+        const shouldUnsubscribe = previousTopics.filter(topic=>!newTopics.includes(topic))
+        this._unsubscribeToTopics(shouldUnsubscribe)
+    }
+
     // unsubscribe to a topic
     _unsubscribeToTopics(topics:string[]){
         const filteredTopics = topics.filter(topic=>this._subscribedTopics.has(topic))
