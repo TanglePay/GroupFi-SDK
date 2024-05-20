@@ -87,6 +87,7 @@ export interface MessageGroupMeta {
     tokenId: string,
     collectionId: string,
 }
+export type GroupConfig = MessageGroupMeta & {groupId:string}
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
 export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, address:string}
 export type EventGroupMarkChanged = {type: typeof ImInboxEventTypeMarkChanged, groupId: string, timestamp: number, isNewMark: boolean} 
