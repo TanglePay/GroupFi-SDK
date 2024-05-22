@@ -60,7 +60,7 @@ class IotaCatSDK {
             return acc
         },{} as Record<string,any>)
         const groupId = CryptoJS.SHA256(JSON.stringify(sortedMap)).toString(CryptoJS.enc.Hex)
-        return groupId
+        return this._addHexPrefixIfAbsent(groupId)
     }
     _addHexPrefixIfAbsent(hex:string){
         // if (!hex) return hex
