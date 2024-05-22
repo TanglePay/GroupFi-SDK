@@ -778,6 +778,12 @@ class GroupFiSDKFacade {
     return res
   }
 
+  // fetchForMeGroupConfigs
+  async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}) {
+    this._ensureWalletConnected();
+    const res = await IotaCatSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})
+    return res
+  }
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
     this._ensureWalletConnected();
