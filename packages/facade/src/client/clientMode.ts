@@ -103,7 +103,7 @@ export class ImpersonationModeRequestAdapter
           },
         },
       }),
-      GroupfiWalletEmbedded.setup(this._nodeUrlHint)
+      GroupfiWalletEmbedded.setup(this._nodeUrlHint),
     ]);
     return res[0] as { bech32Address: string; hexAddress: string };
   }
@@ -153,7 +153,7 @@ export class ImpersonationModeRequestAdapter
       throw new Error('ImpersonationMode decrypt pairX is undefined');
     }
 
-    GroupfiWalletEmbedded.setupPair(pairX)
+    GroupfiWalletEmbedded.setupPair(pairX);
     return await decryptByPairX({ dataTobeDecrypted, pairX });
   }
 
@@ -176,93 +176,109 @@ export class DelegationModeRequestAdapter
 
   private _nodeUrlHint: string;
 
-  private _dappClient: any
+  private _dappClient: any;
 
   constructor(evmAddress: string, nodeUrlHint: string, dappClient: any) {
     this._evmAddress = evmAddress;
-    this._nodeUrlHint = nodeUrlHint
-    this._dappClient = dappClient
-    GroupfiWalletEmbedded.setup(this._nodeUrlHint)
+    this._nodeUrlHint = nodeUrlHint;
+    this._dappClient = dappClient;
+    GroupfiWalletEmbedded.setup(this._nodeUrlHint);
   }
 
   async decryptPairX(params: { encryptedData: string }) {
     const res = await this._dappClient.request({
       method: 'eth_decrypt',
-      params: [params.encryptedData, this._evmAddress!]
-    })
-    console.log('===> Groupfi facade res', res)
-    return res
+      params: [params.encryptedData, this._evmAddress!],
+    });
+    console.log('===> Groupfi facade res', res);
+    return res;
     // return (await window.ethereum.request({
     //   method: 'eth_decrypt',
     //   params: [params.encryptedData, this._evmAddress!],
     // })) as string;
   }
 
-  async registerPairX(params: { pairX: PairX }): Promise<string> {
+  async registerPairX(metadataObjWithSignature: Object): Promise<string> {
     try {
-      const { pairX } = params;
-
-      const encryptionPublicKey = await this.getEncryptionPublicKey();
-
-      const first32BytesOfPrivateKeyHex = bytesToHex(
-        pairX.privateKey.slice(0, 32)
-      );
-
-      const encryptedPrivateKeyHex = EthEncrypt({
-        publicKey: encryptionPublicKey,
-        dataTobeEncrypted: first32BytesOfPrivateKeyHex,
-      });
-
-      const metadataObj = {
-        encryptedPrivateKey: encryptedPrivateKeyHex,
-        pairXPublicKey: bytesToHex(pairX.publicKey, true),
-        evmAddress: this._evmAddress!,
-        timestamp: getCurrentEpochInSeconds(),
-        // 1: tp  2: mm
-        scenery: 2,
-      };
-
-      const dataTobeSignedStr = [
-        metadataObj.encryptedPrivateKey,
-        metadataObj.evmAddress,
-        metadataObj.pairXPublicKey,
-        metadataObj.scenery,
-        metadataObj.timestamp,
-      ].join('');
-
-      const dataToBeSignedHex = utf8ToHex(dataTobeSignedStr, true);
-
-      const signature = await this.ethSign({ dataToBeSignedHex });
-
-      const body = JSON.stringify({
-        ...metadataObj,
-        signature,
-      });
-
-      console.log('===> mm register PairX body', body);
-      const start = Date.now()
-
+      const body = JSON.stringify(metadataObjWithSignature);
+      
       const res = await auxiliaryService.register(body);
-      console.log('register service cost:', Date.now() - start)
-
-      console.log('mm register PairX resJson', res);
 
       if (res.result) {
         return res.proxy_account;
       } else {
-        throw new Error('Failed to register');
+        throw new Error('Failed to register pairX');
       }
     } catch (error) {
-      throw error;
+      throw error
     }
   }
+
+  // async registerPairX(params: { pairX: PairX }): Promise<string> {
+  //   try {
+  //     const { pairX } = params;
+
+  //     const encryptionPublicKey = await this.getEncryptionPublicKey();
+
+  //     const first32BytesOfPrivateKeyHex = bytesToHex(
+  //       pairX.privateKey.slice(0, 32)
+  //     );
+
+  //     const encryptedPrivateKeyHex = EthEncrypt({
+  //       publicKey: encryptionPublicKey,
+  //       dataTobeEncrypted: first32BytesOfPrivateKeyHex,
+  //     });
+
+  //     const metadataObj = {
+  //       encryptedPrivateKey: encryptedPrivateKeyHex,
+  //       pairXPublicKey: bytesToHex(pairX.publicKey, true),
+  //       evmAddress: this._evmAddress!,
+  //       timestamp: getCurrentEpochInSeconds(),
+  //       // 1: tp  2: mm
+  //       scenery: 2,
+  //     };
+
+  //     const dataTobeSignedStr = [
+  //       metadataObj.encryptedPrivateKey,
+  //       metadataObj.evmAddress,
+  //       metadataObj.pairXPublicKey,
+  //       metadataObj.scenery,
+  //       metadataObj.timestamp,
+  //     ].join('');
+
+  //     const dataToBeSignedHex = utf8ToHex(dataTobeSignedStr, true);
+
+  //     const signature = await this.ethSign({ dataToBeSignedHex });
+
+  //     const body = JSON.stringify({
+  //       ...metadataObj,
+  //       signature,
+  //     });
+
+  //     console.log('===> mm register PairX body', body);
+  //     const start = Date.now()
+
+  //     const res = await auxiliaryService.register(body);
+  //     console.log('register service cost:', Date.now() - start)
+
+  //     console.log('mm register PairX resJson', res);
+
+  //     if (res.result) {
+  //       return res.proxy_account;
+  //     } else {
+  //       throw new Error('Failed to register');
+  //     }
+  //   } catch (error) {
+  //     throw error;
+  //   }
+  // }
 
   async ethSign(params: { dataToBeSignedHex: string }): Promise<string> {
     const res = await this._dappClient.request({
       method: 'personal_sign',
-      params: [params.dataToBeSignedHex, this._evmAddress!]
-    })
-    return res
+      params: [params.dataToBeSignedHex, this._evmAddress!],
+    });
+    return res;
     // const res = await window.ethereum.request({
     //   method: 'personal_sign',
     //   params: [params.dataToBeSignedHex, this._evmAddress!],
@@ -287,7 +303,7 @@ export class DelegationModeRequestAdapter
     if (!pairX) {
       throw new Error('ImpersonationMode decrypt pairX is undefined');
     }
-    GroupfiWalletEmbedded.setupPair(pairX)
+    GroupfiWalletEmbedded.setupPair(pairX);
     return await decryptByPairX({ dataTobeDecrypted, pairX });
   }
 
@@ -310,11 +326,11 @@ export class DelegationModeRequestAdapter
     });
 
     console.log('===> mint proxy name nft body:', body);
-    const start = Date.now()
+    const start = Date.now();
     const res = await auxiliaryService.mintProxyNicknameNft(body);
-    console.log('mintproxyname cost:', Date.now() - start)
-    console.log('mintproxyname end', Date.now())
-    
+    console.log('mintproxyname cost:', Date.now() - start);
+    console.log('mintproxyname end', Date.now());
+
     console.log('===> mint proxy name nft res:', res);
 
     return res;
@@ -323,7 +339,7 @@ export class DelegationModeRequestAdapter
   async sendTransaction({
     pairX,
     essence,
-    essenceOutputsLength
+    essenceOutputsLength,
   }: IRequestAdapterSendTransationParams) {
     if (!pairX) {
       throw new Error('DelegationMode sendTransation pairX is undefined');
@@ -332,7 +348,7 @@ export class DelegationModeRequestAdapter
     const ts = getCurrentEpochInSeconds();
     const tsBytes = strToBytes(ts.toString());
 
-    const signedDataBytes = strToBytes(bytesToHex(essence, true) + ts)
+    const signedDataBytes = strToBytes(bytesToHex(essence, true) + ts);
 
     const signatureBytes = Ed25519.sign(pairX.privateKey, signedDataBytes);
 
@@ -343,16 +359,22 @@ export class DelegationModeRequestAdapter
       sign: bytesToHex(signatureBytes, true),
     });
 
-    const {blockId, transactionId} = await auxiliaryService.sendTransaction(body);
+    const { blockId, transactionId } = await auxiliaryService.sendTransaction(
+      body
+    );
 
-    const { outputId, remainderOutputId } = GroupfiWalletEmbedded.getMetadataFromTransactionId(transactionId, essenceOutputsLength)
+    const { outputId, remainderOutputId } =
+      GroupfiWalletEmbedded.getMetadataFromTransactionId(
+        transactionId,
+        essenceOutputsLength
+      );
 
     return {
       blockId,
       transactionId,
       outputId,
-      remainderOutputId
-    }
+      remainderOutputId,
+    };
   }
 }
 
@@ -363,8 +385,9 @@ async function decryptByPairX({
   dataTobeDecrypted: Uint8Array;
   pairX: PairX;
 }) {
-  
-  return await GroupfiWalletEmbedded.decryptAesKeyFromPayload(dataTobeDecrypted)
+  return await GroupfiWalletEmbedded.decryptAesKeyFromPayload(
+    dataTobeDecrypted
+  );
 }
 
 async function sendTransactionByTanglePay({
