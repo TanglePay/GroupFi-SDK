@@ -17,14 +17,28 @@ import {
   InboxItemResponse,
   MessageResponseItem,
   ImInboxEventTypeMarkChanged,
-  IIncludesAndExcludes
+  IIncludesAndExcludes,
 } from 'iotacat-sdk-core';
 
-import { SimpleDataExtended, strToBytes, objectId, sleep, generateSMRPair, bytesToHex, concatBytes, getCurrentEpochInSeconds } from 'iotacat-sdk-utils';
-import { GroupfiSdkClient, IProxyModeRequest, MessageBody, AddressMappingStore } from 'groupfi-sdk-client';
-import { Web3 } from 'web3'
-import smrPurchaseAbi from './contractAbi/smr-purchase'
-
+import {
+  SimpleDataExtended,
+  strToBytes,
+  objectId,
+  sleep,
+  generateSMRPair,
+  bytesToHex,
+  concatBytes,
+  getCurrentEpochInSeconds,
+} from 'iotacat-sdk-utils';
+import {
+  GroupfiSdkClient,
+  IProxyModeRequestAdapter,
+  MessageBody,
+  AddressMappingStore,
+} from 'groupfi-sdk-client';
+import { Web3 } from 'web3';
+import smrPurchaseAbi from './contractAbi/smr-purchase';
+import { EthEncrypt, utf8ToHex } from 'iotacat-sdk-utils';
 
 import {
   WalletType,
@@ -38,7 +52,7 @@ import {
   DelegationMode,
   RegisteredInfo,
   ModeInfo,
-  PairX
+  PairX,
 } from './types';
 
 import {
@@ -47,7 +61,7 @@ import {
   DelegationModeRequestAdapter,
 } from './client/clientMode';
 
-import { AuxiliaryService, config } from './auxiliaryService'
+import { AuxiliaryService, config } from './auxiliaryService';
 import { IBasicOutput } from '@iota/iota.js';
 
 export { SimpleDataExtended };
@@ -60,16 +74,16 @@ const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 class GroupFiSDKFacade {
   private _address: string | undefined;
   private _proxyAddress: string | undefined;
-  private _nodeId: number | undefined
+  private _nodeId: number | undefined;
   private _mode: Mode | undefined;
-  private _pairX: PairX | undefined
+  private _pairX: PairX | undefined;
 
   private _mqttConnected: boolean = false;
 
   private _lastTimeSdkRequestResultSent: number = 0;
   private _lastTimeSdkRequestResultReceived: number = 0;
 
-  private _auxiliaryService = new AuxiliaryService()
+  private _auxiliaryService = new AuxiliaryService();
 
   private _currentGroup:
     | {
@@ -84,9 +98,9 @@ class GroupFiSDKFacade {
 
   get currentMode() {
     if (this._mode === undefined) {
-      throw new Error('Mode is undefined.')
+      throw new Error('Mode is undefined.');
     }
-    return this._mode
+    return this._mode;
   }
 
   get currentGroupId() {
@@ -126,7 +140,7 @@ class GroupFiSDKFacade {
   }
 
   async getIsMutedFromMuteMap(groupId: string, address: string) {
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
     if (this._muteMap === undefined) {
       const allUserMuteGroupMembers = await this.getAllUserMuteGroupMembers();
       this._muteMap = allUserMuteGroupMembers.reduce(
@@ -137,13 +151,15 @@ class GroupFiSDKFacade {
         {}
       );
     }
-    const addressHash = IotaCatSDKObj._addHexPrefixIfAbsent(IotaCatSDKObj._sha256Hash(address))
-    const mutedAddressHash =  this._muteMap[groupId] ?? [];
-    return mutedAddressHash.includes(addressHash)
+    const addressHash = IotaCatSDKObj._addHexPrefixIfAbsent(
+      IotaCatSDKObj._sha256Hash(address)
+    );
+    const mutedAddressHash = this._muteMap[groupId] ?? [];
+    return mutedAddressHash.includes(addressHash);
   }
 
   async filterMutedMessage(groupId: string, sender: string) {
-    return await this.getIsMutedFromMuteMap(groupId, sender)
+    return await this.getIsMutedFromMuteMap(groupId, sender);
   }
 
   async handlePushedMessage(
@@ -182,8 +198,10 @@ class GroupFiSDKFacade {
       };
 
       if (this._mode !== ShimmerMode) {
-        const evmAddress = await AddressMappingStore.getEvmAddress(message.sender)
-        message.sender = evmAddress
+        const evmAddress = await AddressMappingStore.getEvmAddress(
+          message.sender
+        );
+        message.sender = evmAddress;
       }
 
       console.log('*****Enter handlePushedMessage filter');
@@ -224,8 +242,11 @@ class GroupFiSDKFacade {
       } else if (pushed.type == ImInboxEventTypeGroupMemberChanged) {
         item = pushed;
       } else if (pushed.type === ImInboxEventTypeMarkChanged) {
-        console.log('===> mqtt event ImInboxEventTypeMarkChanged, pushed:', pushed)
-        item = pushed
+        console.log(
+          '===> mqtt event ImInboxEventTypeMarkChanged, pushed:',
+          pushed
+        );
+        item = pushed;
       }
       if (item) {
         callback(item);
@@ -241,8 +262,12 @@ class GroupFiSDKFacade {
   }
 
   async onMetaMaskAccountChanged(account: string) {
-    const res = this.connectMetaMaskAccount(account)
-    await this._onAccountChanged({...res,nodeId: undefined, isAddressChanged: true});
+    const res = this.connectMetaMaskAccount(account);
+    await this._onAccountChanged({
+      ...res,
+      nodeId: undefined,
+      isAddressChanged: true,
+    });
   }
 
   // listenningMetaMaskAccountsChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
@@ -265,23 +290,31 @@ class GroupFiSDKFacade {
   // }
 
   listenningTPAccountChanged(
-    callback: (params: { address: string; nodeId: number; mode: Mode, isAddressChanged: boolean }) => void
+    callback: (params: {
+      address: string;
+      nodeId: number;
+      mode: Mode;
+      isAddressChanged: boolean;
+    }) => void
   ) {
     const listener = async (accountChangeEvent: {
       address: string;
       nodeId: number;
     }) => {
       // Uniformly convert EVM addresses to lowercase
-      accountChangeEvent.address = accountChangeEvent.address.toLowerCase()
+      accountChangeEvent.address = accountChangeEvent.address.toLowerCase();
       const { address, nodeId } = accountChangeEvent;
 
-      const newMode = this.getTPMode(nodeId)
+      const newMode = this.getTPMode(nodeId);
 
       // 第一次连接钱包，也会触发这个函数, 这样避免第一次连接时处罚
-      if (this._address === address && this._mode === newMode && this._nodeId === nodeId) {
-        return
+      if (
+        this._address === address &&
+        this._mode === newMode &&
+        this._nodeId === nodeId
+      ) {
+        return;
       }
-
 
       if (this._address !== address) {
         // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
@@ -293,19 +326,19 @@ class GroupFiSDKFacade {
         });
       }
 
-      console.log('===> this._address', this._address)
-      console.log('===> address', address)
+      console.log('===> this._address', this._address);
+      console.log('===> address', address);
 
       const res = {
         address,
         nodeId,
         mode: newMode,
-        isAddressChanged: this._address !== address
-      }
+        isAddressChanged: this._address !== address,
+      };
 
-      this._address = address
-      this._nodeId = nodeId
-      this._mode = newMode
+      this._address = address;
+      this._nodeId = nodeId;
+      this._mode = newMode;
 
       await this._onAccountChanged(res);
       callback(res);
@@ -341,13 +374,13 @@ class GroupFiSDKFacade {
     address: string;
     nodeId?: number;
     mode: Mode;
-    isAddressChanged: boolean
+    isAddressChanged: boolean;
   }) {
-    this.switchClientAdapter(mode)
+    this.switchClientAdapter(mode);
     if (isAddressChanged) {
-      await this.initialAddress()
+      await this.initialAddress();
     }
-    
+
     // this._address = newAddress;
     // this.clearAddress();
     // await this.initialAddress(nodeId);
@@ -382,11 +415,17 @@ class GroupFiSDKFacade {
   }
   // registerMessageCallback
   registerMessageCallback(
-    callback: (param: { message?: IMessage; outputId: string, status:number }) => void
+    callback: (param: {
+      message?: IMessage;
+      outputId: string;
+      status: number;
+    }) => void
   ) {
-    const listener = (
-      param: { message?: IMessage; outputId: string, status:number }
-    ) => {
+    const listener = (param: {
+      message?: IMessage;
+      outputId: string;
+      status: number;
+    }) => {
       if (param) {
         callback(param);
       }
@@ -442,18 +481,19 @@ class GroupFiSDKFacade {
     const res = this._client!.disablePrepareRemainderHint();
     return res;
   }
-  async preloadGroupSaltCache({groupId, memberList}:
-    {
-    groupId: string,
-    memberList?: { addr: string; publicKey: string }[]
+  async preloadGroupSaltCache({
+    groupId,
+    memberList,
+  }: {
+    groupId: string;
+    memberList?: { addr: string; publicKey: string }[];
   }) {
     this._ensureWalletConnected();
     const res = await this._client!.preloadGroupSaltCache({
-      senderAddr:this._address!,
+      senderAddr: this._address!,
       groupId,
-      memberList
-    }
-  );
+      memberList,
+    });
     return res;
   }
   async fullfillMessageLiteList(
@@ -550,52 +590,67 @@ class GroupFiSDKFacade {
   }
 
   getTpNodeInfo(nodeId: number) {
-    return config.find(({tpNodeId}) => tpNodeId === nodeId)
+    return config.find(({ tpNodeId }) => tpNodeId === nodeId);
   }
 
   async fetchSMRPrice(nodeId: number) {
-    const conf = config.find(c => c.tpNodeId === nodeId)
+    const conf = config.find((c) => c.tpNodeId === nodeId);
     if (!conf) {
-      return undefined
+      return undefined;
     }
-    const res = await this._auxiliaryService.fetchSMRPrice(conf.chainId)
-    return res
+    const res = await this._auxiliaryService.fetchSMRPrice(conf.chainId);
+    return res;
   }
 
-  async buySMR(params: {targetAmount: string, principalAmount: string, nodeId: number, contract: string, web3: Web3}) {
-      const { web3, principalAmount, targetAmount, contract: contractAddress } = params
-      const proxyAddress = await this.getSMRProxyAccount()
-      if (proxyAddress === undefined) {
-        throw new Error('proxy account is undefined.')
-      }
-  
-      const contract = new web3.eth.Contract(smrPurchaseAbi, params.contract)
+  async buySMR(params: {
+    targetAmount: string;
+    principalAmount: string;
+    nodeId: number;
+    contract: string;
+    web3: Web3;
+  }) {
+    const {
+      web3,
+      principalAmount,
+      targetAmount,
+      contract: contractAddress,
+    } = params;
+    const proxyAddress = await this.getSMRProxyAccount();
+    if (proxyAddress === undefined) {
+      throw new Error('proxy account is undefined.');
+    }
 
-      const transaction = contract.methods.buySmr(proxyAddress.hexAddress, targetAmount)
-      
-      const options = {
-        from: this._address,
-        to: contractAddress,
-        data: transaction.encodeABI(),
-        value: principalAmount
-      }
-      
-      await IotaSDK.request({
-        method: 'eth_sendTransaction',
-        params: options,
-      })
+    const contract = new web3.eth.Contract(smrPurchaseAbi, params.contract);
+
+    const transaction = contract.methods.buySmr(
+      proxyAddress.hexAddress,
+      targetAmount
+    );
+
+    const options = {
+      from: this._address,
+      to: contractAddress,
+      data: transaction.encodeABI(),
+      value: principalAmount,
+    };
+
+    await IotaSDK.request({
+      method: 'eth_sendTransaction',
+      params: options,
+    });
   }
 
   async mintProxyNicknameNft(name: string) {
     this._ensureWalletConnected();
     if (this._pairX === undefined) {
-      throw new Error('PairX is undefined')
+      throw new Error('PairX is undefined');
     }
-    const adapter = this._client!.getRequestAdapter() as DelegationModeRequestAdapter
+    const adapter =
+      this._client!.getRequestAdapter() as DelegationModeRequestAdapter;
     return await adapter.mintProxyNicknameNft({
       pairX: this._pairX,
-      name
-    })
+      name,
+    });
   }
 
   async mintNicknameNFT(name: string): Promise<{
@@ -605,10 +660,9 @@ class GroupFiSDKFacade {
     reason?: string;
   }> {
     this._ensureWalletConnected();
-    const addr = this._proxyAddress ?? this._address!
-    return await this._auxiliaryService.mintNicknameNFT(addr, name)
+    const addr = this._proxyAddress ?? this._address!;
+    return await this._auxiliaryService.mintNicknameNFT(addr, name);
   }
-
 
   async fetchAddressNames(addressList: string[]) {
     return await IotaCatSDKObj.fetchAddressNames(addressList);
@@ -663,7 +717,7 @@ class GroupFiSDKFacade {
   }
   async fetchAddressBalance() {
     this._ensureWalletConnected();
-    const addr = this._proxyAddress ?? this._address!
+    const addr = this._proxyAddress ?? this._address!;
     const balance = await IotaCatSDKObj.fetchAddressBalance(addr);
     return balance ?? 0;
   }
@@ -686,19 +740,19 @@ class GroupFiSDKFacade {
   }
 
   _isEvm() {
-    return this._mode !== ShimmerMode
+    return this._mode !== ShimmerMode;
   }
 
   async filterEvmGroups(groupId: string): Promise<boolean> {
-    const isGroupPublic = await this.isGroupPublic(groupId)
+    const isGroupPublic = await this.isGroupPublic(groupId);
     if (isGroupPublic) {
-      return true
+      return true;
     }
-    const isQualified = await this._isEvmQualified(groupId)
+    const isQualified = await this._isEvmQualified(groupId);
     if (isQualified) {
-      return true
+      return true;
     }
-    return false
+    return false;
   }
 
   async getRecommendGroups({
@@ -709,42 +763,42 @@ class GroupFiSDKFacade {
     excludes?: IIncludesAndExcludes[];
   }) {
     this._ensureWalletConnected();
-    const isEvm = this._isEvm()
-    const res =
-      await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
-        address: this._address!,
-        includes,
-        excludes,
-        ifSaveGroupConfigMap: false
-      }) as MessageGroupMeta[]
-      let groups =  res
-      if (isEvm) {
-        groups = groups.filter(({chainId})=>chainId != 0)
-      } else {
-        // Actually, there is no need to write the logic. 
-        // To fix test bug
-        groups = groups.filter(({chainId})=>chainId == 0)
-      }
-      const recommendGroups = groups.map(({ groupName, qualifyType }) => ({
+    const isEvm = this._isEvm();
+    const res = (await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
+      address: this._address!,
+      includes,
+      excludes,
+      ifSaveGroupConfigMap: false,
+    })) as MessageGroupMeta[];
+    let groups = res;
+    if (isEvm) {
+      groups = groups.filter(({ chainId }) => chainId != 0);
+    } else {
+      // Actually, there is no need to write the logic.
+      // To fix test bug
+      groups = groups.filter(({ chainId }) => chainId == 0);
+    }
+    const recommendGroups = groups
+      .map(({ groupName, qualifyType }) => ({
         groupName,
         groupId: IotaCatSDKObj._groupToGroupId(groupName),
         qualifyType: qualifyType,
       }))
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
 
-      if (!this._isEvm) {
-        return recommendGroups
-      }
+    if (!this._isEvm) {
+      return recommendGroups;
+    }
 
-      const evmQualifiedGroups = []
-      for(const group of recommendGroups) {
-        const isOk = await this.filterEvmGroups(group.groupId)
-        if (isOk) {
-          evmQualifiedGroups.push(group)
-        }
+    const evmQualifiedGroups = [];
+    for (const group of recommendGroups) {
+      const isOk = await this.filterEvmGroups(group.groupId);
+      if (isOk) {
+        evmQualifiedGroups.push(group);
       }
-      
-      return evmQualifiedGroups
+    }
+
+    return evmQualifiedGroups;
   }
 
   async initialAddressQualifiedGroupConfigs({
@@ -760,9 +814,9 @@ class GroupFiSDKFacade {
       address: this._address!,
       includes,
       excludes,
-      ifSaveGroupConfigMap: true
+      ifSaveGroupConfigMap: true,
     });
-    console.log('initial Address Qualified Group Configs success')
+    console.log('initial Address Qualified Group Configs success');
     return res
       .map(({ groupName, qualifyType }) => ({
         groupName,
@@ -773,9 +827,18 @@ class GroupFiSDKFacade {
   }
 
   // fetchPublicGroupConfigs
-  async fetchPublicGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}) {
-    const res = await IotaCatSDKObj.fetchPublicGroupConfigs({includes, excludes})
-    return res
+  async fetchPublicGroupConfigs({
+    includes,
+    excludes,
+  }: {
+    includes?: IIncludesAndExcludes[];
+    excludes?: IIncludesAndExcludes[];
+  }) {
+    const res = await IotaCatSDKObj.fetchPublicGroupConfigs({
+      includes,
+      excludes,
+    });
+    return res;
   }
 
   // fetchForMeGroupConfigs
@@ -787,21 +850,26 @@ class GroupFiSDKFacade {
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
     this._ensureWalletConnected();
-    const res = await IotaCatSDKObj.fetchAddressMarkedGroupConfigs(this._address!);
+    const res = await IotaCatSDKObj.fetchAddressMarkedGroupConfigs(
+      this._address!
+    );
     return res;
   }
   _client?: GroupfiSdkClient;
 
-  _dappClient: any
+  _dappClient: any;
 
   setDappClient(dappClient: any) {
-    this._dappClient = dappClient
+    this._dappClient = dappClient;
   }
 
-  async bootstrap(walletType: WalletType, metaMaskAccountFromDapp: string | undefined): Promise<{
+  async bootstrap(
+    walletType: WalletType,
+    metaMaskAccountFromDapp: string | undefined
+  ): Promise<{
     address: string;
     mode: Mode;
-    nodeId: number | undefined
+    nodeId: number | undefined;
   }> {
     this._client = new GroupfiSdkClient();
     await this._client!.setup();
@@ -817,17 +885,20 @@ class GroupFiSDKFacade {
     if (walletType === TanglePayWallet) {
       // connect tanglepay wallet
       res = await this.waitWalletReadyAndConnectTanglePayWallet();
-    } else if (walletType === MetaMaskWallet && metaMaskAccountFromDapp !== undefined) {
-      res = this.connectMetaMaskAccount(metaMaskAccountFromDapp)
+    } else if (
+      walletType === MetaMaskWallet &&
+      metaMaskAccountFromDapp !== undefined
+    ) {
+      res = this.connectMetaMaskAccount(metaMaskAccountFromDapp);
       // res = await this.connectMetaMaskWallet()
     }
 
     if (!res?.mode) {
       throw new Error('mode is undefined.');
     }
-    
-    this.switchClientAdapter(res.mode)
-    await this.initialAddress()
+
+    this.switchClientAdapter(res.mode);
+    await this.initialAddress();
 
     // await Promise.all([
     //   this.fetchAddressQualifiedGroupConfigs({}),
@@ -839,56 +910,97 @@ class GroupFiSDKFacade {
     return { address: res.address, mode: res.mode, nodeId: res.nodeId };
   }
 
-  async fetchRegisteredInfo(isPairXPresent: boolean): Promise<RegisteredInfo | undefined> {
-    const res = await IotaCatSDKObj.fetchAddressPairX(this._address!)
-    console.log('===>fetchRegisteredInfo res', res, isPairXPresent)
-    if (!res) {
-      return undefined
-    }
-    let registeredInfo: RegisteredInfo = {}
-    if (res.mmProxyAddress){
-      registeredInfo[DelegationMode] = {
-        account: res.mmProxyAddress
+  async fetchRegisterInfoV2(): Promise<
+    | {
+        publicKey: string;
+        privateKeyEncrypted: string;
+        mmProxyAddress: string;
+        tpProxyAddress: string;
       }
+    | undefined
+  > {
+    const res = await IotaCatSDKObj.fetchAddressPairX(this._address!);
+    if (!res) {
+      return undefined;
+    }
+    return res;
+  }
+
+  async login(encryptedPairX: {
+    publicKey: string,
+    privateKeyEncrypted: string
+  }) {
+    const { publicKey, privateKeyEncrypted } = encryptedPairX
+    const pairX = await this._client!.decryptPairX({
+      publicKey: publicKey,
+      privateKeyEncrypted: privateKeyEncrypted,
+    });
+    this._pairX = pairX
+    return pairX
+  }
+
+  async fetchRegisteredInfo(
+    isPairXPresent: boolean
+  ): Promise<RegisteredInfo | undefined> {
+    const res = await IotaCatSDKObj.fetchAddressPairX(this._address!);
+    console.log('===>fetchRegisteredInfo res', res, isPairXPresent);
+    if (!res) {
+      return undefined;
+    }
+    let registeredInfo: RegisteredInfo = {};
+    if (res.mmProxyAddress) {
+      registeredInfo[DelegationMode] = {
+        account: res.mmProxyAddress,
+      };
     }
     if (res.tpProxyAddress) {
       registeredInfo[ImpersonationMode] = {
-        account: res.tpProxyAddress
-      }
+        account: res.tpProxyAddress,
+      };
     }
     if (isPairXPresent) {
-      return registeredInfo
+      return registeredInfo;
     }
     if (this._pairX) {
-      registeredInfo.pairX = this._pairX
+      registeredInfo.pairX = this._pairX;
     } else {
-      const pairX = await this._client!.decryptPairX({publicKey: res.publicKey, privateKeyEncrypted: res.privateKeyEncrypted})
-      this._pairX = pairX
-      registeredInfo.pairX = pairX
+      const pairX = await this._client!.decryptPairX({
+        publicKey: res.publicKey,
+        privateKeyEncrypted: res.privateKeyEncrypted,
+      });
+      this._pairX = pairX;
+      registeredInfo.pairX = pairX;
     }
-    return registeredInfo
+    return registeredInfo;
   }
-  
+
   switchClientAdapter(mode: Mode) {
     const nodeUrlHint = this._client!.getCurrentNode().apiUrl;
-    switch(mode) {
+    switch (mode) {
       case ShimmerMode: {
-        const adapter = new ShimmerModeRequestAdapter(this._address!, nodeUrlHint);
-        this._client!.switchAdapter({adapter, mode})
-        return
+        const adapter = new ShimmerModeRequestAdapter(
+          this._address!,
+          nodeUrlHint
+        );
+        this._client!.switchAdapter({ adapter, mode });
+        return;
       }
       case ImpersonationMode: {
         const adapter = new ImpersonationModeRequestAdapter(
           this._address!,
           nodeUrlHint
         );
-        this._client!.switchAdapter({adapter, mode})
-        return
+        this._client!.switchAdapter({ adapter, mode });
+        return;
       }
       case DelegationMode: {
-        const adapter = new DelegationModeRequestAdapter(this._address!, nodeUrlHint, this._dappClient);
-        this._client!.switchAdapter({adapter, mode})
-        return
+        const adapter = new DelegationModeRequestAdapter(
+          this._address!,
+          nodeUrlHint,
+          this._dappClient
+        );
+        this._client!.switchAdapter({ adapter, mode });
+        return;
       }
     }
   }
@@ -901,12 +1013,12 @@ class GroupFiSDKFacade {
 
     // shimmer mode, setup normally
     if (this._mode === ShimmerMode) {
-      this._proxyAddress = this._address
+      this._proxyAddress = this._address;
       this._client!.switchAddress(this._address!);
-    } else if (this._mode === ImpersonationMode){
-      const proxy = await this.getSMRProxyAccount()
+    } else if (this._mode === ImpersonationMode) {
+      const proxy = await this.getSMRProxyAccount();
       if (proxy) {
-        this._proxyAddress = proxy.bech32Address
+        this._proxyAddress = proxy.bech32Address;
       }
     }
     // IotaCatSDKObj.switchMqttAddress(this._address!);
@@ -914,82 +1026,168 @@ class GroupFiSDKFacade {
   }
 
   subscribeToAllTopics() {
-    IotaCatSDKObj.switchMqttAddress(this._address!)
+    IotaCatSDKObj.switchMqttAddress(this._address!);
   }
 
   unsubscribeToAllTopics() {
-    IotaCatSDKObj.unsubscribeToAllTopics()
+    IotaCatSDKObj.unsubscribeToAllTopics();
   }
 
   syncAllTopics(newAllTopics: string[]) {
-    IotaCatSDKObj.syncAllTopics(newAllTopics)
+    IotaCatSDKObj.syncAllTopics(newAllTopics);
   }
 
   setProxyModeInfo(modeInfo: ModeInfo) {
     if (!modeInfo.pairX || !modeInfo.detail) {
-      return
+      return;
     }
-    this._proxyAddress = modeInfo.detail.account
-    this._client!.switchAddress(this._proxyAddress, modeInfo.pairX)
-    this._pairX = modeInfo.pairX
+    this._proxyAddress = modeInfo.detail.account;
+    this._client!.switchAddress(this._proxyAddress, modeInfo.pairX);
+    this._pairX = modeInfo.pairX;
   }
 
-  async registerPairX(modeInfo: ModeInfo) {
-    const pairX = modeInfo.pairX ?? generateSMRPair(); 
+  // register step one
+  async getEncryptionPublicKey() {
+    const adapter = this._client!.getRequestAdapter();
+    return await (adapter as IProxyModeRequestAdapter).getEncryptionPublicKey();
+  }
+
+  // register step two
+  async signaturePairX(
+    encryptionPublicKey: string,
+    pairX: PairX | undefined | null
+  ) {
+    pairX = pairX ?? generateSMRPair();
+    const first32BytesOfPrivateKeyHex = bytesToHex(
+      pairX.privateKey.slice(0, 32)
+    );
+    const encryptedPrivateKeyHex = EthEncrypt({
+      publicKey: encryptionPublicKey,
+      dataTobeEncrypted: first32BytesOfPrivateKeyHex,
+    });
+    const metadataObj = {
+      encryptedPrivateKey: encryptedPrivateKeyHex,
+      pairXPublicKey: bytesToHex(pairX.publicKey, true),
+      evmAddress: this._address!,
+      timestamp: getCurrentEpochInSeconds(),
+      // 1: tp  2: mm
+      scenery: this._mode === DelegationMode ? 2 : 1,
+    };
+
+    const dataTobeSignedStr = [
+      metadataObj.encryptedPrivateKey,
+      metadataObj.evmAddress,
+      metadataObj.pairXPublicKey,
+      metadataObj.scenery,
+      metadataObj.timestamp,
+    ].join('');
+
+    const dataToBeSignedHex = utf8ToHex(dataTobeSignedStr, true);
+
+    const adapter = this._client!.getRequestAdapter();
+
+    const signature = await (adapter as IProxyModeRequestAdapter).ethSign({
+      dataToBeSignedHex,
+    });
+
+    const metadataObjWithSignature = { ...metadataObj, signature };
+
+    return {
+      pairX,
+      metadataObjWithSignature,
+    };
+  }
+
+  async registerPairX(params: {
+    metadataObjWithSignature: Object;
+    pairX: PairX;
+  }) {
+    const { pairX, metadataObjWithSignature } = params;
+    const adapter = this._client!.getRequestAdapter();
     if (this._mode === ImpersonationMode) {
-      const adapter = this._client!.getRequestAdapter()  as ImpersonationModeRequestAdapter
-      const {bech32Address} = await adapter.getProxyAccount();
+      const { bech32Address } = await (
+        adapter as ImpersonationModeRequestAdapter
+      ).getProxyAccount();
       await this._client!.switchAddress(bech32Address, pairX);
       await this._client!.registerTanglePayPairX({
-        evmAddress: this._address!,
         pairX,
+        metadataObjWithSignature,
       });
-      this._pairX = pairX
-      // import smr proxy account after registering pairX
-      adapter.importProxyAccount()
+      this._pairX = pairX;
+      (adapter as ImpersonationModeRequestAdapter).importProxyAccount();
     } else if (this._mode === DelegationMode) {
-      const adapter = this._client!.getRequestAdapter()  as DelegationModeRequestAdapter
-      const smrAddress = await adapter.registerPairX({pairX})
+      const smrAddress = await (adapter as DelegationModeRequestAdapter).registerPairX(metadataObjWithSignature)
       this._proxyAddress = smrAddress
       this._pairX = pairX
     }
   }
 
-  async getSMRProxyAccount(): Promise<{bech32Address: string, hexAddress: string} | undefined> {
+  // register step three
+  // async sendRegister(metadataObjWithSignature: Object) {
+  //   const body = JSON.stringify(metadataObjWithSignature);
+  //   // const res = await auxiliaryService.register(body);
+  // }
+
+  // async registerPairX(modeInfo: ModeInfo) {
+  //   const pairX = modeInfo.pairX ?? generateSMRPair();
+  //   if (this._mode === ImpersonationMode) {
+  //     const adapter = this._client!.getRequestAdapter()  as ImpersonationModeRequestAdapter
+  //     const {bech32Address} = await adapter.getProxyAccount();
+  //     await this._client!.switchAddress(bech32Address, pairX);
+  //     await this._client!.registerTanglePayPairX({
+  //       evmAddress: this._address!,
+  //       pairX,
+  //     });
+  //     this._pairX = pairX
+  //     // import smr proxy account after registering pairX
+  //     adapter.importProxyAccount()
+  //   } else if (this._mode === DelegationMode) {
+  //     const adapter = this._client!.getRequestAdapter()  as DelegationModeRequestAdapter
+  //     const smrAddress = await adapter.registerPairX({pairX})
+  //     this._proxyAddress = smrAddress
+  //     this._pairX = pairX
+  //   }
+  // }
+
+  async getSMRProxyAccount(): Promise<
+    { bech32Address: string; hexAddress: string } | undefined
+  > {
     if (this._mode !== ImpersonationMode) {
-      return
+      return;
     }
-    const adapter = this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter
-    return await adapter.getProxyAccount()
+    const adapter =
+      this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter;
+    return await adapter.getProxyAccount();
   }
 
   async importSMRProxyAccount() {
-    const adapter = this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter
-    return await adapter.importProxyAccount()
+    const adapter =
+      this._client!.getRequestAdapter() as ImpersonationModeRequestAdapter;
+    return await adapter.importProxyAccount();
   }
 
   clearAddress() {
     this._muteMap = undefined;
-    this._pairX = undefined
-    this._proxyAddress = undefined
+    this._pairX = undefined;
+    this._proxyAddress = undefined;
   }
 
   getTPMode(nodeId: number): Mode {
     if (nodeId === TP_SHIMMER_MAINNET_ID) {
       return ShimmerMode;
     }
-    return ImpersonationMode
+    return ImpersonationMode;
   }
 
   connectMetaMaskAccount(metaMaskAccountFromDapp: string) {
-    this._mode = DelegationMode
-    this._address = metaMaskAccountFromDapp
-    this._nodeId = undefined
+    this._mode = DelegationMode;
+    this._address = metaMaskAccountFromDapp;
+    this._nodeId = undefined;
 
-    return {mode: this._mode, address: this._address}
+    return { mode: this._mode, address: this._address };
   }
 
-  async connectMetaMaskWallet(): Promise<{address: string, mode: Mode}> {
+  async connectMetaMaskWallet(): Promise<{ address: string; mode: Mode }> {
     return new Promise((resolve, reject) => {
       if (typeof window.ethereum === undefined) {
         reject({
@@ -1005,27 +1203,27 @@ class GroupFiSDKFacade {
                 name: 'MetaMaskConnectFailed',
               });
             })) as string[];
-          console.log('trollbox connect metamask wallet accounts', accounts)
+          console.log('trollbox connect metamask wallet accounts', accounts);
           const rawAccount = accounts[0];
-          
-          if (!rawAccount) {
-            throw new Error()
-          }
-          
-          // Uniformly convert EVM addresses to lowercase
-          const account = rawAccount.toLowerCase()
 
-          this._mode = DelegationMode
-          this._address = account
-          this._nodeId = undefined
+          if (!rawAccount) {
+            throw new Error();
+          }
+
+          // Uniformly convert EVM addresses to lowercase
+          const account = rawAccount.toLowerCase();
+
+          this._mode = DelegationMode;
+          this._address = account;
+          this._nodeId = undefined;
           resolve({
             mode: this._mode,
             address: this._address,
-          })
-        }catch(err) {
+          });
+        } catch (err) {
           reject({
             name: 'MetaMaskConnectFailed',
-          })
+          });
         }
       };
       connect();
@@ -1052,12 +1250,12 @@ class GroupFiSDKFacade {
             })) as { address: string; nodeId: number };
 
             // Uniformly convert EVM addresses to lowercase
-            res.address = res.address.toLowerCase()
+            res.address = res.address.toLowerCase();
 
             console.log('===>iota connect', res);
             this._lastTimeSdkRequestResultReceived = Date.now();
             this._address = res.address;
-            this._nodeId = res.nodeId
+            this._nodeId = res.nodeId;
             const mode = this.getTPMode(res.nodeId);
             this._mode = mode;
             resolve({
@@ -1096,10 +1294,12 @@ class GroupFiSDKFacade {
 
   async voteGroup(groupId: string, vote: number) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
-    const res = (await this._client!.voteGroup(groupId, vote, this._address!)) as
-      | TransactionRes
-      | undefined;
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    const res = (await this._client!.voteGroup(
+      groupId,
+      vote,
+      this._address!
+    )) as TransactionRes | undefined;
     if (res === undefined) {
       throw new Error('voteGruop res');
     }
@@ -1109,7 +1309,7 @@ class GroupFiSDKFacade {
 
   async unvoteGroup(groupId: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
     const res = (await this._client!.unvoteGroup(groupId, this._address!)) as
       | TransactionRes
       | undefined;
@@ -1132,9 +1332,11 @@ class GroupFiSDKFacade {
     return allUserGroup;
   }
   async getGroupVoteRes(groupId: string) {
-    this._ensureWalletConnected()
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
-    const allGroupVotes = (await this._client!.getAllGroupVotes(this._address!)) as Array<{
+    this._ensureWalletConnected();
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    const allGroupVotes = (await this._client!.getAllGroupVotes(
+      this._address!
+    )) as Array<{
       groupId: string;
       vote: number;
     }>;
@@ -1143,11 +1345,12 @@ class GroupFiSDKFacade {
   }
 
   async markGroup(groupId: string) {
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
     this._ensureWalletConnected();
-    const res = (await this._client!.markGroup({ groupId, userAddress: this._address! })) as
-      | TransactionRes
-      | undefined;
+    const res = (await this._client!.markGroup({
+      groupId,
+      userAddress: this._address!,
+    })) as TransactionRes | undefined;
     return res;
   }
 
@@ -1162,7 +1365,7 @@ class GroupFiSDKFacade {
     memberList: { addr: string; publicKey: string }[];
     qualifyList?: { addr: string; publicKey: string }[];
   }) {
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
     this._ensureWalletConnected();
     const isAlreadyInMemberList = memberList.find(
       (o) => o.addr === this._address!
@@ -1172,18 +1375,25 @@ class GroupFiSDKFacade {
       // TODO
       publicKey = this._client!.getPairXPublicKey()!;
     }
-    const memberSelf = { addr: this._address!, publicKey }
+    const memberSelf = { addr: this._address!, publicKey };
     memberList.push(memberSelf);
-    const res = (await this._client!.markGroup({ groupId, memberList, userAddress: this._address!,memberSelf,qualifyList })) as
-      | TransactionRes
-      | undefined;
+    const res = (await this._client!.markGroup({
+      groupId,
+      memberList,
+      userAddress: this._address!,
+      memberSelf,
+      qualifyList,
+    })) as TransactionRes | undefined;
     return res;
   }
-// getGroupEvmQualifiedList
+  // getGroupEvmQualifiedList
   async getGroupEvmQualifiedList(groupId: string) {
     this._ensureWalletConnected();
-    const memberSelf = { addr: this._address!, publicKey:this._client!.getPairXPublicKey()! }
-    return await this._client!.getEvmQualifyList(groupId,memberSelf)
+    const memberSelf = {
+      addr: this._address!,
+      publicKey: this._client!.getPairXPublicKey()!,
+    };
+    return await this._client!.getEvmQualifyList(groupId, memberSelf);
   }
   // sendAdHocOutput
   async sendAdHocOutput(output: IBasicOutput) {
@@ -1193,15 +1403,19 @@ class GroupFiSDKFacade {
   // getPluginGroupEvmQualifiedList
   async getPluginGroupEvmQualifiedList(groupId: string) {
     this._ensureWalletConnected();
-    return await this._client!.getPluginEvmQualifyList(groupId)
+    return await this._client!.getPluginEvmQualifyList(groupId);
   }
   // async _getEvmQualify(groupId:string,addressList:string[],signature:string):Promise<IBasicOutput>{
-    async getEvmQualify(groupId: string, addressList: string[], signature: string) : Promise<IBasicOutput> {
+  async getEvmQualify(
+    groupId: string,
+    addressList: string[],
+    signature: string
+  ): Promise<IBasicOutput> {
     this._ensureWalletConnected();
-    return await this._client!._getEvmQualify(groupId, addressList, signature)
+    return await this._client!._getEvmQualify(groupId, addressList, signature);
   }
   async leaveOrUnMarkGroup(groupId: string) {
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
     this._ensureWalletConnected();
     const res = (await this._client!.unmarkGroup(groupId, this._address!)) as
       | TransactionRes
@@ -1215,16 +1429,16 @@ class GroupFiSDKFacade {
     return this._address!;
   }
   getCurrentNodeId() {
-    return this._nodeId
+    return this._nodeId;
   }
   getCurrentMode() {
     return this._mode;
   }
   async isQualified(groupId: string) {
     this._ensureWalletConnected();
-    const isEvm = this._isEvm()
+    const isEvm = this._isEvm();
     if (isEvm) {
-      return await this._isEvmQualified(groupId)
+      return await this._isEvmQualified(groupId);
     }
     const ipfsOrigins = await IotaCatSDKObj.fetchIpfsOrigins(this._address!);
     const qualifiedGroups = await IotaCatSDKObj.fetchAddressQualifiedGroups(
@@ -1237,8 +1451,8 @@ class GroupFiSDKFacade {
     );
   }
   async _isEvmQualified(groupId: string) {
-    const address = this._address!
-    return await IotaCatSDKObj.isEvmAddressQualifiedForGroup(address, groupId)
+    const address = this._address!;
+    return await IotaCatSDKObj.isEvmAddressQualifiedForGroup(address, groupId);
   }
 
   // _addHexPrefixIfAbsent
@@ -1354,8 +1568,10 @@ class GroupFiSDKFacade {
 
   async muteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
-    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(IotaCatSDKObj._sha256Hash(memberAddress))
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
+      IotaCatSDKObj._sha256Hash(memberAddress)
+    );
     // call client muteGroupMember(groupId, addrHash)
     const muteGroupMemberRes = (await this._client!.muteGroupMember(
       groupId,
@@ -1370,8 +1586,10 @@ class GroupFiSDKFacade {
 
   async unMuteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
-    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(IotaCatSDKObj._sha256Hash(memberAddress))
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
+      IotaCatSDKObj._sha256Hash(memberAddress)
+    );
 
     // call client unmuteGroupMember(groupId, addrHash)
     const unmuteGroupMemberRes = (await this._client!.unmuteGroupMember(
@@ -1450,7 +1668,9 @@ class GroupFiSDKFacade {
 
     // call client getAllUserMuteGroupMembers(groupId)
     const AllUserMuteGroupMembers =
-      (await this._client!.getAllUserMuteGroupMembers(this._address!)) as IMUserMuteGroupMember[];
+      (await this._client!.getAllUserMuteGroupMembers(
+        this._address!
+      )) as IMUserMuteGroupMember[];
     this._lastTimeSdkRequestResultReceived = Date.now();
     return AllUserMuteGroupMembers;
   }
