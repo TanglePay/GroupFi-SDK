@@ -515,7 +515,12 @@ class IotaCatSDK {
 // fetch address marked group configs
     async fetchAddressMarkedGroupConfigs(address:string):Promise<GroupConfig[]>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/markedgroupconfigs?address=${address}`
-        const res = await fetch(url)
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
         const json = await res.json()
         return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group))
     }

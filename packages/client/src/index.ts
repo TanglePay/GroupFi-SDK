@@ -2199,77 +2199,31 @@ export class GroupfiSdkClient {
         }
     }
 
-    async registerTanglePayPairX(params: {evmAddress: string, pairX: PairX}) {
-        const {pairX, evmAddress} = params
-        const pairXNftOutput = await this.createPairXNftOutput(evmAddress, pairX)
+    async registerTanglePayPairX(params: {
+        pairX: PairX,
+        metadataObjWithSignature: Object
+    }) {
+        const { metadataObjWithSignature, pairX } = params
+        const pairXNftOutput = await this.createPairXNftOutput(metadataObjWithSignature)
         const res = await this._sendBasicOutput([pairXNftOutput])
         console.log('===> registerTanglePayPairX res', res)
         this._pairX = pairX
     }
-    async createPairXNftOutput(evmAddress: string, pairX: PairX) {
-        if (!this._requestAdapter) {
-            throw new Error('request dapter is undefined')
-        }
 
-        const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
-
-        const encryptionPublicKey = await proxyModeRequestAdapter.getEncryptionPublicKey()
-
-        const test = pairX.privateKey
-        const test111 = test.slice(0,32)
-
-        console.log('===> test', test)
-        console.log('===> test111', test111)
-
-        // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
-        // only the first 32 bytes can be encrypted
-        const first32BytesOfPrivateKeyHex = Converter.bytesToHex(pairX.privateKey.slice(0, 32))
-        console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
-
-        const encryptedPrivateKeyHex = EthEncrypt({
-            publicKey: encryptionPublicKey,
-            dataTobeEncrypted: first32BytesOfPrivateKeyHex
-        })
-
-        console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
+    // async registerTanglePayPairX(params: {evmAddress: string, pairX: PairX}) {
+    //     const {pairX, evmAddress} = params
+    //     const pairXNftOutput = await this.createPairXNftOutput(evmAddress, pairX)
+    //     const res = await this._sendBasicOutput([pairXNftOutput])
+    //     console.log('===> registerTanglePayPairX res', res)
+    //     this._pairX = pairX
+    // }
+    async createPairXNftOutput(metadataObjWithSignature: Object) {
+        const metadata = Converter.utf8ToHex(JSON.stringify(metadataObjWithSignature), true)
 
         const tagFeature: ITagFeature = {
             type: 3,
             tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
         };
-
-        const metadataObj = {
-            encryptedPrivateKey: encryptedPrivateKeyHex,
-            pairXPublicKey: Converter.bytesToHex(pairX.publicKey, true),
-            evmAddress: evmAddress,
-            timestamp: getCurrentEpochInSeconds(),
-            // 1: tp  2: mm
-            scenery: 1
-        }
-            
-        console.log('===> metadataObj', metadataObj)
-
-        const dataTobeSignedStr = [
-            metadataObj.encryptedPrivateKey,
-            metadataObj.evmAddress,
-            metadataObj.pairXPublicKey,
-            metadataObj.scenery,
-            metadataObj.timestamp
-        ].join('')
-
-        console.log('===> dataToBeSignedStr', dataTobeSignedStr)
-
-        const dataToBeSignedHex = Converter.utf8ToHex(dataTobeSignedStr, true)
-        const signature = await proxyModeRequestAdapter.ethSign({dataToBeSignedHex})
-
-        console.log('===> signature', signature)
-
-        const metadata = Converter.utf8ToHex(JSON.stringify({
-            ...metadataObj,
-            signature,
-        }), true)
-
-        console.log('===> metadata final', metadata)
 
         const collectionOutput: INftOutput = {
             type: NFT_OUTPUT_TYPE,
@@ -2305,5 +2259,98 @@ export class GroupfiSdkClient {
         };
         return collectionOutput
     }
+    // async createPairXNftOutput(evmAddress: string, pairX: PairX) {
+    //     if (!this._requestAdapter) {
+    //         throw new Error('request dapter is undefined')
+    //     }
+
+    //     const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
+
+    //     const encryptionPublicKey = await proxyModeRequestAdapter.getEncryptionPublicKey()
+
+    //     // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
+    //     // only the first 32 bytes can be encrypted
+    //     const first32BytesOfPrivateKeyHex = Converter.bytesToHex(pairX.privateKey.slice(0, 32))
+    //     console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
+
+    //     const encryptedPrivateKeyHex = EthEncrypt({
+    //         publicKey: encryptionPublicKey,
+    //         dataTobeEncrypted: first32BytesOfPrivateKeyHex
+    //     })
+
+    //     console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
+
+    //     const tagFeature: ITagFeature = {
+    //         type: 3,
+    //         tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
+    //     };
+
+    //     const metadataObj = {
+    //         encryptedPrivateKey: encryptedPrivateKeyHex,
+    //         pairXPublicKey: Converter.bytesToHex(pairX.publicKey, true),
+    //         evmAddress: evmAddress,
+    //         timestamp: getCurrentEpochInSeconds(),
+    //         // 1: tp  2: mm
+    //         scenery: 1
+    //     }
+            
+    //     console.log('===> metadataObj', metadataObj)
+
+    //     const dataTobeSignedStr = [
+    //         metadataObj.encryptedPrivateKey,
+    //         metadataObj.evmAddress,
+    //         metadataObj.pairXPublicKey,
+    //         metadataObj.scenery,
+    //         metadataObj.timestamp
+    //     ].join('')
+
+    //     console.log('===> dataToBeSignedStr', dataTobeSignedStr)
+
+    //     const dataToBeSignedHex = Converter.utf8ToHex(dataTobeSignedStr, true)
+    //     const signature = await proxyModeRequestAdapter.ethSign({dataToBeSignedHex})
+
+    //     console.log('===> signature', signature)
+
+    //     const metadata = Converter.utf8ToHex(JSON.stringify({
+    //         ...metadataObj,
+    //         signature,
+    //     }), true)
+
+    //     console.log('===> metadata final', metadata)
+
+    //     const collectionOutput: INftOutput = {
+    //         type: NFT_OUTPUT_TYPE,
+    //         amount: '',
+    //         nativeTokens: [],
+    //         nftId:
+    //             '0x0000000000000000000000000000000000000000000000000000000000000000',
+    //         unlockConditions: [
+    //             {
+    //                 type: ADDRESS_UNLOCK_CONDITION_TYPE,
+    //                 address: {
+    //                     type: ED25519_ADDRESS_TYPE,
+    //                     pubKeyHash: this._accountHexAddress!
+    //                 }
+    //             }
+    //         ],
+    //         features: [
+    //             tagFeature
+    //         ],
+    //         immutableFeatures: [
+    //             {
+    //             type: ISSUER_FEATURE_TYPE,
+    //             address: {
+    //                 type: ED25519_ADDRESS_TYPE,
+    //                 pubKeyHash: this._accountHexAddress!
+    //             },
+    //             },
+    //             {
+    //             type: METADATA_FEATURE_TYPE,
+    //             data: metadata
+    //             },
+    //         ],
+    //     };
+    //     return collectionOutput
+    // }
 }
 
