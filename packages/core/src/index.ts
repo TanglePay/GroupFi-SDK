@@ -37,7 +37,7 @@ class IotaCatSDK {
     }
     _groupIdToGroupMeta(groupId:string):MessageGroupMeta|undefined{
         // log enter
-        console.log('_groupIdToGroupMeta enter',groupId)
+        console.log('_groupIdToGroupMeta enter',groupId, this._groupConfigMap)
         for (const group in this._groupConfigMap) {
             const meta = this._groupConfigMap[group]
             const groupId_ = this._groupMetaToGroupId(meta)
@@ -71,7 +71,8 @@ class IotaCatSDK {
         return this._sha256Hash(address)
     }
     _sha256Hash(str:string):string{
-        return CryptoJS.SHA256(str).toString(CryptoJS.enc.Hex)
+        const hash = CryptoJS.SHA256(str).toString(CryptoJS.enc.Hex)
+        return this._addHexPrefixIfAbsent(hash)
     }
     _groupIdToGroupMembers(groupId:string):string[]{
         return this._groupIdCache[groupId] || []
@@ -508,7 +509,8 @@ class IotaCatSDK {
             const json = await res.json() as MessageGroupMetaPlus[];
             const resultList = this._ensureList(json);
             const groupConfig = resultList.reduce((acc, group) => {
-                acc[group.groupName] = group;
+                const {isPublic,...config} = group
+                acc[group.groupName] = config;
                 return acc;
             }, {} as Record<string, MessageGroupMeta>);
             // merge groupConfig with this._groupConfigMap
