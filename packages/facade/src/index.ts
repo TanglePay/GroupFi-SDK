@@ -843,7 +843,6 @@ class GroupFiSDKFacade {
 
   // fetchForMeGroupConfigs
   async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}) {
-    this._ensureWalletConnected();
     const res = await IotaCatSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})
     return res
   }
@@ -861,6 +860,11 @@ class GroupFiSDKFacade {
 
   setDappClient(dappClient: any) {
     this._dappClient = dappClient;
+  }
+
+  async browseModeSetupClient() {
+    this._client = new GroupfiSdkClient();
+    await this._client!.setup();
   }
 
   async bootstrap(
@@ -1510,7 +1514,6 @@ class GroupFiSDKFacade {
   }
 
   async isGroupPublic(groupId: string) {
-    this._ensureWalletConnected();
     return await IotaCatSDKObj.checkIsGroupPublicFromSharedApiCall(groupId!);
   }
 
@@ -1682,7 +1685,6 @@ class GroupFiSDKFacade {
     endToken?: string,
     size = 10
   ) {
-    this._ensureWalletConnected();
     const res = await IotaCatSDKObj.fetchPublicMessageOutputList(
       groupId,
       direction,
