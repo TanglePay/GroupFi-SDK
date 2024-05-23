@@ -1429,8 +1429,7 @@ class GroupFiSDKFacade {
 
   // get current address
   getCurrentAddress() {
-    this._ensureWalletConnected();
-    return this._address!;
+    return this._address ?? '';
   }
   getCurrentNodeId() {
     return this._nodeId;
