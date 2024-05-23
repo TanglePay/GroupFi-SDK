@@ -938,7 +938,7 @@ export class GroupfiSdkClient {
         if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
     }
     _ensureWalletInited(){
-        if (!this._accountHexAddress || !this._accountBech32Address) throw new Error('Wallet not initialized')
+        // if (!this._accountHexAddress || !this._accountBech32Address) throw new Error('Wallet not initialized')
     }
     _ensureStorageInited(){
         if (!this._storage) throw new Error('Storage not initialized')
