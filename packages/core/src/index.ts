@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -492,44 +492,54 @@ class IotaCatSDK {
     }
     // fetch for me group configs
     async fetchForMeGroupConfigs({address, includes, excludes}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfigPlus[]> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/formegroupconfigs?address=${address}`
-        const body = {
-            includes,
-            excludes
-        };
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        });
-        const json = await res.json() as {MessageGroupMeta: MessageGroupMeta, isPublic: boolean}[];
-        const resultList = this._ensureList(json);
-        const configList = resultList.map(group => group.MessageGroupMeta);
-        const groupConfig = configList.reduce((acc, group) => {
-            acc[group.groupName] = group;
-            return acc;
-        }, {} as Record<string, MessageGroupMeta>);
-        // merge groupConfig with this._groupConfigMap
-        this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
-        const configPlusList = resultList.map(group => {
-            const config = this._messageGroupMetaToGroupConfig(group.MessageGroupMeta);
-            return {...config, isPublic: group.isPublic};
-        })
-        return configPlusList;
+        try {
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/formegroupconfigs?address=${address}`
+            const body = {
+                includes,
+                excludes
+            };
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+            const json = await res.json() as MessageGroupMetaPlus[];
+            const resultList = this._ensureList(json);
+            const groupConfig = resultList.reduce((acc, group) => {
+                acc[group.groupName] = group;
+                return acc;
+            }, {} as Record<string, MessageGroupMeta>);
+            // merge groupConfig with this._groupConfigMap
+            this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
+            const configPlusList = resultList.map(group => {
+                const {isPublic, ...meta} = group;
+                const config = this._messageGroupMetaToGroupConfig(meta);
+                return {...config, isPublic};
+            })
+            return configPlusList;
+        } catch (error) {
+            console.log('fetchForMeGroupConfigs error',error)
+            throw error
+        }
     }
 // fetch address marked group configs
     async fetchAddressMarkedGroupConfigs(address:string):Promise<GroupConfig[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/markedgroupconfigs?address=${address}`
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-        const json = await res.json()
-        return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group))
+        try {
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/markedgroupconfigs?address=${address}`
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            const json = await res.json()
+            return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group))
+        } catch (error) {
+            console.log('fetchAddressMarkedGroupConfigs error',error)
+            throw error
+        }
     }
     async fetchAddressPairX(evmAddress: string) {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addresspairx?address=${evmAddress}`
