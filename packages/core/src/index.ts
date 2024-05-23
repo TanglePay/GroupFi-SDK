@@ -291,7 +291,8 @@ class IotaCatSDK {
     }
     // fetch marked addresses for a group, /groupmarkedaddresses
     async fetchGroupMarkedAddresses(groupId:string):Promise<string[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmarkedaddresses?groupId=0x${groupId}`
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmarkedaddresses?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -316,7 +317,8 @@ class IotaCatSDK {
     }
     // fetch group votes for a group, /groupvotes
     async fetchGroupVotes(groupId:string):Promise<{groupId:string,addressSha256Hash:string,vote:number}>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotes?groupId=0x${groupId}`
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotes?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -328,7 +330,8 @@ class IotaCatSDK {
         privateCount: number;
         memberCount: number;
     }>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotescount?groupId=0x${groupId}`
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotescount?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -352,7 +355,8 @@ class IotaCatSDK {
     }
     // fetch group blacklist for a group, /groupblacklist
     async fetchGroupBlacklist(groupId:string):Promise<string[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupblacklist?groupId=0x${groupId}`
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupblacklist?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -382,7 +386,8 @@ class IotaCatSDK {
     }
     // RouteGroupUserReputation = "/groupuserreputation"
     async fetchGroupUserReputation(groupId:string):Promise<IGroupUserReputation[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupuserreputation?groupId=0x${groupId}`
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupuserreputation?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -390,7 +395,8 @@ class IotaCatSDK {
 
     // RouteUserGroupReputation = "/usergroupreputation"
     async fetchUserGroupReputation(groupId:string,address:string):Promise<IGroupUserReputation>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/usergroupreputation?address=${address}&groupId=0x${groupId}`
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/usergroupreputation?address=${address}&groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -421,7 +427,8 @@ class IotaCatSDK {
     }
     // get shared output id for a group
     async fetchSharedOutputId(groupId:string):Promise<{outputId:string}>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${prefixedGroupId}`
         try {
             const res = await fetch(url)
             const json = await res.json() as {outputId:string}
