@@ -470,7 +470,8 @@ export class GroupfiSdkClient {
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
         //TODO try inx plugin 
         try {
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nftswithpublickey?groupId=0x${groupId}`
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nftswithpublickey?groupId=${prefixedGroupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
             {
@@ -499,7 +500,8 @@ export class GroupfiSdkClient {
     }
     async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
         try {
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${prefixedGroupId}`
             try {
                 // @ts-ignore
                 const res = await fetch(url,{
@@ -1755,7 +1757,8 @@ export class GroupfiSdkClient {
     }
     async fetchMessageListFrom(groupId:string, address:string, coninuationToken?:string, limit:number=10) {
         try {
-            const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages${paramStr}`
             // @ts-ignore
@@ -1785,7 +1788,9 @@ export class GroupfiSdkClient {
     // fetchMessageListUntil
     async fetchMessageListUntil(groupId:string, address:string, coninuationToken:string, limit:number=10) {
         try {
-            const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            
+            const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages/until${paramStr}`
             // @ts-ignore
