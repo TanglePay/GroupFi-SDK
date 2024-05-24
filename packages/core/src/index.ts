@@ -185,10 +185,14 @@ class IotaCatSDK {
     // sync topics
     syncAllTopics(newTopics:string[]){
         const previousTopics = Array.from(this._subscribedTopics)
-        const shouldSubscribe = newTopics.filter(topic=>!previousTopics.includes(topic))
-        this._subscribeToTopics(shouldSubscribe)
         const shouldUnsubscribe = previousTopics.filter(topic=>!newTopics.includes(topic))
+        // log shouldUnsubscribe
+        console.log('syncAllTopics shouldUnsubscribe',shouldUnsubscribe)
         this._unsubscribeToTopics(shouldUnsubscribe)
+        const shouldSubscribe = newTopics.filter(topic=>!previousTopics.includes(topic))
+        // log shouldSubscribe
+        console.log('syncAllTopics shouldSubscribe',shouldSubscribe)
+        this._subscribeToTopics(shouldSubscribe)
     }
 
     // unsubscribe to a topic
@@ -537,6 +541,12 @@ class IotaCatSDK {
                 }
             })
             const json = await res.json()
+            const groupConfig = json.reduce((acc:Record<string, MessageGroupMeta>, group:MessageGroupMeta) => {
+                acc[group.groupName] = group;
+                return acc;
+            }, {} as Record<string, MessageGroupMeta>);
+            // merge groupConfig with this._groupConfigMap
+            this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
             return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group))
         } catch (error) {
             console.log('fetchAddressMarkedGroupConfigs error',error)
@@ -973,28 +983,33 @@ class IotaCatSDK {
         return addressList.length > 0
     }
     _prepareEvmFilterPayload(addresses:string[], groupId:string) {
-        const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
-        let filterParam = {
-            addresses,
-            chain:groupConfig.chainId,
-            contract:'',
-            erc:20 as 20|721,
-            ts:getCurrentEpochInSeconds()
+        try {
+            const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
+            let filterParam = {
+                addresses,
+                chain:groupConfig.chainId,
+                contract:'',
+                erc:20 as 20|721,
+                ts:getCurrentEpochInSeconds()
+            }
+            if (groupConfig.qualifyType === 'nft'){
+                filterParam = Object.assign(filterParam,{
+                    contract:groupConfig.collectionId,
+                    erc:721
+                })
+            } else {
+                const thresInt = parseInt(groupConfig.tokenThres)
+                filterParam = Object.assign(filterParam,{
+                    contract:groupConfig.tokenId,
+                    erc:20,
+                    threshold: thresInt
+                })
+            }
+            return filterParam
+        } catch (error) {
+            console.log('_prepareEvmFilterPayload error',error)
+            throw error
         }
-        if (groupConfig.qualifyType === 'nft'){
-            filterParam = Object.assign(filterParam,{
-                contract:groupConfig.collectionId,
-                erc:721
-            })
-        } else {
-            const thresInt = parseInt(groupConfig.tokenThres)
-            filterParam = Object.assign(filterParam,{
-                contract:groupConfig.tokenId,
-                erc:20,
-                threshold: thresInt
-            })
-        }
-        return filterParam
     }
 
 
