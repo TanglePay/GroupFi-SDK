@@ -844,7 +844,36 @@ class GroupFiSDKFacade {
   // fetchForMeGroupConfigs
   async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}) {
     const res = await IotaCatSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})
-    return res
+    if (!this._address) {
+      return res
+    }
+    const isEvm = this._isEvm();
+    let configs = res
+    if (isEvm) {
+      configs = configs.filter(({ chainId }) => chainId != 0);
+    } else {
+      // Actually, there is no need to write the logic.
+      // To fix test bug
+      configs = configs.filter(({ chainId }) => chainId == 0);
+    }
+
+    if (!isEvm) {
+      return configs
+    }
+
+    const evmQualifiedConfigs = [];
+    for (const config of configs) {
+      if (config.isPublic) {
+        evmQualifiedConfigs.push(config);
+        continue
+      }
+      const isOk = await this.filterEvmGroups(config.groupId);
+      if (isOk) {
+        evmQualifiedConfigs.push(config);
+      }
+    }
+
+    return evmQualifiedConfigs;
   }
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
