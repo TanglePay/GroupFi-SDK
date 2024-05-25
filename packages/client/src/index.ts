@@ -60,6 +60,7 @@ export { AddressMappingStore }
 //TODO tune concurrency
 const httpCallLimit = 5;
 const consolidateBatchSize = 29;
+const cashSplitNums = 4;
 setIotaCrypto({
     Bip39,
     Ed25519,
@@ -305,7 +306,7 @@ export class GroupfiSdkClient {
             let amount = outputs.reduce((acc,output)=>acc.add(bigInt(output.output.amount)),bigInt(0))
             // log amount
             console.log('amount', amount);
-            const amountPerOutput = amount.divide(3)
+            const amountPerOutput = amount.divide(cashSplitNums)
             const outputsToSend:IBasicOutput[] = []
             outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
             amount = amount.subtract(amountPerOutput)
