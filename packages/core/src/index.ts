@@ -540,14 +540,15 @@ class IotaCatSDK {
                     'Content-Type': 'application/json'
                 }
             })
-            const json = await res.json()
+            let json = await res.json()
+            json = this._ensureList(json)
             const groupConfig = json.reduce((acc:Record<string, MessageGroupMeta>, group:MessageGroupMeta) => {
                 acc[group.groupName] = group;
                 return acc;
             }, {} as Record<string, MessageGroupMeta>);
             // merge groupConfig with this._groupConfigMap
             this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
-            return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group))
+            return json.map((group:MessageGroupMeta) => this._messageGroupMetaToGroupConfig(group))
         } catch (error) {
             console.log('fetchAddressMarkedGroupConfigs error',error)
             throw error
@@ -567,6 +568,13 @@ class IotaCatSDK {
             mmProxyAddress: string
             tpProxyAddress: string 
         } | null
+        return json
+    }
+
+    async fetchTokenTotalBalance(token: string, chainId: number): Promise<{TotalSupply:string,Decimals: number}> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/tokentotalbalance?token=${token}&chainId=${chainId}`
+        const res = await fetch(url)
+        const json = await res.json()
         return json
     }
 

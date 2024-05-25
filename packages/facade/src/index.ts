@@ -721,6 +721,10 @@ class GroupFiSDKFacade {
     const balance = await IotaCatSDKObj.fetchAddressBalance(addr);
     return balance ?? 0;
   }
+  async fetchTokenTotalBalance(token: string, chainId: number) {
+    const totalBalance = await IotaCatSDKObj.fetchTokenTotalBalance(token, chainId)
+    return totalBalance
+  }
   _ensureWalletConnected() {
     if (!this._address) {
       throw new Error('Wallet not connected.');
