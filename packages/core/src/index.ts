@@ -571,6 +571,13 @@ class IotaCatSDK {
         return json
     }
 
+    async fetchTokenTotalBalance(token: string, chainId: number): Promise<{TotalSupply:string,Decimals: number}> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/tokentotalbalance?token=${token}&chainId=${chainId}`
+        const res = await fetch(url)
+        const json = await res.json()
+        return json
+    }
+
     // addressbalance
     async fetchAddressBalance(address:string):Promise<number>{
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressbalance?address=${address}`
