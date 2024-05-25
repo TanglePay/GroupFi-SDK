@@ -470,7 +470,8 @@ export class GroupfiSdkClient {
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
         //TODO try inx plugin 
         try {
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nftswithpublickey?groupId=0x${groupId}`
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nftswithpublickey?groupId=${prefixedGroupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
             {
@@ -499,7 +500,8 @@ export class GroupfiSdkClient {
     }
     async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
         try {
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=0x${groupId}`
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${prefixedGroupId}`
             try {
                 // @ts-ignore
                 const res = await fetch(url,{
@@ -569,56 +571,16 @@ export class GroupfiSdkClient {
             return {outputId}
         } 
     }
-    //ensure group have shared output, if not create one
-    async ensureGroupHaveSharedOutput(groupId:string){
-        this._ensureClientInited()
-        try {
-            // log entering
-            console.log('ensureGroupHaveSharedOutput', groupId);
-            const res = await this._getSharedOutputIdForGroupFromInxApi(groupId)
-            // log res
-            console.log('ensureGroupHaveSharedOutput InxApi res', res);
-            let isMake = false
-            if (!res) {
-                isMake = true    
-            } else {
-                const {outputId} = res
-                try {
-                    const output = await this._client!.output(outputId)
-                    // log output
-                    console.log('ensureGroupHaveSharedOutput output', output);
-                    if (!output) {
-                        isMake = true
-                    }
-                } catch (error) {
-                    if (error instanceof ClientError) {
-                        if (error.httpStatus === 404) {
-                            isMake = true
-                        }
-                    }
-                }
-            }
-            if (isMake) {
-                // log make shared output
-                console.log('ensureGroupHaveSharedOutput make shared output', groupId);
-                const res = await this._makeSharedOutputForGroup({groupId})
-                if (!res) return
-                const {outputs} = res
-                const {blockId,outputId} = await this._sendBasicOutput(outputs);
-                return {outputId,outputs};
-            }
-
-        } catch (error) {
-            if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
-                console.log('GroupMemberTooMany,public for now', error);
-            } else {
-                throw error
-            }
+    
+    _getMemberSelfFromAddress(address:string):{addr:string,publicKey:string}|undefined{
+        const pairXPublicKey = this.getPairXPublicKey()
+        if (pairXPublicKey) {
+            return {addr:address,publicKey:pairXPublicKey}
         }
-        return {message:'ok'}
     }
     async _getSaltForGroup(groupId:string, address:string,memberList?:{addr:string,publicKey:string}[]):Promise<{salt:string, outputId?:string, outputs?:IBasicOutput[],isHA:boolean}>{
         console.log(`_getSaltForGroup groupId:${groupId}, address:${address}`);
+        const memberSelf = this._getMemberSelfFromAddress(address)
         const sharedOutputResp = await this._tryGetSharedOutputIdForGroup(groupId)
         // log sharedOutputResp
         console.log('sharedOutputResp', sharedOutputResp);
@@ -638,7 +600,7 @@ export class GroupfiSdkClient {
             } catch (error) {
                 if (error instanceof ClientError) {
                     if (error.httpStatus == 404) {
-                        const {outputs:outputsCreated,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
+                        const {outputs:outputsCreated,salt} = await this._makeSharedOutputForGroup({groupId,memberList,memberSelf})
                         return {salt, outputId,outputs:outputsCreated,isHA:true}
                     }
                 }
@@ -729,7 +691,8 @@ export class GroupfiSdkClient {
             if (isHA && groupId) {
                 // log ha and groupid and memberList
                 console.log('isHA and groupId and memberList', isHA, groupId, memberList);
-                const {outputs,salt} = await this._makeSharedOutputForGroup({groupId,memberList})
+                const memberSelf = this._getMemberSelfFromAddress(address)
+                const {outputs,salt} = await this._makeSharedOutputForGroup({groupId,memberList,memberSelf})
                 return {salt,outputs}
             } else {
                 throw new Error(`Address not found in shared output, address:${address},sharedOutputId:${sharedOutputId}`)
@@ -832,34 +795,46 @@ export class GroupfiSdkClient {
         
     }
 
+    // get evm qualify list
+    async getEvmQualifyList(groupId:string, memberSelf?:{addr:string,publicKey:string}):Promise<{addressKeyList:{addr:string,publicKey:string}[],signature:string,isSelfInList:boolean}>{
+        let previouslyQualified =  (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? []
+        const memberList = previouslyQualified.map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))
+        // add memberSelf to memberList, if memberSelf exist and memberSelf is not in memberList
+        if (memberSelf) {
+            const idx = memberList!.findIndex((pair)=>pair.addr === memberSelf.addr)
+            if (idx === -1) {
+                memberList!.push(memberSelf)
+            }
+        }
+        const addressToBeFiltered = memberList ? memberList.map(member=>member.addr) : []
+        
+        const {addressList:addressListFiltered,signature} = await IotaCatSDKObj.filterEvmGroupQualify(addressToBeFiltered,groupId)
+        const memberListFiltered = memberList?.filter((pair)=>{
+            const {addr} = pair
+            return addressListFiltered.includes(addr)
+        })
+        // log memberListFiltered
+        console.log('EvmQualifyList', memberListFiltered);
+        const isSelfInList = !!(memberSelf && memberListFiltered?.findIndex((pair)=>pair.addr === memberSelf.addr) !== -1)
+        return {addressKeyList:memberListFiltered,signature,isSelfInList}
+    }
+    // get plugin evm qualify list
+    async getPluginEvmQualifyList(groupId:string):Promise<{addr:string,publicKey:string}[]>{
+        const list =  (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? [] 
+        return list.map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))     
+    }
     // _makeSharedOutputForEvmGroup
     async _makeSharedOutputForEvmGroup({groupId,memberList,memberSelf}:{groupId:string,memberList?:{addr:string,publicKey:string}[],memberSelf?:{addr:string,publicKey:string}}):Promise<{outputs:IBasicOutput[],salt:string}>{
         // log entering
         console.log(`_makeSharedOutputForEvmGroup groupId:${groupId}, memberList:${memberList}, memberSelf:${memberSelf}`);
         try {
             //TODO move to group meta domain
-            let previouslyQualified =  (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? []
-            memberList = previouslyQualified.map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))
-            // add memberSelf to memberList, if memberSelf exist and memberSelf is not in memberList
-            if (memberSelf) {
-                const idx = memberList!.findIndex((pair)=>pair.addr === memberSelf.addr)
-                if (idx === -1) {
-                    memberList!.push(memberSelf)
-                }
-            }
-            const addressToBeFiltered = memberList ? memberList.map(member=>member.addr) : []
-            
-            const {addressList:addressListFiltered,signature} = await IotaCatSDKObj.filterEvmGroupQualify(addressToBeFiltered,groupId)
-            const memberListFiltered = memberList?.filter((pair)=>{
-                const {addr} = pair
-                return addressListFiltered.includes(addr)
-            })
-            // log memberListFiltered
-            console.log('memberListFiltered', memberListFiltered);
-            const qualifyOutput = await this._getEvmQualify(groupId,addressListFiltered,signature)
-            const {output,salt} = await this._makeSharedOutputForGroupInternal({groupId,memberList:memberListFiltered})
+            //const {addressKeyList:memberListFiltered,signature} = await this.getEvmQualifyList(groupId,memberSelf)
+            //const addressListFiltered = memberListFiltered.map((member)=>member.addr)
+            //const qualifyOutput = await this._getEvmQualify(groupId,addressListFiltered,signature)
+            const {output,salt} = await this._makeSharedOutputForGroupInternal({groupId,memberList:memberList})
             return {
-                outputs:[qualifyOutput,output],
+                outputs:[output],
                 salt
             }
         } catch (error) {
@@ -965,7 +940,7 @@ export class GroupfiSdkClient {
         if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
     }
     _ensureWalletInited(){
-        if (!this._accountHexAddress || !this._accountBech32Address) throw new Error('Wallet not initialized')
+        // if (!this._accountHexAddress || !this._accountBech32Address) throw new Error('Wallet not initialized')
     }
     _ensureStorageInited(){
         if (!this._storage) throw new Error('Storage not initialized')
@@ -1346,7 +1321,11 @@ export class GroupfiSdkClient {
         return cachedValue
     }
     _preloadGroupSaltCacheWaits:Record<string,{resolve:(value:undefined)=>void,reject:(error:Error)=>void}[]> = {}
-    async preloadGroupSaltCache(senderAddr:string, groupId:string,memberList?:{addr:string,publicKey:string}[]){
+    async preloadGroupSaltCache({
+        senderAddr,
+        groupId,
+        memberList
+    }:{senderAddr:string, groupId:string,memberList?:{addr:string,publicKey:string}[]}){
         // if in waiting cache, create a promise, add to waiting cache, return promise
         const waiting = this._preloadGroupSaltCacheWaits[groupId]
         if (waiting) {
@@ -1778,7 +1757,8 @@ export class GroupfiSdkClient {
     }
     async fetchMessageListFrom(groupId:string, address:string, coninuationToken?:string, limit:number=10) {
         try {
-            const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages${paramStr}`
             // @ts-ignore
@@ -1808,7 +1788,9 @@ export class GroupfiSdkClient {
     // fetchMessageListUntil
     async fetchMessageListUntil(groupId:string, address:string, coninuationToken:string, limit:number=10) {
         try {
-            const params = {groupId:`0x${groupId}`,size:limit, token:coninuationToken}
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            
+            const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages/until${paramStr}`
             // @ts-ignore
@@ -1904,7 +1886,13 @@ export class GroupfiSdkClient {
         return list
     }
     // memberList should contain self if already qualified
-    async markGroup({groupId,memberList, userAddress,memberSelf}:{groupId:string,memberList?:{addr:string,publicKey:string}[], userAddress: string,memberSelf?:{addr:string,publicKey:string}}){
+    async markGroup({groupId,memberList, userAddress,memberSelf,
+        qualifyList
+    }:{groupId:string,
+        memberList?:{addr:string,publicKey:string}[], userAddress: string,
+        memberSelf?:{addr:string,publicKey:string},
+        qualifyList?:{addr:string,publicKey:string}[]
+    }){
         this._ensureClientInited()
         this._ensureWalletInited()
         // log markGroup, groupId, memberList, userAddress, memberSelf
@@ -2216,77 +2204,31 @@ export class GroupfiSdkClient {
         }
     }
 
-    async registerTanglePayPairX(params: {evmAddress: string, pairX: PairX}) {
-        const {pairX, evmAddress} = params
-        const pairXNftOutput = await this.createPairXNftOutput(evmAddress, pairX)
+    async registerTanglePayPairX(params: {
+        pairX: PairX,
+        metadataObjWithSignature: Object
+    }) {
+        const { metadataObjWithSignature, pairX } = params
+        const pairXNftOutput = await this.createPairXNftOutput(metadataObjWithSignature)
         const res = await this._sendBasicOutput([pairXNftOutput])
         console.log('===> registerTanglePayPairX res', res)
         this._pairX = pairX
     }
-    async createPairXNftOutput(evmAddress: string, pairX: PairX) {
-        if (!this._requestAdapter) {
-            throw new Error('request dapter is undefined')
-        }
 
-        const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
-
-        const encryptionPublicKey = await proxyModeRequestAdapter.getEncryptionPublicKey()
-
-        const test = pairX.privateKey
-        const test111 = test.slice(0,32)
-
-        console.log('===> test', test)
-        console.log('===> test111', test111)
-
-        // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
-        // only the first 32 bytes can be encrypted
-        const first32BytesOfPrivateKeyHex = Converter.bytesToHex(pairX.privateKey.slice(0, 32))
-        console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
-
-        const encryptedPrivateKeyHex = EthEncrypt({
-            publicKey: encryptionPublicKey,
-            dataTobeEncrypted: first32BytesOfPrivateKeyHex
-        })
-
-        console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
+    // async registerTanglePayPairX(params: {evmAddress: string, pairX: PairX}) {
+    //     const {pairX, evmAddress} = params
+    //     const pairXNftOutput = await this.createPairXNftOutput(evmAddress, pairX)
+    //     const res = await this._sendBasicOutput([pairXNftOutput])
+    //     console.log('===> registerTanglePayPairX res', res)
+    //     this._pairX = pairX
+    // }
+    async createPairXNftOutput(metadataObjWithSignature: Object) {
+        const metadata = Converter.utf8ToHex(JSON.stringify(metadataObjWithSignature), true)
 
         const tagFeature: ITagFeature = {
             type: 3,
             tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
         };
-
-        const metadataObj = {
-            encryptedPrivateKey: encryptedPrivateKeyHex,
-            pairXPublicKey: Converter.bytesToHex(pairX.publicKey, true),
-            evmAddress: evmAddress,
-            timestamp: getCurrentEpochInSeconds(),
-            // 1: tp  2: mm
-            scenery: 1
-        }
-            
-        console.log('===> metadataObj', metadataObj)
-
-        const dataTobeSignedStr = [
-            metadataObj.encryptedPrivateKey,
-            metadataObj.evmAddress,
-            metadataObj.pairXPublicKey,
-            metadataObj.scenery,
-            metadataObj.timestamp
-        ].join('')
-
-        console.log('===> dataToBeSignedStr', dataTobeSignedStr)
-
-        const dataToBeSignedHex = Converter.utf8ToHex(dataTobeSignedStr, true)
-        const signature = await proxyModeRequestAdapter.ethSign({dataToBeSignedHex})
-
-        console.log('===> signature', signature)
-
-        const metadata = Converter.utf8ToHex(JSON.stringify({
-            ...metadataObj,
-            signature,
-        }), true)
-
-        console.log('===> metadata final', metadata)
 
         const collectionOutput: INftOutput = {
             type: NFT_OUTPUT_TYPE,
@@ -2322,5 +2264,98 @@ export class GroupfiSdkClient {
         };
         return collectionOutput
     }
+    // async createPairXNftOutput(evmAddress: string, pairX: PairX) {
+    //     if (!this._requestAdapter) {
+    //         throw new Error('request dapter is undefined')
+    //     }
+
+    //     const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
+
+    //     const encryptionPublicKey = await proxyModeRequestAdapter.getEncryptionPublicKey()
+
+    //     // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
+    //     // only the first 32 bytes can be encrypted
+    //     const first32BytesOfPrivateKeyHex = Converter.bytesToHex(pairX.privateKey.slice(0, 32))
+    //     console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
+
+    //     const encryptedPrivateKeyHex = EthEncrypt({
+    //         publicKey: encryptionPublicKey,
+    //         dataTobeEncrypted: first32BytesOfPrivateKeyHex
+    //     })
+
+    //     console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
+
+    //     const tagFeature: ITagFeature = {
+    //         type: 3,
+    //         tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
+    //     };
+
+    //     const metadataObj = {
+    //         encryptedPrivateKey: encryptedPrivateKeyHex,
+    //         pairXPublicKey: Converter.bytesToHex(pairX.publicKey, true),
+    //         evmAddress: evmAddress,
+    //         timestamp: getCurrentEpochInSeconds(),
+    //         // 1: tp  2: mm
+    //         scenery: 1
+    //     }
+            
+    //     console.log('===> metadataObj', metadataObj)
+
+    //     const dataTobeSignedStr = [
+    //         metadataObj.encryptedPrivateKey,
+    //         metadataObj.evmAddress,
+    //         metadataObj.pairXPublicKey,
+    //         metadataObj.scenery,
+    //         metadataObj.timestamp
+    //     ].join('')
+
+    //     console.log('===> dataToBeSignedStr', dataTobeSignedStr)
+
+    //     const dataToBeSignedHex = Converter.utf8ToHex(dataTobeSignedStr, true)
+    //     const signature = await proxyModeRequestAdapter.ethSign({dataToBeSignedHex})
+
+    //     console.log('===> signature', signature)
+
+    //     const metadata = Converter.utf8ToHex(JSON.stringify({
+    //         ...metadataObj,
+    //         signature,
+    //     }), true)
+
+    //     console.log('===> metadata final', metadata)
+
+    //     const collectionOutput: INftOutput = {
+    //         type: NFT_OUTPUT_TYPE,
+    //         amount: '',
+    //         nativeTokens: [],
+    //         nftId:
+    //             '0x0000000000000000000000000000000000000000000000000000000000000000',
+    //         unlockConditions: [
+    //             {
+    //                 type: ADDRESS_UNLOCK_CONDITION_TYPE,
+    //                 address: {
+    //                     type: ED25519_ADDRESS_TYPE,
+    //                     pubKeyHash: this._accountHexAddress!
+    //                 }
+    //             }
+    //         ],
+    //         features: [
+    //             tagFeature
+    //         ],
+    //         immutableFeatures: [
+    //             {
+    //             type: ISSUER_FEATURE_TYPE,
+    //             address: {
+    //                 type: ED25519_ADDRESS_TYPE,
+    //                 pubKeyHash: this._accountHexAddress!
+    //             },
+    //             },
+    //             {
+    //             type: METADATA_FEATURE_TYPE,
+    //             data: metadata
+    //             },
+    //         ],
+    //     };
+    //     return collectionOutput
+    // }
 }
 

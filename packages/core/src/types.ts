@@ -82,27 +82,51 @@ export interface MessageGroupMeta {
     messageType:typeof MessageTypePrivate | typeof MessageTypePublic,
     authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain,
     qualifyType: GroupQualifyTypeStr,
-    chainName: string,
+    chainId: number,
     tokenThres: string,
     tokenId: string,
-    collectionIds: string[],
+    collectionId: string,
 }
+export type GroupConfig = MessageGroupMeta & {groupId:string}
+export type MessageGroupMetaPlus = MessageGroupMeta & {isPublic:boolean}
+export type GroupConfigPlus = GroupConfig & {isPublic:boolean}
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
 export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, address:string}
 export type EventGroupMarkChanged = {type: typeof ImInboxEventTypeMarkChanged, groupId: string, timestamp: number, isNewMark: boolean} 
+
+export type EvmQualifyChangedEvent = {
+    type: typeof ImInboxEventTypeEvmQualifyChanged
+    groupId: string
+    timestamp: number
+}
+
+export type PairXChangedEvent = {
+    type: typeof ImInboxEventTypePairXChanged
+    addressSha256Hash: string
+    timestamp: number
+}
+
+export type DidChangedEvent = {
+    type: typeof ImInboxEventTypeDidChangedEvent
+    addressSha256Hash: string
+    timestamp: number
+}
+export type PushedEvent = EventGroupMemberChanged | EventGroupMarkChanged | EvmQualifyChangedEvent | PairXChangedEvent | DidChangedEvent
 export type EventGroupUpdateMinMaxToken = {
     type: typeof DomainGroupUpdateMinMaxToken
     groupId:string
     min?:string
     max?:string
 }
-export type PushedValue = PushedNewMessage | EventGroupMemberChanged | EventGroupMarkChanged
+export type PushedValue = PushedNewMessage | PushedEvent
 export type MessageGroupMetaKey = keyof MessageGroupMeta
 export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain
 
 export const AddressHashLength = 20
 export const GroupIDLength = 32
 export const OutputIDLength = 34
+export const TimestampLength = 4
+export const Sha256Length = 32
 
 export const GroupMemberTooManyToPublicThreshold = 100
 export type EncryptedHexPayload = {
@@ -189,13 +213,16 @@ export const ImInboxEventTypeNewMessage = 1
 export const ImInboxEventTypeGroupMemberChanged = 2
 export const DomainGroupUpdateMinMaxToken = 3
 export const ImInboxEventTypeMarkChanged = 4
+export const ImInboxEventTypeEvmQualifyChanged = 5
+export const ImInboxEventTypePairXChanged = 6
+export const ImInboxEventTypeDidChangedEvent = 7
 
 export type InboxItemResponse = {
     items:EventItem[]
     token:string
 }
 
-export type EventItem = MessageResponseItem | EventGroupMemberChanged
+export type EventItem = MessageResponseItem | PushedEvent
 
 export type MessageResponseItem = {
     type: typeof ImInboxEventTypeNewMessage
@@ -227,3 +254,8 @@ export const GROUPFIReservedTags = [
     GROUPFIVOTETAG,
     'PARTICIPANTION',
 ]
+
+export interface IIncludesAndExcludes {
+    groupName: string
+    chainId?: number
+}
