@@ -1439,7 +1439,7 @@ class GroupFiSDKFacade {
   }
   // getPluginGroupEvmQualifiedList
   async getPluginGroupEvmQualifiedList(groupId: string) {
-    this._ensureWalletConnected();
+    // this._ensureWalletConnected();
     return await this._client!.getPluginEvmQualifyList(groupId);
   }
   // async _getEvmQualify(groupId:string,addressList:string[],signature:string):Promise<IBasicOutput>{
@@ -1549,10 +1549,10 @@ class GroupFiSDKFacade {
     return await IotaCatSDKObj.checkIsGroupPublicFromSharedApiCall(groupId!);
   }
 
-  async loadAddressMemberGroups(address?: string) {
-    this._ensureWalletConnected();
+  async loadAddressMemberGroups(address: string) {
+    // this._ensureWalletConnected();
     const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
-      address ?? this._address!
+      address
     );
     const groups = groupIds
       .map((groupId) => ({
@@ -1568,7 +1568,7 @@ class GroupFiSDKFacade {
   }
 
   async loadGroupMemberAddresses(groupId: string) {
-    this._ensureWalletConnected();
+    // this._ensureWalletConnected();
     return await IotaCatSDKObj.fetchGroupMemberAddresses(groupId);
   }
 
