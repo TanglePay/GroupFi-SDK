@@ -1,21 +1,21 @@
-import { IMUserMuteGroupMember, IMUserMuteGroupMemberIntermediate, MessageCurrentSchemaVersion } from "./types";
+import { IMUserLikeGroupMember, IMUserLikeGroupMemberIntermediate, IMUserMuteGroupMember, IMUserMuteGroupMemberIntermediate, MessageCurrentSchemaVersion } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 
-export function serializeUserMuteGroupMembers(list:IMUserMuteGroupMember[]) : Uint8Array {
+export function serializeUserLikeGroupMembers(list:IMUserLikeGroupMember[]) : Uint8Array {
     const stream = new WriteStream();
-    const listIntermediate:IMUserMuteGroupMemberIntermediate[] = list.map(umg => ({
-        groupId: Converter.hexToBytes(umg.groupId),
-        addrSha256Hash: Converter.hexToBytes(umg.addrSha256Hash)
+    const listIntermediate:IMUserLikeGroupMemberIntermediate[] = list.map(ulg => ({
+        groupId: Converter.hexToBytes(ulg.groupId),
+        addrSha256Hash: Converter.hexToBytes(ulg.addrSha256Hash)
     }))
-    serializeUserMuteGroupMemberIntermediates(stream, listIntermediate);
+    serializeUserLikeGroupMemberIntermediates(stream, listIntermediate);
     return stream.finalBytes();
 }
 
-export function serializeUserMuteGroupMemberIntermediates(writer: WriteStream, list: IMUserMuteGroupMemberIntermediate[]) {
+export function serializeUserLikeGroupMemberIntermediates(writer: WriteStream, list: IMUserLikeGroupMemberIntermediate[]) {
     // first write schema version
     writer.writeUInt8("schema_version", MessageCurrentSchemaVersion);
-    for (const userMuteGroupMemberIntermediate of list) {
-        const { groupId, addrSha256Hash } = userMuteGroupMemberIntermediate;
+    for (const userLikeGroupMemberIntermediate of list) {
+        const { groupId, addrSha256Hash } = userLikeGroupMemberIntermediate;
         // check if list.groupId is 32 bytes
         if (groupId.byteLength !== 32) {
             throw new Error(`groupId length is not 32 bytes`);
@@ -31,12 +31,12 @@ export function serializeUserMuteGroupMemberIntermediates(writer: WriteStream, l
     }
 }
 
-export function deserializeUserMuteGroupMemberIntermediates(reader: ReadStream): IMUserMuteGroupMemberIntermediate[] {
+export function deserializeUserLikeGroupMemberIntermediates(reader: ReadStream): IMUserLikeGroupMemberIntermediate[] {
     const schemaVersion = reader.readUInt8("schema_version");
     if (schemaVersion !== MessageCurrentSchemaVersion) {
         throw new Error(`schema version ${schemaVersion} is not supported`);
     }
-    const list: IMUserMuteGroupMemberIntermediate[] = [];
+    const list: IMUserLikeGroupMemberIntermediate[] = [];
     while (reader.hasRemaining(1)) {
         const groupId = reader.readBytes("groupId", 32);
         const addrSha256Hash = reader.readBytes("addrSha256Hash", 32);
@@ -48,10 +48,10 @@ export function deserializeUserMuteGroupMemberIntermediates(reader: ReadStream):
     return list;
 }
 
-export function deserializeUserMuteGroupMembers(bytes: Uint8Array): IMUserMuteGroupMember[] {
-    const listIntermediate = deserializeUserMuteGroupMemberIntermediates(new ReadStream(bytes));
-    return listIntermediate.map(umg => ({
-        groupId: Converter.bytesToHex(umg.groupId),
-        addrSha256Hash: Converter.bytesToHex(umg.addrSha256Hash)
+export function deserializeUserLikeGroupMembers(bytes: Uint8Array): IMUserLikeGroupMember[] {
+    const listIntermediate = deserializeUserLikeGroupMemberIntermediates(new ReadStream(bytes));
+    return listIntermediate.map(ulg => ({
+        groupId: Converter.bytesToHex(ulg.groupId),
+        addrSha256Hash: Converter.bytesToHex(ulg.addrSha256Hash)
     }))
 }
