@@ -13,6 +13,7 @@ import { deserializePushed } from './codec_event';
 export * from './types';
 export * from './codec_mark';
 export * from './codec_mute';
+export * from './codec_like';
 export * from './codec_vote';
 export * from './codec_evm_qualify';
 const SHA256_LEN = 32
@@ -356,6 +357,17 @@ class IotaCatSDK {
         return jsonList.map(list => ({
             groupId: list.groupId,
             addrSha256Hash: list.mutedAddressSha256Hash
+        }))
+    }
+    // fetchAddressLikes
+    async fetchAddressLikes(address: string): Promise<{groupId: string,addrSha256Hash: string}[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addresslikes?address=${address}`
+        const res = await fetch(url)
+        const json = await res.json()
+        const jsonList = this._ensureList(json) as {groupId:string,likedAddressSha256Hash:string}[]
+        return jsonList.map(list => ({
+            groupId: list.groupId,
+            addrSha256Hash: list.likedAddressSha256Hash
         }))
     }
     // fetch group blacklist for a group, /groupblacklist
@@ -1056,6 +1068,7 @@ export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV1'
 export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
+export const GROUPFILIKETAG = 'GROUPFILIKEV1'
 export const IotaCatSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

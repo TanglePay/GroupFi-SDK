@@ -48,6 +48,17 @@ export interface IMUserMuteGroupMember {
     addrSha256Hash: string;
 }
 
+// user like group member
+export interface IMUserLikeGroupMember {
+    groupId: string;
+    addrSha256Hash: string;
+}
+
+// user like group member intermediate
+export interface IMUserLikeGroupMemberIntermediate {
+    groupId: Uint8Array;
+    addrSha256Hash: Uint8Array;
+}
 export interface IMUserMuteGroupMemberIntermediate {
     groupId: Uint8Array;
     addrSha256Hash: Uint8Array;
