@@ -1619,6 +1619,42 @@ class GroupFiSDKFacade {
     }
   }
 
+  // likeGroupMember
+  async likeGroupMember(groupId: string, memberAddress: string) {
+    this._ensureWalletConnected();
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
+      IotaCatSDKObj._sha256Hash(memberAddress)
+    );
+    // call client likeGroupMember(groupId, addrHash)
+    const likeGroupMemberRes = (await this._client!.likeGroupMember(
+      groupId,
+      memberAddrHash,
+      this._address!
+    )) as TransactionRes | undefined;
+    if (likeGroupMemberRes !== undefined) {
+      await IotaCatSDKObj.waitOutput(likeGroupMemberRes.outputId);
+    }
+  }
+
+  // unlikeGroupMember
+  async unlikeGroupMember(groupId: string, memberAddress: string) {
+    this._ensureWalletConnected();
+    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
+      IotaCatSDKObj._sha256Hash(memberAddress)
+    );
+    // call client unlikeGroupMember(groupId, addrHash)
+    const unlikeGroupMemberRes = (await this._client!.unlikeGroupMember(
+      groupId,
+      memberAddrHash,
+      this._address!
+    )) as TransactionRes | undefined;
+    if (unlikeGroupMemberRes !== undefined) {
+      await IotaCatSDKObj.waitOutput(unlikeGroupMemberRes.outputId);
+    }
+  }
+  
   async unMuteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
     groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
