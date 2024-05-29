@@ -104,6 +104,8 @@ export type GroupConfigPlus = GroupConfig & {isPublic:boolean}
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
 export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, address:string}
 export type EventGroupMarkChanged = {type: typeof ImInboxEventTypeMarkChanged, groupId: string, timestamp: number, isNewMark: boolean} 
+export type EventGroupMuteChanged = {type: typeof ImInboxEventTypeMuteChanged, groupId: string, timestamp: number, isNewMute: boolean}
+export type EventGroupLikeChanged = {type: typeof ImInboxEventTypeLikeChanged, groupId: string, timestamp: number, isNewLike: boolean}
 
 export type EvmQualifyChangedEvent = {
     type: typeof ImInboxEventTypeEvmQualifyChanged
@@ -122,7 +124,7 @@ export type DidChangedEvent = {
     addressSha256Hash: string
     timestamp: number
 }
-export type PushedEvent = EventGroupMemberChanged | EventGroupMarkChanged | EvmQualifyChangedEvent | PairXChangedEvent | DidChangedEvent
+export type PushedEvent = EventGroupMemberChanged | EventGroupMarkChanged | EvmQualifyChangedEvent | PairXChangedEvent | DidChangedEvent | EventGroupMuteChanged | EventGroupLikeChanged
 export type EventGroupUpdateMinMaxToken = {
     type: typeof DomainGroupUpdateMinMaxToken
     groupId:string
@@ -227,6 +229,8 @@ export const ImInboxEventTypeMarkChanged = 4
 export const ImInboxEventTypeEvmQualifyChanged = 5
 export const ImInboxEventTypePairXChanged = 6
 export const ImInboxEventTypeDidChangedEvent = 7
+export const ImInboxEventTypeMuteChanged = 8
+export const ImInboxEventTypeLikeChanged = 9
 
 export type InboxItemResponse = {
     items:EventItem[]
