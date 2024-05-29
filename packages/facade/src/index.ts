@@ -711,8 +711,6 @@ class GroupFiSDKFacade {
       message!,
       memberList
     );
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    console.log('send message res', res);
     return res;
   }
   async fetchAddressBalance() {
