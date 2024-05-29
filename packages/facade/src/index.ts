@@ -157,6 +157,11 @@ class GroupFiSDKFacade {
     const mutedAddressHash = this._muteMap[groupId] ?? [];
     return mutedAddressHash.includes(addressHash);
   }
+  
+  async getAllUserLikeGroupMembers() {
+    this._ensureWalletConnected();
+    return await this._client!.getAllUserLikeGroupMembers(this._address!)
+  }
 
   async filterMutedMessage(groupId: string, sender: string) {
     return await this.getIsMutedFromMuteMap(groupId, sender);
@@ -711,8 +716,6 @@ class GroupFiSDKFacade {
       message!,
       memberList
     );
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    console.log('send message res', res);
     return res;
   }
   async fetchAddressBalance() {
