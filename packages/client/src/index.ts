@@ -1367,7 +1367,13 @@ export class GroupfiSdkClient {
             }
         }
     }
-    async sendMessage(senderAddr:string, groupId:string,message: IMMessage, memberList?:{addr:string,publicKey:string}[]){
+    async sendMessage(senderAddr:string, groupId:string,message: IMMessage, memberList?:{addr:string,publicKey:string}[])
+    :Promise<
+    {
+        sentMessagePromise:Promise<IMessage>,
+        sendBasicOutputPromise:Promise<{blockId:string,outputId:string}>
+    }|undefined>
+    {
         this._ensureClientInited()
         this._ensureWalletInited()
         const {data:rawText} = message
@@ -1456,9 +1462,22 @@ export class GroupfiSdkClient {
             };
             console.log("Basic Output: ", basicOutput);
 
-            
-            const {blockId,outputId} = await this._sendBasicOutput([basicOutput]);
-            return {blockId,outputId,messageSent}
+            // promise for ui, resolve messageSent after 0.2s, reject on _sendBasicOutput error,
+            let rejectForSentMessage:((error:Error)=>void)|undefined
+            const sentMessagePromise = new Promise<IMessage>((resolve,reject)=>{
+                setTimeout(()=>{
+                    resolve(messageSent)
+                },200)
+                rejectForSentMessage = reject
+            })
+            // promise for _sendBasicOutput, resolve on success, reject on error
+            let sendBasicOutputPromise = this._sendBasicOutput([basicOutput])
+            sendBasicOutputPromise = sendBasicOutputPromise.catch((error)=>{
+                if (rejectForSentMessage) rejectForSentMessage(error)
+                throw error
+            })
+            // return both promises
+            return {sentMessagePromise,sendBasicOutputPromise}
         } catch (e) {
             console.log("Error submitting block: ", e);
         }
