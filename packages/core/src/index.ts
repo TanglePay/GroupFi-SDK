@@ -12,7 +12,7 @@ import LZString from 'lz-string'
 import { deserializePushed } from './codec_event';
 export * from './types';
 export * from './codec_mark';
-export * from './codec_like1';
+export * from './codec_like';
 export * from './codec_mute';
 export * from './codec_vote';
 export * from './codec_evm_qualify';
