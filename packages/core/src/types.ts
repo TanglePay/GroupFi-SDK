@@ -185,7 +185,7 @@ export class UserDoesNotHasEnoughTokenError extends Error {
     }
 }
 export type IMessage = {type:typeof ImInboxEventTypeNewMessage,messageId:string, groupId:string, sender:string, message:string, timestamp:number,token?:string}
-export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged
+export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged | EventGroupMuteChanged | EventGroupLikeChanged
 export interface IGroupFiSDK {
     bootstrap(): Promise<void>;
     getGroups(): Promise<{groupId:string,groupName:string}[]>;
