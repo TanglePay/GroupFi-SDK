@@ -18,6 +18,8 @@ import {
   MessageResponseItem,
   ImInboxEventTypeMarkChanged,
   IIncludesAndExcludes,
+  ImInboxEventTypeMuteChanged,
+  ImInboxEventTypeLikeChanged,
 } from 'iotacat-sdk-core';
 
 import {
@@ -247,11 +249,11 @@ class GroupFiSDKFacade {
       } else if (pushed.type == ImInboxEventTypeGroupMemberChanged) {
         item = pushed;
       } else if (pushed.type === ImInboxEventTypeMarkChanged) {
-        console.log(
-          '===> mqtt event ImInboxEventTypeMarkChanged, pushed:',
-          pushed
-        );
         item = pushed;
+      } else if (pushed.type === ImInboxEventTypeMuteChanged) {
+        item = pushed
+      } else if (pushed.type === ImInboxEventTypeLikeChanged) {
+        item = pushed
       }
       if (item) {
         callback(item);
@@ -1616,10 +1618,11 @@ class GroupFiSDKFacade {
       memberAddrHash,
       this._address!
     )) as TransactionRes | undefined;
-    if (muteGroupMemberRes !== undefined) {
-      await IotaCatSDKObj.waitOutput(muteGroupMemberRes.outputId);
-      this._updateMuteMap(groupId, memberAddrHash);
-    }
+    this._updateMuteMap(groupId, memberAddrHash);
+    // if (muteGroupMemberRes !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(muteGroupMemberRes.outputId);
+    //   this._updateMuteMap(groupId, memberAddrHash);
+    // }
   }
 
   // likeGroupMember
@@ -1635,9 +1638,9 @@ class GroupFiSDKFacade {
       memberAddrHash,
       this._address!
     )) as TransactionRes | undefined;
-    if (likeGroupMemberRes !== undefined) {
-      await IotaCatSDKObj.waitOutput(likeGroupMemberRes.outputId);
-    }
+    // if (likeGroupMemberRes !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(likeGroupMemberRes.outputId);
+    // }
   }
 
   // unlikeGroupMember
@@ -1653,9 +1656,9 @@ class GroupFiSDKFacade {
       memberAddrHash,
       this._address!
     )) as TransactionRes | undefined;
-    if (unlikeGroupMemberRes !== undefined) {
-      await IotaCatSDKObj.waitOutput(unlikeGroupMemberRes.outputId);
-    }
+    // if (unlikeGroupMemberRes !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(unlikeGroupMemberRes.outputId);
+    // }
   }
   
   async unMuteGroupMember(groupId: string, memberAddress: string) {
@@ -1672,10 +1675,11 @@ class GroupFiSDKFacade {
       this._address!
     )) as TransactionRes | undefined;
     this._lastTimeSdkRequestResultReceived = Date.now();
-    if (unmuteGroupMemberRes !== undefined) {
-      await IotaCatSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
-      this._updateMuteMap(groupId, memberAddrHash);
-    }
+    this._updateMuteMap(groupId, memberAddrHash);
+    // if (unmuteGroupMemberRes !== undefined) {
+    //   await IotaCatSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
+    //   this._updateMuteMap(groupId, memberAddrHash);
+    // }
   }
 
   setupIotaMqttConnection(mqttClient: any) {
@@ -1689,20 +1693,6 @@ class GroupFiSDKFacade {
     muted: boolean;
   }> {
     this._ensureWalletConnected();
-    /*
-    console.log('isGroupPublic start calling');
-    const isGroupPublic = await this.isGroupPublic(groupId);
-    console.log('isGroupPublic end calling', isGroupPublic);
-    console.log('isQualified start calling');
-    const isQualified = await this.isQualified(groupId);
-    console.log('isQualified end calling', isQualified);
-    console.log('marked start calling');
-    const marked = await this.marked(groupId);
-    console.log('marked end calling', marked);
-    console.log('muted start calling');
-    const muted = await this.isBlackListed(groupId);
-    console.log('muted end calling', muted);
-    */
     const [isGroupPublic, isQualified, marked, muted] = await Promise.all([
       this.isGroupPublic(groupId),
       this.isQualified(groupId),
