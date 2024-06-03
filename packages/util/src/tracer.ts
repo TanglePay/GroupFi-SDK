@@ -48,6 +48,11 @@ class Tracer {
     public clearLogs(): void {
         this.logs = [];
     }
+    // dump logs to console
+    public dumpLogs(): void {
+        console.log(this.logs.join('\n'));
+    }
+
 }
 
 export const tracer = new Tracer();
