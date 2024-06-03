@@ -54,7 +54,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex } from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer } from 'iotacat-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
@@ -1376,9 +1376,10 @@ export class GroupfiSdkClient {
     {
         this._ensureClientInited()
         this._ensureWalletInited()
+        tracer.startStep('sendMessageToGroup','client start send message')
         const {data:rawText} = message
         try {
-            const protocolInfo = await this._client!.protocolInfo();
+            const protocolInfo = this._protocolInfo
             console.log('ProtocolInfo', protocolInfo);
             const groupSaltMap:Record<string,string> = {}
             const groupSaltResolver = async (groupId:string)=>groupSaltMap[groupId]
@@ -1412,13 +1413,14 @@ export class GroupfiSdkClient {
                 }
             }
             console.log('MessageWithPublicKeys', message);
+            tracer.startStep('sendMessageToGroup','client start serialize message')
             const pl = await IotaCatSDKObj.serializeMessage(message,{encryptUsingPublicKey:async (key,data)=>{
                 const publicKey = Converter.hexToBytes(key)
                 const encrypted = await encrypt(publicKey, data, tag)
                 return encrypted.payload
             },groupSaltResolver})
             console.log('MessagePayload', pl);
-            
+            tracer.startStep('sendMessageToGroup','client create message output')
             const tagFeature: ITagFeature = {
                 type: 3,
                 tag: `0x${Converter.utf8ToHex(IOTACATTAG)}`
@@ -1461,7 +1463,7 @@ export class GroupfiSdkClient {
                 ]
             };
             console.log("Basic Output: ", basicOutput);
-
+            tracer.endStep('sendMessageToGroup','client create message output')
             // promise for ui, resolve messageSent after 0.2s, reject on _sendBasicOutput error,
             let rejectForSentMessage:((error:Error)=>void)|undefined
             const sentMessagePromise = new Promise<IMessage>((resolve,reject)=>{

@@ -31,6 +31,7 @@ import {
   bytesToHex,
   concatBytes,
   getCurrentEpochInSeconds,
+  tracer,
 } from 'iotacat-sdk-utils';
 import {
   GroupfiSdkClient,
@@ -700,6 +701,7 @@ class GroupFiSDKFacade {
     messageText: string,
     memberList?: { addr: string; publicKey: string }[]
   ) {
+    tracer.startStep('sendMessageToGroup','facade sendMessage');
     const address: Address = {
       type: ShimmerBech32Addr,
       addr: this._address!,
@@ -712,12 +714,14 @@ class GroupFiSDKFacade {
     );
     if (!message) throw new Error('prepareSendMessage error');
     // call client sendMessage(addr, groupId, message)
+    tracer.startStep('sendMessageToGroup','call client sendMessage');
     const res = await this._client!.sendMessage(
       this._address!,
       groupId,
       message!,
       memberList
     );
+    tracer.endStep('sendMessageToGroup','call client sendMessage');
     return res;
   }
   async fetchAddressBalance() {
