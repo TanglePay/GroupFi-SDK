@@ -10,6 +10,7 @@ export * from './concurrent_pipe';
 export * from './stream_processor';
 export * from './crypto';
 export * from './SerialAsyncQueue'
+export * from './tracer';
 
 export const concatBytes = (...args: Uint8Array[]) => {
   let totalLength = 0;

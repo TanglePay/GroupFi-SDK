@@ -49,9 +49,12 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserMuteGroupMember,serializeUserMuteGroupMembers, deserializeUserMuteGroupMembers,
     IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
-    GROUPFICASHTAG,MessageGroupMeta
+    GROUPFICASHTAG,MessageGroupMeta,
+    GROUPFILIKETAG,
+    IMUserLikeGroupMember,
+    serializeUserLikeGroupMembers
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex } from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer } from 'iotacat-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
@@ -1364,12 +1367,19 @@ export class GroupfiSdkClient {
             }
         }
     }
-    async sendMessage(senderAddr:string, groupId:string,message: IMMessage, memberList?:{addr:string,publicKey:string}[]){
+    async sendMessage(senderAddr:string, groupId:string,message: IMMessage, memberList?:{addr:string,publicKey:string}[])
+    :Promise<
+    {
+        sentMessagePromise:Promise<IMessage>,
+        sendBasicOutputPromise:Promise<{blockId:string,outputId:string}>
+    }|undefined>
+    {
         this._ensureClientInited()
         this._ensureWalletInited()
+        tracer.startStep('sendMessageToGroup','client start send message')
         const {data:rawText} = message
         try {
-            const protocolInfo = await this._client!.protocolInfo();
+            const protocolInfo = this._protocolInfo
             console.log('ProtocolInfo', protocolInfo);
             const groupSaltMap:Record<string,string> = {}
             const groupSaltResolver = async (groupId:string)=>groupSaltMap[groupId]
@@ -1403,13 +1413,14 @@ export class GroupfiSdkClient {
                 }
             }
             console.log('MessageWithPublicKeys', message);
+            tracer.startStep('sendMessageToGroup','client start serialize message')
             const pl = await IotaCatSDKObj.serializeMessage(message,{encryptUsingPublicKey:async (key,data)=>{
                 const publicKey = Converter.hexToBytes(key)
                 const encrypted = await encrypt(publicKey, data, tag)
                 return encrypted.payload
             },groupSaltResolver})
             console.log('MessagePayload', pl);
-            
+            tracer.startStep('sendMessageToGroup','client create message output')
             const tagFeature: ITagFeature = {
                 type: 3,
                 tag: `0x${Converter.utf8ToHex(IOTACATTAG)}`
@@ -1452,10 +1463,23 @@ export class GroupfiSdkClient {
                 ]
             };
             console.log("Basic Output: ", basicOutput);
-
-            
-            const {blockId,outputId} = await this._sendBasicOutput([basicOutput]);
-            return {blockId,outputId,messageSent}
+            tracer.endStep('sendMessageToGroup','client create message output')
+            // promise for ui, resolve messageSent after 0.2s, reject on _sendBasicOutput error,
+            let rejectForSentMessage:((error:Error)=>void)|undefined
+            const sentMessagePromise = new Promise<IMessage>((resolve,reject)=>{
+                setTimeout(()=>{
+                    resolve(messageSent)
+                },200)
+                rejectForSentMessage = reject
+            })
+            // promise for _sendBasicOutput, resolve on success, reject on error
+            let sendBasicOutputPromise = this._sendBasicOutput([basicOutput])
+            sendBasicOutputPromise = sendBasicOutputPromise.catch((error)=>{
+                if (rejectForSentMessage) rejectForSentMessage(error)
+                throw error
+            })
+            // return both promises
+            return {sentMessagePromise,sendBasicOutputPromise}
         } catch (e) {
             console.log("Error submitting block: ", e);
         }
@@ -2029,16 +2053,6 @@ export class GroupfiSdkClient {
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
 
-    // async _getUserMuteGroupMembers():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
-    //     const existing = await this._getOneOutputWithTag(GROUPFIMUTETAG)
-    //     if (!existing) return {list:[]}
-    //     const {output} = existing
-    //     const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
-    //     if (!meta) return {list:[]}
-    //     const data = Converter.hexToBytes(meta.data)
-    //     const groupIds = deserializeUserMuteGroupMembers(data)
-    //     return {outputWrapper:existing,list:groupIds}
-    // }
     async _getUserMuteGroupMembers(userAddress: string):Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIMUTETAG)
         const muteGroups = await IotaCatSDKObj.fetchAddressMutes(userAddress)
@@ -2054,6 +2068,46 @@ export class GroupfiSdkClient {
         this._ensureClientInited()
         this._ensureWalletInited()
         const {list} = await this._getUserMuteGroupMembers(userAddress)
+        return list
+    }
+    // same sets of function for user like group members
+    async likeGroupMember(groupId:string,addrSha256Hash:string, userAddress: string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getUserLikeGroupMembers(userAddress)
+        if (list.find(id=>id.groupId === groupId && id.addrSha256Hash === addrSha256Hash)) return
+        list.push({groupId,addrSha256Hash})
+        return await this._persistUserLikeGroupMembers(list,outputWrapper)
+    }
+
+    async unlikeGroupMember(groupId:string,addrSha256Hash:string, userAddress: string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {outputWrapper,list} = await this._getUserLikeGroupMembers(userAddress)
+        const idx = list.findIndex(id=>id.groupId === groupId && id.addrSha256Hash === addrSha256Hash)
+        if (idx === -1) return
+        list.splice(idx,1)
+        return await this._persistUserLikeGroupMembers(list,outputWrapper)
+    }
+
+    async _persistUserLikeGroupMembers(list:IMUserLikeGroupMember[],outputWrapper?:BasicOutputWrapper){
+        const tag = `0x${Converter.utf8ToHex(GROUPFILIKETAG)}`
+        const data = serializeUserLikeGroupMembers(list)
+        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const toBeConsumed = outputWrapper ? [outputWrapper] : []
+        return await this._sendBasicOutput([basicOutput],toBeConsumed);
+    }
+
+    async _getUserLikeGroupMembers(userAddress: string):Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserLikeGroupMember[]}>{
+        const existing = await this._getOneOutputWithTag(GROUPFILIKETAG)
+        const likeGroups = await IotaCatSDKObj.fetchAddressLikes(userAddress)
+        return {outputWrapper:existing,list:likeGroups}
+    }
+
+    async getAllUserLikeGroupMembers(userAddress: string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const {list} = await this._getUserLikeGroupMembers(userAddress)
         return list
     }
     // get group votes
