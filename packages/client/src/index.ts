@@ -165,6 +165,7 @@ type Network = {
     explorerApiNetwork: string;
     networkId: string;
     inxMqttEndpoint: string;
+    imagePreSignedUrl?: string;
 }
 const shimmerTestNet = {
     id: 101,
@@ -175,6 +176,7 @@ const shimmerTestNet = {
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
     inxMqttEndpoint: "wss://test.shimmer.node.tanglepay.com/mqtt",
+    imagePreSignedUrl: "https://pwzmabpgxc.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-stage-4-Stage/get-upload-url",
 }
 
 const shimmerMainNet = {
@@ -1484,6 +1486,53 @@ export class GroupfiSdkClient {
             console.log("Error submitting block: ", e);
         }
         
+    }
+    async _getPresignedImageUploadUrl({publicKey,signature,message,ext}:{publicKey:string,signature:string,message:string,ext:string}):Promise<{uploadURL:string,imageURL:string}>{
+        const url = this._curNode!.imagePreSignedUrl!
+        const body = {publicKey,signature,message,ext}
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        })
+        const json = await res.json() as {uploadURL:string}
+        const {uploadURL} = json
+        const imageURL = uploadURL.split('?')[0]
+        return {uploadURL,imageURL}
+    }
+    async uploadImageToS3({fileGetter}:{fileGetter:()=>Promise<File>}){
+        const file = await fileGetter()
+        // get ext from file
+        const ext = file.name.split('.').pop()
+        if (!ext) throw new Error('No ext')
+        const publicKey = this._accountHexAddress!
+        const message = this._accountBech32Address!
+        const signature = this._signMessage(message)
+        const {uploadURL,imageURL} = await this._getPresignedImageUploadUrl({publicKey,signature,message,ext})
+        let uploadPromise = this._uploadFileToS3({file,uploadURL})
+        uploadPromise = uploadPromise.catch((error)=>{
+            console.log('uploadImageToS3 error', error);
+            throw error
+        })
+        return {imageURL, uploadPromise}
+    }
+    _signMessage(message:string){
+        const payload = Converter.utf8ToBytes(message)
+        const signature = Ed25519.sign(payload, this._walletKeyPair!.privateKey)
+        return Converter.bytesToHex(signature)
+    }
+    // given File object and a presigned url, upload file to s3
+    async _uploadFileToS3({file,uploadURL}:{file:File,uploadURL:string}){
+        // content type should be steamed
+        const res = await fetch(uploadURL, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/octet-stream'
+            },
+            body: file
+        })
     }
     async _findLargestUnspentOutput(outputIds:string[]){
         let largestAmount = bigInt('0')
