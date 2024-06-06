@@ -854,6 +854,11 @@ class GroupFiSDKFacade {
     return res;
   }
 
+  // upload image to s3
+  async uploadImageToS3({fileGetter}: {fileGetter: () => Promise<File>}) : Promise<{imageURL: string, uploadPromise:Promise<void>}> {
+    return await this._client!.uploadImageToS3({fileGetter});
+  }
+  
   // fetchForMeGroupConfigs
   async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}) {
     const res = await IotaCatSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})

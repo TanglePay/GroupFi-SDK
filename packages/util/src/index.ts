@@ -11,6 +11,7 @@ export * from './stream_processor';
 export * from './crypto';
 export * from './SerialAsyncQueue'
 export * from './tracer';
+export * from './browser_upload_helper';
 
 export const concatBytes = (...args: Uint8Array[]) => {
   let totalLength = 0;
