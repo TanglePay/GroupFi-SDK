@@ -1,4 +1,4 @@
-import { INftOutput } from '@iota/iota.js';
+import { IKeyPair, INftOutput } from '@iota/iota.js';
 
 export const ShimmerMode = 1;
 export const ImpersonationMode = 2;
@@ -33,7 +33,8 @@ export interface IRequestAdapterSendTransationParams {
 
 export interface IRequestAdapter {
   decrypt: (params: IRequestAdapterDecryptParams) => Promise<string>;
-
+  ed25519SignAndGetPublicKey:(params:{message:string,pairX:PairX}) => Promise<{signature:string, publicKey:string}>;
+  
   sendTransaction: (
     params: IRequestAdapterSendTransationParams
   ) => Promise<SendTransationRes>;
