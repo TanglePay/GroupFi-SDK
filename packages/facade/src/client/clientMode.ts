@@ -35,6 +35,9 @@ export class ShimmerModeRequestAdapter implements IRequestAdapter {
     this._bech32Address = bech32Address;
     this._nodeUrlHint = nodeUrlHint;
   }
+  async ed25519SignAndGetPublicKey(params: { message: string; pairX: PairX; }):Promise<{ signature: string; publicKey: string; }>{
+    throw new Error('Method not implemented.');
+  }
 
   async decrypt({ dataTobeDecrypted }: IRequestAdapterDecryptParams) {
     const recipientPayloadUrl = createBlobURLFromUint8Array(dataTobeDecrypted);
@@ -156,7 +159,15 @@ export class ImpersonationModeRequestAdapter
     GroupfiWalletEmbedded.setupPair(pairX);
     return await decryptByPairX({ dataTobeDecrypted, pairX });
   }
+  async ed25519SignAndGetPublicKey({message,pairX}:{message:string,pairX:PairX}):Promise<{signature:string, publicKey:string}> {
+    
+    if (!pairX) {
+      throw new Error('ImpersonationMode decrypt pairX is undefined');
+    }
 
+    GroupfiWalletEmbedded.setupPair(pairX);
+    return await signMessageAndGetPublicKey({message,pairX});
+  }
   async sendTransaction({ essence }: IRequestAdapterSendTransationParams) {
     if (!essence) {
       throw new Error('essence is undefined.');
@@ -214,64 +225,6 @@ export class DelegationModeRequestAdapter
     }
   }
 
-  // async registerPairX(params: { pairX: PairX }): Promise<string> {
-  //   try {
-  //     const { pairX } = params;
-
-  //     const encryptionPublicKey = await this.getEncryptionPublicKey();
-
-  //     const first32BytesOfPrivateKeyHex = bytesToHex(
-  //       pairX.privateKey.slice(0, 32)
-  //     );
-
-  //     const encryptedPrivateKeyHex = EthEncrypt({
-  //       publicKey: encryptionPublicKey,
-  //       dataTobeEncrypted: first32BytesOfPrivateKeyHex,
-  //     });
-
-  //     const metadataObj = {
-  //       encryptedPrivateKey: encryptedPrivateKeyHex,
-  //       pairXPublicKey: bytesToHex(pairX.publicKey, true),
-  //       evmAddress: this._evmAddress!,
-  //       timestamp: getCurrentEpochInSeconds(),
-  //       // 1: tp  2: mm
-  //       scenery: 2,
-  //     };
-
-  //     const dataTobeSignedStr = [
-  //       metadataObj.encryptedPrivateKey,
-  //       metadataObj.evmAddress,
-  //       metadataObj.pairXPublicKey,
-  //       metadataObj.scenery,
-  //       metadataObj.timestamp,
-  //     ].join('');
-
-  //     const dataToBeSignedHex = utf8ToHex(dataTobeSignedStr, true);
-
-  //     const signature = await this.ethSign({ dataToBeSignedHex });
-
-  //     const body = JSON.stringify({
-  //       ...metadataObj,
-  //       signature,
-  //     });
-
-  //     console.log('===> mm register PairX body', body);
-  //     const start = Date.now()
-
-  //     const res = await auxiliaryService.register(body);
-  //     console.log('register service cost:', Date.now() - start)
-
-  //     console.log('mm register PairX resJson', res);
-
-  //     if (res.result) {
-  //       return res.proxy_account;
-  //     } else {
-  //       throw new Error('Failed to register');
-  //     }
-  //   } catch (error) {
-  //     throw error;
-  //   }
-  // }
 
   async ethSign(params: { dataToBeSignedHex: string }): Promise<string> {
     const res = await this._dappClient.request({
@@ -301,12 +254,20 @@ export class DelegationModeRequestAdapter
 
   async decrypt({ dataTobeDecrypted, pairX }: IRequestAdapterDecryptParams) {
     if (!pairX) {
-      throw new Error('ImpersonationMode decrypt pairX is undefined');
+      throw new Error('DelegationMode decrypt pairX is undefined');
     }
     GroupfiWalletEmbedded.setupPair(pairX);
     return await decryptByPairX({ dataTobeDecrypted, pairX });
   }
+  async ed25519SignAndGetPublicKey({message,pairX}:{message:string,pairX:PairX}):Promise<{signature:string, publicKey:string}> {
+    
+    if (!pairX) {
+      throw new Error('DelegationMode decrypt pairX is undefined');
+    }
 
+    GroupfiWalletEmbedded.setupPair(pairX);
+    return await signMessageAndGetPublicKey({message,pairX});
+  }
   async mintProxyNicknameNft(params: { name: string; pairX: PairX }) {
     const { pairX, name } = params;
 
@@ -388,6 +349,18 @@ async function decryptByPairX({
   return await GroupfiWalletEmbedded.decryptAesKeyFromPayload(
     dataTobeDecrypted
   );
+}
+
+async function signMessageAndGetPublicKey({
+  message,
+  pairX,
+}: {
+  message: string;
+  pairX: PairX;
+}) {
+  const signature = GroupfiWalletEmbedded.ed25519SignMessage(message);
+  const publicKey = GroupfiWalletEmbedded.getEd25519PublicKey();
+  return { signature, publicKey };
 }
 
 async function sendTransactionByTanglePay({

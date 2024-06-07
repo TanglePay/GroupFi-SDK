@@ -1502,14 +1502,17 @@ export class GroupfiSdkClient {
         const imageURL = uploadURL.split('?')[0]
         return {uploadURL,imageURL}
     }
-    async uploadImageToS3({fileGetter}:{fileGetter:()=>Promise<File>}){
-        const file = await fileGetter()
+    async uploadImageToS3({fileGetter,pairX}:{fileGetter:()=>Promise<File>,pairX:PairX}){
+        const message = this._accountBech32Address!
+        const [file, sigRes] = await Promise.all([
+            fileGetter(),
+            this._requestAdapter!.ed25519SignAndGetPublicKey({message,pairX})
+        ])
         // get ext from file
         const ext = file.name.split('.').pop()
         if (!ext) throw new Error('No ext')
-        const publicKey = this._accountHexAddress!
-        const message = this._accountBech32Address!
-        const signature = this._signMessage(message)
+        
+        const {signature,publicKey} = sigRes 
         const {uploadURL,imageURL} = await this._getPresignedImageUploadUrl({publicKey,signature,message,ext})
         let uploadPromise = this._uploadFileToS3({file,uploadURL})
         uploadPromise = uploadPromise.catch((error)=>{
@@ -1518,7 +1521,7 @@ export class GroupfiSdkClient {
         })
         return {imageURL, uploadPromise}
     }
-    _signMessage(message:string){
+    signMessage(message:string){
         const payload = Converter.utf8ToBytes(message)
         const signature = Ed25519.sign(payload, this._walletKeyPair!.privateKey)
         return Converter.bytesToHex(signature)
