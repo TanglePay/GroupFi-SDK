@@ -1521,11 +1521,6 @@ export class GroupfiSdkClient {
         })
         return {imageURL, uploadPromise}
     }
-    signMessage(message:string){
-        const payload = Converter.utf8ToBytes(message)
-        const signature = Ed25519.sign(payload, this._walletKeyPair!.privateKey)
-        return Converter.bytesToHex(signature)
-    }
     // given File object and a presigned url, upload file to s3
     async _uploadFileToS3({file,uploadURL}:{file:File,uploadURL:string}){
         // content type should be steamed
