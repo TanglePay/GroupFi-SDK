@@ -274,5 +274,4 @@ export const GROUPFIReservedTags = [
 
 export interface IIncludesAndExcludes {
     groupId: string
-    chainId?: number
 }
