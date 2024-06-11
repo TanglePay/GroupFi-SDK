@@ -273,6 +273,6 @@ export const GROUPFIReservedTags = [
 ]
 
 export interface IIncludesAndExcludes {
-    groupName: string
+    groupId: string
     chainId?: number
 }
