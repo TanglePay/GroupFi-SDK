@@ -88,6 +88,7 @@ export const MessageTypePublic = 2
 export const MessageAuthSchemeRecipeintInMessage = 1
 export const MessageAuthSchemeRecipeintOnChain = 2
 export interface MessageGroupMeta {
+    dappGroupId:string
     groupName: string;
     schemaVersion: number; 
     messageType:typeof MessageTypePrivate | typeof MessageTypePublic,
