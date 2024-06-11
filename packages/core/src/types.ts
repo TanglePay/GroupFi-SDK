@@ -94,9 +94,9 @@ export interface MessageGroupMeta {
     authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain,
     qualifyType: GroupQualifyTypeStr,
     chainId: number,
-    tokenThres: string,
-    tokenId: string,
-    collectionId: string,
+    contractAddress: string,
+    tokenThres?: string,
+    tokenThresValue?: string,
 }
 export type GroupConfig = MessageGroupMeta & {groupId:string}
 export type MessageGroupMetaPlus = MessageGroupMeta & {isPublic:boolean}

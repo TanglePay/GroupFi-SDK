@@ -1014,13 +1014,13 @@ class IotaCatSDK {
             }
             if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
-                    contract:groupConfig.collectionId,
+                    contract:groupConfig.contractAddress,
                     erc:721
                 })
             } else {
-                const thresInt = parseInt(groupConfig.tokenThres)
+                const thresInt = parseInt(groupConfig.tokenThres!)
                 filterParam = Object.assign(filterParam,{
-                    contract:groupConfig.tokenId,
+                    contract:groupConfig.contractAddress,
                     erc:20,
                     threshold: thresInt
                 })
