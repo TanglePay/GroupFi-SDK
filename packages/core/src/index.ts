@@ -49,7 +49,9 @@ class IotaCatSDK {
         return undefined
     }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
-        const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
+        let sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
+        // filter out dappGroupId
+        sortedKeys = sortedKeys.filter(key=>key !== 'dappGroupId')
         const sortedMap = sortedKeys.reduce((acc,key)=>{
             let value = meta[key]
             if (Array.isArray(value)) {
