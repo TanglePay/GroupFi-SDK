@@ -1527,7 +1527,8 @@ export class GroupfiSdkClient {
         const res = await fetch(uploadURL, {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/octet-stream'
+                'Content-Type': 'application/octet-stream',
+                'Cache-Control': 'max-age=31536000'
             },
             body: file
         })
