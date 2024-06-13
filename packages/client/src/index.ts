@@ -54,7 +54,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer } from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'iotacat-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
@@ -1502,16 +1502,32 @@ export class GroupfiSdkClient {
         const imageURL = uploadURL.split('?')[0]
         return {uploadURL,imageURL}
     }
-    async uploadImageToS3({fileGetter,pairX}:{fileGetter:()=>Promise<File>,pairX:PairX}){
+    async uploadImageToS3({fileGetter,pairX, fileObj}:{fileGetter?:()=>Promise<File>,pairX:PairX, fileObj?:File}):Promise<{imageURL:string, 
+        dimensionsPromise:Promise<{width:number,height:number}>,
+        uploadPromise:Promise<void>}>{
         const message = this._accountBech32Address!
-        const [file, sigRes] = await Promise.all([
-            fileGetter(),
-            this._requestAdapter!.ed25519SignAndGetPublicKey({message,pairX})
-        ])
+        let file:File|undefined = fileObj
+        const signAndPerhapsGetFileTasks:Promise<any>[] = []
+        signAndPerhapsGetFileTasks.push(this._requestAdapter!.ed25519SignAndGetPublicKey({message,pairX}))  
+        if (!file && fileGetter) {
+            signAndPerhapsGetFileTasks.push(fileGetter())
+        }
+        const signAndPerhapsGetFileTasksRes = await Promise.all(signAndPerhapsGetFileTasks)
+        const sigRes = signAndPerhapsGetFileTasksRes[0] as {signature:string,publicKey:string}
+        if (!file && fileGetter) {
+            file = signAndPerhapsGetFileTasksRes[1] as File
+        }
+        if (!file) throw new Error('No file')
         // get ext from file
         const ext = file.name.split('.').pop()
         if (!ext) throw new Error('No ext')
-        
+        const dimensionsPromise = new Promise<
+    {width:number,height:number}
+    >((resolve)=>{
+            getImageDimensions(file!).then((dimensions)=>{
+                resolve(dimensions)
+            })
+        })
         const {signature,publicKey} = sigRes 
         const {uploadURL,imageURL} = await this._getPresignedImageUploadUrl({publicKey,signature,message,ext})
         let uploadPromise = this._uploadFileToS3({file,uploadURL})
@@ -1519,7 +1535,7 @@ export class GroupfiSdkClient {
             console.log('uploadImageToS3 error', error);
             throw error
         })
-        return {imageURL, uploadPromise}
+        return {imageURL, dimensionsPromise, uploadPromise}
     }
     // given File object and a presigned url, upload file to s3
     async _uploadFileToS3({file,uploadURL}:{file:File,uploadURL:string}){
