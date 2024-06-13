@@ -854,9 +854,9 @@ class GroupFiSDKFacade {
     return res;
   }
 
-  // upload image to s3
-  async uploadImageToS3({fileGetter}: {fileGetter: () => Promise<File>}) : Promise<{imageURL: string, uploadPromise:Promise<void>}> {
-    return await this._client!.uploadImageToS3({fileGetter,pairX: this._pairX!});
+  // upload image to s3    
+  async uploadImageToS3({fileGetter, pairX, fileObj}: {fileGetter?: () => Promise<File>, pairX: PairX, fileObj?: File}): Promise<{ imageURL: string, dimensionsPromise: Promise<{ width: number; height: number }>, uploadPromise: Promise<void> }> {
+    return await this._client!.uploadImageToS3({fileGetter, pairX, fileObj});
   }
   
   // fetchForMeGroupConfigs
