@@ -1,3 +1,5 @@
+import { PairX } from './types'
+
 export const config = [
   {
     chainId: 148,
@@ -23,7 +25,7 @@ export const config = [
 ];
 
 export class AuxiliaryService {
-  _domain = 'testapi.groupfi.ai';
+  _domain = process.env.AUXILIARY_SERVICE_DOMAIN;
 
   async fetchSMRPrice(chainId: number) {
     const res = await fetch(`https://${this._domain}/smr_price`);
@@ -39,6 +41,18 @@ export class AuxiliaryService {
     };
 
     return json.data[chainId];
+  }
+
+  async fetchProxyAccount(body: string): Promise<any> {
+    const res = await fetch(`https://${this._domain}/proxy/account`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: body,
+    });
+    console.log('===> fetchProxyAccount res', res)
+    return res
   }
 
   async sendTransaction(body: string): Promise<{

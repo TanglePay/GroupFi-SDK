@@ -42,6 +42,7 @@ import {
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
 import { EthEncrypt, utf8ToHex } from 'iotacat-sdk-utils';
+import { Ed25519 } from '@iota/crypto.js';
 
 import {
   WalletType,
@@ -1764,6 +1765,19 @@ class GroupFiSDKFacade {
       size
     );
     return res;
+  }
+
+  // Check if the user is registered in the corresponding service environmen
+  async checkIsRegisteredInServiceEnv(pairX: PairX) {
+    const publicKeyHex = bytesToHex(pairX.publicKey,true)
+    const ts = getCurrentEpochInSeconds()
+    const dataToBeSignedBytes = strToBytes(publicKeyHex+ts)
+    const signBytes = Ed25519.sign(pairX.privateKey, dataToBeSignedBytes)
+    const signHex = bytesToHex(signBytes, true)
+    // const body = {
+    //   publickey: 
+    // }
+    // const res = AuxiliaryService.fetch
   }
 }
 
