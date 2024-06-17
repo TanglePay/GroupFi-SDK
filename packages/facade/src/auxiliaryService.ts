@@ -44,11 +44,15 @@ export class AuxiliaryService {
   }
 
   async fetchProxyAccount(publicKey: string): Promise<string | undefined> {
-    const res = (await fetch(
+    const res = await fetch(
       `https://${this._domain}/proxy/account?publickey=${publicKey}`
-    )) as unknown as { result: boolean; proxy_account?: string };
-    if (res.result) {
-      return res.proxy_account!;
+    );
+    const jsonRes = (await res.json()) as {
+      result: boolean;
+      proxy_account?: string;
+    };
+    if (jsonRes.result) {
+      return jsonRes.proxy_account!;
     } else {
       return undefined;
     }
