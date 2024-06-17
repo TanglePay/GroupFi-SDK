@@ -1767,17 +1767,18 @@ class GroupFiSDKFacade {
     return res;
   }
 
-  // Check if the user is registered in the corresponding service environmen
-  async checkIsRegisteredInServiceEnv(pairX: PairX) {
-    const publicKeyHex = bytesToHex(pairX.publicKey,true)
-    const ts = getCurrentEpochInSeconds()
-    const dataToBeSignedBytes = strToBytes(publicKeyHex+ts)
-    const signBytes = Ed25519.sign(pairX.privateKey, dataToBeSignedBytes)
-    const signHex = bytesToHex(signBytes, true)
-    // const body = {
-    //   publickey: 
-    // }
-    // const res = AuxiliaryService.fetch
+  async checkIsRegisteredInServiceEnv(publicKey: string, proxyAddressToConfirm: string) {
+    if (this._mode !== DelegationMode) {
+      return true
+    }
+    const proxyAddressFromServiceEnv = await this._auxiliaryService.fetchProxyAccount(publicKey)
+    if (proxyAddressFromServiceEnv === undefined) {
+      return false
+    }
+    if (proxyAddressFromServiceEnv !== proxyAddressToConfirm) {
+      return false
+    }
+    return true
   }
 }
 
