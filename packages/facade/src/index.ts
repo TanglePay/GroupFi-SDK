@@ -42,6 +42,7 @@ import {
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
 import { EthEncrypt, utf8ToHex } from 'iotacat-sdk-utils';
+import { Ed25519 } from '@iota/crypto.js';
 
 import {
   WalletType,
@@ -1764,6 +1765,20 @@ class GroupFiSDKFacade {
       size
     );
     return res;
+  }
+
+  async checkIsRegisteredInServiceEnv(publicKey: string, proxyAddressToConfirm: string) {
+    if (this._mode !== DelegationMode) {
+      return true
+    }
+    const proxyAddressFromServiceEnv = await this._auxiliaryService.fetchProxyAccount(publicKey)
+    if (proxyAddressFromServiceEnv === undefined) {
+      return false
+    }
+    if (proxyAddressFromServiceEnv !== proxyAddressToConfirm) {
+      return false
+    }
+    return true
   }
 }
 

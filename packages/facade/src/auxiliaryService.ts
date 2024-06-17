@@ -1,3 +1,5 @@
+import { PairX } from './types';
+
 export const config = [
   {
     chainId: 148,
@@ -23,7 +25,7 @@ export const config = [
 ];
 
 export class AuxiliaryService {
-  _domain = 'testapi.groupfi.ai';
+  _domain = process.env.AUXILIARY_SERVICE_DOMAIN;
 
   async fetchSMRPrice(chainId: number) {
     const res = await fetch(`https://${this._domain}/smr_price`);
@@ -41,12 +43,23 @@ export class AuxiliaryService {
     return json.data[chainId];
   }
 
+  async fetchProxyAccount(publicKey: string): Promise<string | undefined> {
+    const res = (await fetch(
+      `https://${this._domain}/proxy/account?publickey=${publicKey}`
+    )) as unknown as { result: boolean; proxy_account?: string };
+    if (res.result) {
+      return res.proxy_account!;
+    } else {
+      return undefined;
+    }
+  }
+
   async sendTransaction(body: string): Promise<{
-    blockId: string,
-    result: boolean,
-    transactionId: string
+    blockId: string;
+    result: boolean;
+    transactionId: string;
   }> {
-    console.log('send proxy tx body:', body)
+    console.log('send proxy tx body:', body);
     const res = await fetch(`https://${this._domain}/proxy/send`, {
       method: 'POST',
       headers: {
@@ -54,13 +67,17 @@ export class AuxiliaryService {
       },
       body: body,
     });
-    const json = await res.json() as {result: boolean, blockid: string, transactionid: string}
-    console.log('send proxy tx res:', json)
+    const json = (await res.json()) as {
+      result: boolean;
+      blockid: string;
+      transactionid: string;
+    };
+    console.log('send proxy tx res:', json);
     return {
       result: json.result,
       blockId: json.blockid,
-      transactionId: json.transactionid
-    }
+      transactionId: json.transactionid,
+    };
   }
 
   async register(body: string) {
