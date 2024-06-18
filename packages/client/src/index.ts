@@ -54,7 +54,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers
 } from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer } from 'iotacat-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'iotacat-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
@@ -165,6 +165,7 @@ type Network = {
     explorerApiNetwork: string;
     networkId: string;
     inxMqttEndpoint: string;
+    imagePreSignedUrl?: string;
 }
 const shimmerTestNet = {
     id: 101,
@@ -175,6 +176,7 @@ const shimmerTestNet = {
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
     inxMqttEndpoint: "wss://test.shimmer.node.tanglepay.com/mqtt",
+    imagePreSignedUrl: "https://pwzmabpgxc.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-stage-4-Stage/get-upload-url",
 }
 
 const shimmerMainNet = {
@@ -1484,6 +1486,68 @@ export class GroupfiSdkClient {
             console.log("Error submitting block: ", e);
         }
         
+    }
+    async _getPresignedImageUploadUrl({publicKey,signature,message,ext}:{publicKey:string,signature:string,message:string,ext:string}):Promise<{uploadURL:string,imageURL:string}>{
+        const url = this._curNode!.imagePreSignedUrl!
+        const body = {publicKey,signature,message,ext}
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        })
+        const json = await res.json() as {uploadURL:string}
+        const {uploadURL} = json
+        const imageURL = uploadURL.split('?')[0]
+        return {uploadURL,imageURL}
+    }
+    async uploadImageToS3({fileGetter,pairX, fileObj}:{fileGetter?:()=>Promise<File>,pairX:PairX, fileObj?:File}):Promise<{imageURL:string, 
+        dimensionsPromise:Promise<{width:number,height:number}>,
+        uploadPromise:Promise<void>}>{
+        const message = this._accountBech32Address!
+        let file:File|undefined = fileObj
+        const signAndPerhapsGetFileTasks:Promise<any>[] = []
+        signAndPerhapsGetFileTasks.push(this._requestAdapter!.ed25519SignAndGetPublicKey({message,pairX}))  
+        if (!file && fileGetter) {
+            signAndPerhapsGetFileTasks.push(fileGetter())
+        }
+        const signAndPerhapsGetFileTasksRes = await Promise.all(signAndPerhapsGetFileTasks)
+        const sigRes = signAndPerhapsGetFileTasksRes[0] as {signature:string,publicKey:string}
+        if (!file && fileGetter) {
+            file = signAndPerhapsGetFileTasksRes[1] as File
+        }
+        if (!file) throw new Error('No file')
+        // get ext from file
+        const ext = file.name.split('.').pop()
+        if (!ext) throw new Error('No ext')
+        const dimensionsPromise = new Promise<
+    {width:number,height:number}
+    >((resolve)=>{
+            getImageDimensions(file!).then((dimensions)=>{
+                resolve(dimensions)
+            })
+        })
+        const {signature,publicKey} = sigRes 
+        const {uploadURL,imageURL} = await this._getPresignedImageUploadUrl({publicKey,signature,message,ext})
+        let uploadPromise = this._uploadFileToS3({file,uploadURL})
+        uploadPromise = uploadPromise.catch((error)=>{
+            console.log('uploadImageToS3 error', error);
+            throw error
+        })
+        return {imageURL, dimensionsPromise, uploadPromise}
+    }
+    // given File object and a presigned url, upload file to s3
+    async _uploadFileToS3({file,uploadURL}:{file:File,uploadURL:string}){
+        // content type should be steamed
+        const res = await fetch(uploadURL, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'Cache-Control': 'max-age=31536000'
+            },
+            body: file
+        })
     }
     async _findLargestUnspentOutput(outputIds:string[]){
         let largestAmount = bigInt('0')

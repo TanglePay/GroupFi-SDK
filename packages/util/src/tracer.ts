@@ -50,7 +50,7 @@ class Tracer {
     }
     // dump logs to console
     public dumpLogs(): void {
-        console.log(this.logs.join('\n'));
+        console.log(this.getLogs().join('\n'));
     }
 
 }

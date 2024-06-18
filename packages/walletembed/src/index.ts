@@ -359,6 +359,15 @@ class GroupfiWalletEmbedded {
         if (!salt) throw IotaCatSDKObj.makeErrorForSaltNotFound()
         return salt
     }
+    getEd25519PublicKey(){
+        return Converter.bytesToHex(this._SMRAccount._walletKeyPair!.publicKey, true)
+    }
+    ed25519SignMessage(message:string){
+        const payload = Converter.utf8ToBytes(message)
+        // const signature = Ed25519.sign(payload, this._SMRAccount._walletKeyPair!.privateKey)
+        const signature = Ed25519.sign(this._SMRAccount._walletKeyPair!.privateKey, payload)
+        return Converter.bytesToHex(signature)
+    }
     // check address unlock condition is to self
     _isAddressUnlockConditionToSelf(addressUnlockCondition:IAddressUnlockCondition){
         if (!addressUnlockCondition) return false

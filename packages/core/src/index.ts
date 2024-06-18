@@ -49,7 +49,9 @@ class IotaCatSDK {
         return undefined
     }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
-        const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
+        let sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
+        // filter out dappGroupId
+        sortedKeys = sortedKeys.filter(key=>key !== 'dappGroupId')
         const sortedMap = sortedKeys.reduce((acc,key)=>{
             let value = meta[key]
             if (Array.isArray(value)) {
@@ -583,7 +585,7 @@ class IotaCatSDK {
         return json
     }
 
-    async fetchTokenTotalBalance(token: string, chainId: number): Promise<{TotalSupply:string,Decimals: number}> {
+    async fetchTokenTotalBalance(token: string, chainId: number): Promise<{TotalSupply:string,Decimals: number,Name:string}> {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/tokentotalbalance?token=${token}&chainId=${chainId}`
         const res = await fetch(url)
         const json = await res.json()
@@ -1014,13 +1016,13 @@ class IotaCatSDK {
             }
             if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
-                    contract:groupConfig.collectionId,
+                    contract:groupConfig.contractAddress,
                     erc:721
                 })
             } else {
-                const thresInt = parseInt(groupConfig.tokenThres)
+                const thresInt = parseInt(groupConfig.tokenThres!)
                 filterParam = Object.assign(filterParam,{
-                    contract:groupConfig.tokenId,
+                    contract:groupConfig.contractAddress,
                     erc:20,
                     threshold: thresInt
                 })

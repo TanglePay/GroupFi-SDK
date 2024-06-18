@@ -88,15 +88,17 @@ export const MessageTypePublic = 2
 export const MessageAuthSchemeRecipeintInMessage = 1
 export const MessageAuthSchemeRecipeintOnChain = 2
 export interface MessageGroupMeta {
+    dappGroupId:string
     groupName: string;
     schemaVersion: number; 
     messageType:typeof MessageTypePrivate | typeof MessageTypePublic,
     authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain,
     qualifyType: GroupQualifyTypeStr,
     chainId: number,
-    tokenThres: string,
-    tokenId: string,
-    collectionId: string,
+    contractAddress: string,
+    tokenThres?: string,
+    tokenThresValue?: string,
+    tokenDecimals?: string,
 }
 export type GroupConfig = MessageGroupMeta & {groupId:string}
 export type MessageGroupMetaPlus = MessageGroupMeta & {isPublic:boolean}
@@ -271,6 +273,5 @@ export const GROUPFIReservedTags = [
 ]
 
 export interface IIncludesAndExcludes {
-    groupName: string
-    chainId?: number
+    groupId: string
 }
