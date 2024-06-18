@@ -187,6 +187,7 @@ const shimmerMainNet = {
     explorerApiNetwork: "shimmer",
     networkId: "14364762045254553490",
     inxMqttEndpoint: "wss://test.api.iotacat.com/api/iotacatmqtt/v1",
+    imagePreSignedUrl: "https://pwzmabpgxc.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-stage-4-Stage/get-upload-url",
 }
 const nodes = [
     shimmerTestNet,
