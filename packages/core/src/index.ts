@@ -965,7 +965,7 @@ class IotaCatSDK {
     }):Promise<{addressList:string[],signature:string}>
     {
         // post https://testapi.groupfi.ai/filter
-        const url = `https://testapi.groupfi.ai/group/filter`
+        const url = `https://api.groupfi.ai/group/filter`
         const res = await fetch(url, {
             method: 'POST',
             headers: {
