@@ -1020,11 +1020,11 @@ class IotaCatSDK {
                     erc:721
                 })
             } else {
-                const thresInt = parseInt(groupConfig.tokenThres!)
+                const thresValue = groupConfig.tokenThresValue
                 filterParam = Object.assign(filterParam,{
                     contract:groupConfig.contractAddress,
                     erc:20,
-                    threshold: thresInt
+                    threshold: thresValue
                 })
             }
             return filterParam
