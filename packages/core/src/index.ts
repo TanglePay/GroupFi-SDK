@@ -965,7 +965,7 @@ class IotaCatSDK {
     }):Promise<{addressList:string[],signature:string}>
     {
         // post https://testapi.groupfi.ai/filter
-        const url = `https://api.groupfi.ai/group/filter`
+        const url = `https://${process.env.AUXILIARY_SERVICE_DOMAIN}/group/filter`
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -1017,14 +1017,15 @@ class IotaCatSDK {
             if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
                     contract:groupConfig.contractAddress,
+                    threshold: '1',
                     erc:721
                 })
             } else {
-                const thresInt = parseInt(groupConfig.tokenThres!)
+                const thresValue = groupConfig.tokenThresValue
                 filterParam = Object.assign(filterParam,{
                     contract:groupConfig.contractAddress,
                     erc:20,
-                    threshold: thresInt
+                    threshold: thresValue
                 })
             }
             return filterParam
