@@ -171,7 +171,7 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://test2.api.groupfi.ai",//"https://test.api.groupfi.ai",//"https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://test3.api.groupfi.ai",//"https://test.api.groupfi.ai",//"https://mainnet.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
