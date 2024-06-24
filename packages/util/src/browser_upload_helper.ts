@@ -45,3 +45,18 @@ export function getImageDimensions(file: File): Promise<{ width: number; height:
     });
   }
   
+  export async function checkImageExists(imageUrl: string): Promise<boolean> {
+    try {
+      const response = await fetch(imageUrl, { method: 'HEAD' });
+      if (response.ok) {
+        console.log('Image exists.');
+        return true;
+      } else {
+        console.log('Image does not exist.');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error checking if image exists:', error);
+      return false;
+    }
+  }
