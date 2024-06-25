@@ -1,4 +1,4 @@
-import { IMUserMuteGroupMember, IMUserMuteGroupMemberIntermediate, MessageCurrentSchemaVersion } from "./types";
+import { IMUserMuteGroupMember, IMUserMuteGroupMemberIntermediate, MuteSchemaVersion } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 
 export function serializeUserMuteGroupMembers(list:IMUserMuteGroupMember[]) : Uint8Array {
@@ -13,7 +13,7 @@ export function serializeUserMuteGroupMembers(list:IMUserMuteGroupMember[]) : Ui
 
 export function serializeUserMuteGroupMemberIntermediates(writer: WriteStream, list: IMUserMuteGroupMemberIntermediate[]) {
     // first write schema version
-    writer.writeUInt8("schema_version", MessageCurrentSchemaVersion);
+    writer.writeUInt8("schema_version", MuteSchemaVersion);
     for (const userMuteGroupMemberIntermediate of list) {
         const { groupId, addrSha256Hash } = userMuteGroupMemberIntermediate;
         // check if list.groupId is 32 bytes
@@ -33,7 +33,7 @@ export function serializeUserMuteGroupMemberIntermediates(writer: WriteStream, l
 
 export function deserializeUserMuteGroupMemberIntermediates(reader: ReadStream): IMUserMuteGroupMemberIntermediate[] {
     const schemaVersion = reader.readUInt8("schema_version");
-    if (schemaVersion !== MessageCurrentSchemaVersion) {
+    if (schemaVersion !== MuteSchemaVersion) {
         throw new Error(`schema version ${schemaVersion} is not supported`);
     }
     const list: IMUserMuteGroupMemberIntermediate[] = [];
