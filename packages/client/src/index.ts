@@ -63,7 +63,7 @@ export { AddressMappingStore }
 //TODO tune concurrency
 const httpCallLimit = 5;
 const consolidateBatchSize = 29;
-const cashSplitNums = 4;
+const cashSplitNums = 8;
 setIotaCrypto({
     Bip39,
     Ed25519,
