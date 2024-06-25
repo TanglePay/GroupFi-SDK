@@ -1,4 +1,5 @@
 
+import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
 export const getFileForUpload = async ()=>{
     // create a file input element, click it and get the file, then remove the element
     const input = document.createElement('input');
@@ -60,3 +61,37 @@ export function getImageDimensions(file: File): Promise<{ width: number; height:
       return false;
     }
   }
+
+  
+
+const s3Client = new S3Client({
+  region: 'us-east-2',
+  useAccelerateEndpoint: true,
+});
+
+async function checkIfObjectExists(url: string): Promise<boolean> {
+  try {
+    // Parse the URL to extract bucket name and object key
+    const { hostname, pathname } = new URL(url);
+    const bucketName = hostname.split('.')[0];
+    const objectKey = pathname.substring(1);
+
+    // Create the command
+    const command = new HeadObjectCommand({ Bucket: bucketName, Key: objectKey });
+
+    // Send the command
+    await s3Client.send(command);
+
+    // If the command succeeds, the object exists
+    return true;
+  } catch (error) {
+    // If a NotFound error is thrown, the object does not exist
+    if (error.name === "NotFound") {
+      return false;
+    } else {
+      // Handle other errors
+      console.error("An error occurred:", error);
+      throw error;
+    }
+  }
+}

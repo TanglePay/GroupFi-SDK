@@ -41,6 +41,7 @@
     "@types/crypto-js": "^4.1.1"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
     "@iota/crypto.js": "^2.0.0-rc.2",
     "@iota/util.js": "^2.0.0-rc.2",
     "big-integer": "^1.6.51",
