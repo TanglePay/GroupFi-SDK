@@ -80,6 +80,8 @@ export function deserializeRecipientList(reader: ReadStream): IMRecipientInterme
 export function serializeIMMessage(writer: WriteStream, message: IMMessageIntermediate): void {
     // Write schema_version as Int8
     writer.writeUInt8("schema_version", message.schemaVersion);
+    // write isAnnouncement as Int8
+    writer.writeUInt8("is_announcement", message.isAnnouncement);
     // Validate and write groupId (fixed 32 bytes length) first
     if (message.groupId.byteLength !== GroupIDLength) {
         throw new Error("groupId length is not 32 bytes");
@@ -128,6 +130,10 @@ export function serializeIMMessage(writer: WriteStream, message: IMMessageInterm
 export function deserializeIMMessage(reader: ReadStream): IMMessageIntermediate {
     const schemaVersion = reader.readUInt8("schema_version");
     const groupId = reader.readBytes("groupId", GroupIDLength);
+    let isAnnouncement = 0;
+    if (schemaVersion > 1) {
+        isAnnouncement = reader.readUInt8("is_announcement");
+    }
     const messageType = reader.readUInt8("message_type");
     const authScheme = reader.readUInt8("auth_scheme");
     const timestamp = reader.readUInt32("timestamp");
@@ -148,6 +154,7 @@ export function deserializeIMMessage(reader: ReadStream): IMMessageIntermediate 
     return {
         schemaVersion,
         groupId,
+        isAnnouncement,
         messageType,
         authScheme,
         timestamp,

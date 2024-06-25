@@ -711,7 +711,8 @@ class GroupFiSDKFacade {
     const message = await IotaCatSDKObj.prepareSendMessage(
       address,
       groupName!,
-      messageText
+      messageText,
+      false
     );
     if (!message) throw new Error('prepareSendMessage error');
     // call client sendMessage(addr, groupId, message)

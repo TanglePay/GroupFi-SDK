@@ -17,6 +17,7 @@ export interface IMRecipientIntermediateList {
 export interface IMMessage {
     schemaVersion: number; // 0 or 1, 1 byte
     groupId: string; // sha256  bytes
+    isAnnouncement: boolean;
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
     timestamp: number; // 4 bytes
@@ -27,6 +28,7 @@ export interface IMMessage {
 export interface IMMessageIntermediate {
     schemaVersion: number; // 0 or 1, 1 byte
     groupId: Uint8Array; // sha256  bytes
+    isAnnouncement: number; // 0 or 1, 1 byte
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
     timestamp: number; // 4 bytes
@@ -82,7 +84,7 @@ export type Address = {
 }
 export const INX_GROUPFI_DOMAIN = process.env.INX_GROUPFI_DOMAIN
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
-export const MessageCurrentSchemaVersion = 1
+export const MessageCurrentSchemaVersion = 2
 // schema version for evm qualify
 export const EvmQualifySchemaVersion = 1
 // like
