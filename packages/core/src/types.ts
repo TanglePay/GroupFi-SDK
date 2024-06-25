@@ -83,6 +83,19 @@ export type Address = {
 export const INX_GROUPFI_DOMAIN = process.env.INX_GROUPFI_DOMAIN
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
+// schema version for evm qualify
+export const EvmQualifySchemaVersion = 1
+// like
+export const LikeSchemaVersion = 1
+// mark
+export const MarkSchemaVersion = 1
+// mute
+export const MuteSchemaVersion = 1
+// vote
+export const VoteSchemaVersion = 1
+// shared
+export const SharedSchemaVersion = 1
+
 export const MessageTypePrivate = 1
 export const MessageTypePublic = 2
 export const MessageAuthSchemeRecipeintInMessage = 1

@@ -1,4 +1,4 @@
-import { IMUserVoteGroup, IMUserVoteGroupIntermediate, MessageCurrentSchemaVersion } from "./types";
+import { IMUserVoteGroup, IMUserVoteGroupIntermediate, VoteSchemaVersion } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { numberToBytes } from 'iotacat-sdk-utils'
 
@@ -14,7 +14,7 @@ export function serializeUserVoteGroups(list:IMUserVoteGroup[]) : Uint8Array {
 
 export function serializeUserVoteGroupIntermediates(writer: WriteStream, list: IMUserVoteGroupIntermediate[]) {
     // first write schema version
-    writer.writeUInt8("schema_version", MessageCurrentSchemaVersion);
+    writer.writeUInt8("schema_version", VoteSchemaVersion);
     for (const userVoteGroupIntermediate of list) {
         const { groupId, vote } = userVoteGroupIntermediate;
         // check if list.groupId is 32 bytes
@@ -33,7 +33,7 @@ export function serializeUserVoteGroupIntermediates(writer: WriteStream, list: I
 
 export function deserializeUserVoteGroupIntermediates(reader: ReadStream): IMUserVoteGroupIntermediate[] {
     const schemaVersion = reader.readUInt8("schema_version");
-    if (schemaVersion !== MessageCurrentSchemaVersion) {
+    if (schemaVersion !== VoteSchemaVersion) {
         throw new Error(`schema version ${schemaVersion} is not supported`);
     }
     const list: IMUserVoteGroupIntermediate[] = [];
