@@ -2,6 +2,7 @@ import { WriteStream, ReadStream, Converter } from '@iota/util.js';
 import { Blake2b, Bip39, Bip32Path } from '@iota/crypto.js';
 import { Ed25519Seed, generateBip44Address, COIN_TYPE_SHIMMER } from '@iota/iota.js';
 import bigInt from 'big-integer';
+import { createHash } from 'node:crypto'
 export * from './runbatch';
 export * from './objectId';
 export * from './consolidate';
@@ -258,4 +259,15 @@ export function getSMRPairBySeed(baseSeed: Ed25519Seed) {
   const addressSeed = baseSeed.generateSeedFromPath(new Bip32Path(path));
   const addressKeyPair = addressSeed.keyPair();
   return addressKeyPair;
+}
+
+export function SHA256HashBytesReturnString(inputStr: string) {
+  const hasher = createHash('sha256');
+  inputStr = inputStr.indexOf('0x') !== -1 ? inputStr.slice(2) : inputStr
+  const inputBytes111 = new Uint8Array(inputStr.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
+  hasher.update(inputBytes111);
+  const digest = hasher.digest()
+  const hashArray = Array.from(new Uint8Array(digest));
+  const res = hashArray.map(b => ('00' + b.toString(16)).slice(-2)).join('');
+  return res
 }
