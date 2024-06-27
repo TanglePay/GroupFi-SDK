@@ -700,6 +700,7 @@ class GroupFiSDKFacade {
   async sendMessage(
     groupId: string,
     messageText: string,
+    isAnnouncement:boolean,
     memberList?: { addr: string; publicKey: string }[]
   ) {
     tracer.startStep('sendMessageToGroup','facade sendMessage');
@@ -712,7 +713,7 @@ class GroupFiSDKFacade {
       address,
       groupName!,
       messageText,
-      false
+      isAnnouncement
     );
     if (!message) throw new Error('prepareSendMessage error');
     // call client sendMessage(addr, groupId, message)
