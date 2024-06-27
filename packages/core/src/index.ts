@@ -775,7 +775,6 @@ class IotaCatSDK {
         const portionOfRes = {
             schemaVersion,
             groupId: hexToBytes(groupId),
-            isAnnouncement: isAnnouncement ? 1 : 0,
             messageType,
             authScheme,
             timestamp,
@@ -818,11 +817,10 @@ class IotaCatSDK {
         }
     }
     _decompileMessage(message:IMMessageIntermediate):IMMessage{
-        const {schemaVersion,isAnnouncement,groupId,messageType,authScheme,timestamp,data} = message
-        const compressedString = bytesToStr(data)
+        const {schemaVersion,groupId,messageType,authScheme,timestamp,data} = message
         const portionOfRes = {
             schemaVersion,
-            isAnnouncement: isAnnouncement == 1,
+            isAnnouncement: false,
             groupId: bytesToHex(groupId,false),
             messageType,
             authScheme,
