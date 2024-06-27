@@ -771,7 +771,7 @@ class IotaCatSDK {
         return bytesToHex(addressHash(addr,IOTACATTAG))
     }
     _compileMessage(message:IMMessage):IMMessageIntermediate{
-        const {schemaVersion,isAnnouncement,groupId,messageType,authScheme, timestamp, data} = message
+        const {schemaVersion,groupId,messageType,authScheme, timestamp, data} = message
         const portionOfRes = {
             schemaVersion,
             groupId: hexToBytes(groupId),
