@@ -649,6 +649,57 @@ class GroupfiWalletEmbedded {
     tpDecrypt(seed:string, password:string, forceV2 = false){
         return tpDecrypt(seed, password, forceV2)
     }
+
+    encryptDataUsingPassword(data: string, password: string): string {
+        // Generate a random salt
+        const salt = CryptoJS.lib.WordArray.random(128 / 8);
+        // Derive a key using PBKDF2
+        const key = CryptoJS.PBKDF2(password, salt, {
+            keySize: 256 / 32
+        });
+        // Generate a random IV
+        const iv = CryptoJS.lib.WordArray.random(128 / 8);
+        // Encrypt the data using the derived key and random IV
+        const encrypted = CryptoJS.AES.encrypt(data, key, {
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7,
+            iv: iv
+        });
+    
+        // Combine salt, IV, and ciphertext
+        const encryptedData = salt.concat(iv).concat(encrypted.ciphertext);
+    
+        // Return the encrypted data as a hexadecimal string
+        return encryptedData.toString(CryptoJS.enc.Hex);
+    }
+    
+    decryptDataUsingPassword(encryptedData: string, password: string): string {
+        // Convert the encrypted data from hexadecimal to WordArray
+        const encryptedBytes = CryptoJS.enc.Hex.parse(encryptedData);
+        // Extract the salt, IV, and ciphertext
+        const salt = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(0, 4));
+        const iv = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(4, 8));
+        const ciphertext = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(8), encryptedBytes.sigBytes - 16);
+    
+        // Derive the key using PBKDF2 with the same salt
+        const key = CryptoJS.PBKDF2(password, salt, {
+            keySize: 256 / 32
+        });
+    
+        // Decrypt the data using the derived key and extracted IV
+        const decrypted = CryptoJS.AES.decrypt(
+            CryptoJS.lib.CipherParams.create({ ciphertext: ciphertext }),
+            key,
+            {
+                mode: CryptoJS.mode.CBC,
+                padding: CryptoJS.pad.Pkcs7,
+                iv: iv
+            }
+        );
+    
+        // Return the decrypted data as a UTF-8 string
+        return decrypted.toString(CryptoJS.enc.Utf8);
+    }
 }
 
 const instance = new GroupfiWalletEmbedded()
