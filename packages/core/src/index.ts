@@ -208,7 +208,7 @@ class IotaCatSDK {
     unsubscribeToAllTopics(){
         this._unsubscribeToTopics(Array.from(this._subscribedTopics))
     }
-    async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
+    async prepareSendMessage(senderAddr:Address, group:string,message: string, isAnnouncement:boolean):Promise<IMMessage|undefined>  {
         const meta = this._groupNameToGroupMeta(group)
         if (!meta) return undefined
         const {schemaVersion,messageType,authScheme} = meta
@@ -217,6 +217,7 @@ class IotaCatSDK {
         return {
             schemaVersion,
             groupId,
+            isAnnouncement,
             messageType,
             authScheme,
             timestamp,
@@ -817,9 +818,9 @@ class IotaCatSDK {
     }
     _decompileMessage(message:IMMessageIntermediate):IMMessage{
         const {schemaVersion,groupId,messageType,authScheme,timestamp,data} = message
-        const compressedString = bytesToStr(data)
         const portionOfRes = {
             schemaVersion,
+            isAnnouncement: false,
             groupId: bytesToHex(groupId,false),
             messageType,
             authScheme,

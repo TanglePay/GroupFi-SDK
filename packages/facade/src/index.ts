@@ -700,6 +700,7 @@ class GroupFiSDKFacade {
   async sendMessage(
     groupId: string,
     messageText: string,
+    isAnnouncement:boolean,
     memberList?: { addr: string; publicKey: string }[]
   ) {
     tracer.startStep('sendMessageToGroup','facade sendMessage');
@@ -711,7 +712,8 @@ class GroupFiSDKFacade {
     const message = await IotaCatSDKObj.prepareSendMessage(
       address,
       groupName!,
-      messageText
+      messageText,
+      isAnnouncement
     );
     if (!message) throw new Error('prepareSendMessage error');
     // call client sendMessage(addr, groupId, message)

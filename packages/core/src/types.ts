@@ -17,6 +17,7 @@ export interface IMRecipientIntermediateList {
 export interface IMMessage {
     schemaVersion: number; // 0 or 1, 1 byte
     groupId: string; // sha256  bytes
+    isAnnouncement: boolean;
     messageType: number; // 0 or 1, 1 byte
     authScheme: number; // 0 or 1, 1 byte
     timestamp: number; // 4 bytes

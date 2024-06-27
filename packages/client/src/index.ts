@@ -1442,6 +1442,7 @@ export class GroupfiSdkClient {
                 timestamp: message.timestamp
             };
             // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
+            const expireInDays = message.isAnnouncement ? 30 : 5;
             const basicOutput: IBasicOutput = {
                 type: BASIC_OUTPUT_TYPE,
                 amount: '',
@@ -1456,7 +1457,7 @@ export class GroupfiSdkClient {
                     },
                     {
                         type: TIMELOCK_UNLOCK_CONDITION_TYPE,
-                        unixTime: message.timestamp + 60 * 60 * 24 * 3
+                        unixTime: message.timestamp + 60 * 60 * 24 * expireInDays
                     }
                 ],
                 features: [
