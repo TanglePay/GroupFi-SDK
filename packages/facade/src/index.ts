@@ -916,6 +916,12 @@ class GroupFiSDKFacade {
   async browseModeSetupClient() {
     this._client = new GroupfiSdkClient();
     await this._client!.setup();
+
+    this._address = undefined
+    this._proxyAddress = undefined
+    this._nodeId = undefined
+    this._pairX = undefined
+    this._mode = undefined
   }
 
   async bootstrap(
