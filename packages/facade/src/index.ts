@@ -21,6 +21,7 @@ import {
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
 } from 'iotacat-sdk-core';
+import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
 import {
   SimpleDataExtended,
@@ -1122,10 +1123,12 @@ class GroupFiSDKFacade {
     const first32BytesOfPrivateKeyHex = bytesToHex(
       pairX.privateKey.slice(0, 32)
     );
-    const encryptedPrivateKeyHex = EthEncrypt({
-      publicKey: encryptionPublicKey,
-      dataTobeEncrypted: first32BytesOfPrivateKeyHex,
-    });
+    // const encryptedPrivateKeyHex = EthEncrypt({
+    //   publicKey: encryptionPublicKey,
+    //   dataTobeEncrypted: first32BytesOfPrivateKeyHex,
+    // });
+    const encryptedPrivateKeyHex = GroupfiWalletEmbedded.encryptDataUsingPassword(first32BytesOfPrivateKeyHex, encryptionPublicKey)
+    
     const metadataObj = {
       encryptedPrivateKey: encryptedPrivateKeyHex,
       pairXPublicKey: bytesToHex(pairX.publicKey, true),

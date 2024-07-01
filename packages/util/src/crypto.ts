@@ -47,6 +47,31 @@ export function tpEncrypt(seed: string, password: string) {
   return encrypted.ciphertext.toString().toUpperCase() + V2_FLAG
 }
 
+// Used for encryption in local storage of pairX
+export function tpEncryptWithFlag(seed: string, password: string, flag: string) {
+  const [key, iv] = tpGetKeyAndIvV2(password)
+  let srcs = CryptoJS.enc.Utf8.parse(seed)
+  let encrypted = CryptoJS.AES.encrypt(srcs, key, {
+      iv: iv,
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+  })
+  return encrypted.ciphertext.toString().toUpperCase() + flag
+}
+
+// Used for decryption in local storage of pairX
+export function tpDecryptWithFlag(seed:string, password:string, flag: string){
+  const FLAG = flag
+  const reg = new RegExp(`${FLAG}$`)
+  seed = seed.replace(reg, '')
+  const [key, iv] = tpGetKeyAndIvV2(password)
+  let encryptedHexStr = CryptoJS.enc.Hex.parse(seed)
+  let srcs = CryptoJS.enc.Base64.stringify(encryptedHexStr)
+  let decrypt = CryptoJS.AES.decrypt(srcs, key, { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 })
+  let decryptedStr = decrypt.toString(CryptoJS.enc.Utf8)
+  return decryptedStr.toString()
+}
+
 export function EthDecrypt({
   privateKey,
   encryptedData,

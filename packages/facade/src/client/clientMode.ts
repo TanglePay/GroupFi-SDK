@@ -25,6 +25,8 @@ import {
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
 
+const signText = "I acknowledge that I'm signing into GroupFi.\nFor your security, always verify that you are signing into GroupFi. If you did not initiate this sign-in, please disconnect your wallet immediately."
+
 export class ShimmerModeRequestAdapter implements IRequestAdapter {
   private _bech32Address: string;
   _nodeUrlHint: string;
@@ -197,12 +199,21 @@ export class DelegationModeRequestAdapter
   }
 
   async decryptPairX(params: { encryptedData: string }) {
+    const signTextHex = utf8ToHex(signText, true)
     const res = await this._dappClient.request({
-      method: 'eth_decrypt',
-      params: [params.encryptedData, this._evmAddress!],
+      method: 'personal_sign',
+      params: [signTextHex, this._evmAddress!],
     });
-    console.log('===> Groupfi facade res', res);
-    return res;
+    console.log('===>test decryptPairX publickey:', res)
+    const test = GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
+    console.log('===>test decryptPairX res', test)
+    return GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
+    // const res = await this._dappClient.request({
+    //   method: 'eth_decrypt',
+    //   params: [params.encryptedData, this._evmAddress!],
+    // });
+    // console.log('===> Groupfi facade res', res);
+    // return res;
     // return (await window.ethereum.request({
     //   method: 'eth_decrypt',
     //   params: [params.encryptedData, this._evmAddress!],
@@ -240,16 +251,24 @@ export class DelegationModeRequestAdapter
   }
 
   async getEncryptionPublicKey(): Promise<string> {
-    const res = (await this._dappClient.request({
-      method: 'eth_getEncryptionPublicKey',
-      params: [this._evmAddress],
-    })) as string;
-    // const res = (await window.ethereum.request({
+    const signTextHex = utf8ToHex(signText, true)
+    const res = await this._dappClient.request({
+      method: 'personal_sign',
+      params: [signTextHex, this._evmAddress!],
+    });
+    console.log('===>test: getEncryptionPublicKey', res)
+    return res
+    // const res = (await this._)
+    // const res = (await this._dappClient.request({
     //   method: 'eth_getEncryptionPublicKey',
     //   params: [this._evmAddress],
     // })) as string;
-    console.log('===> metamask getEncryptionPublicKey', res);
-    return res;
+    // // const res = (await window.ethereum.request({
+    // //   method: 'eth_getEncryptionPublicKey',
+    // //   params: [this._evmAddress],
+    // // })) as string;
+    // console.log('===> metamask getEncryptionPublicKey', res);
+    // return res;
   }
 
   async decrypt({ dataTobeDecrypted, pairX }: IRequestAdapterDecryptParams) {

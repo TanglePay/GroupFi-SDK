@@ -2313,11 +2313,14 @@ export class GroupfiSdkClient {
     async decryptPairX({privateKeyEncrypted, publicKey}: {privateKeyEncrypted: string, publicKey: string}): Promise<PairX> {
         const  proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
         const first32BytesOfPrivateKeyHex =  await proxyModeRequestAdapter.decryptPairX({encryptedData: privateKeyEncrypted})
+
         const first32BytesOfPrivateKey = Converter.hexToBytes(first32BytesOfPrivateKeyHex) 
-        console.log('===decryptPairX', first32BytesOfPrivateKeyHex)
-        console.log('first32BytesOfPrivateKey', first32BytesOfPrivateKey)
         const publicKeyBytes = Converter.hexToBytes(publicKey)
-        console.log('===>publicKeyBytes', publicKeyBytes)
+        const test = {
+            publicKey: publicKeyBytes,
+            privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)
+        }
+        console.log('===>test pairX', test)
         return {
             publicKey: publicKeyBytes,
             privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)
