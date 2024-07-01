@@ -650,14 +650,15 @@ class GroupfiWalletEmbedded {
         return tpDecrypt(seed, password, forceV2)
     }
 
-    encryptDataUsingPassword(data: string, password: string): string {
-        // Generate a random salt
+     encryptDataUsingPassword(data:string, password:string) {
+        // Generate a random salt (16 bytes)
         const salt = CryptoJS.lib.WordArray.random(128 / 8);
         // Derive a key using PBKDF2
         const key = CryptoJS.PBKDF2(password, salt, {
-            keySize: 256 / 32
+            keySize: 256 / 32,
+            iterations: 1000 // Added iterations for better security
         });
-        // Generate a random IV
+        // Generate a random IV (16 bytes)
         const iv = CryptoJS.lib.WordArray.random(128 / 8);
         // Encrypt the data using the derived key and random IV
         const encrypted = CryptoJS.AES.encrypt(data, key, {
@@ -673,17 +674,19 @@ class GroupfiWalletEmbedded {
         return encryptedData.toString(CryptoJS.enc.Hex);
     }
     
-    decryptDataUsingPassword(encryptedData: string, password: string): string {
+     decryptDataUsingPassword(encryptedData:string, password:string) {
         // Convert the encrypted data from hexadecimal to WordArray
         const encryptedBytes = CryptoJS.enc.Hex.parse(encryptedData);
-        // Extract the salt, IV, and ciphertext
-        const salt = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(0, 4));
-        const iv = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(4, 8));
-        const ciphertext = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(8), encryptedBytes.sigBytes - 16);
+    
+        // Extract the salt (16 bytes), IV (16 bytes), and ciphertext
+        const salt = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(0, 4), 16);
+        const iv = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(4, 8), 16);
+        const ciphertext = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(8), encryptedBytes.sigBytes - 32);
     
         // Derive the key using PBKDF2 with the same salt
         const key = CryptoJS.PBKDF2(password, salt, {
-            keySize: 256 / 32
+            keySize: 256 / 32,
+            iterations: 1000 // Ensure the same number of iterations as used during encryption
         });
     
         // Decrypt the data using the derived key and extracted IV
