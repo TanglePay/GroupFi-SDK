@@ -1,4 +1,4 @@
-import { GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, MessageCurrentSchemaVersion } from "./types";
+import { GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, MarkSchemaVersion } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { unixSecondsToBytes, bytesToUnixSeconds } from 'iotacat-sdk-utils'
 
@@ -15,7 +15,7 @@ export function serializeUserMarkedGroupIds(list:IMUserMarkedGroupId[]) : Uint8A
 
 export function serializeUserMarkedGroupIdsIntermediate(writer: WriteStream, list: IMUserMarkedGroupIdIntermediate[]) {
     // first write schema version
-    writer.writeUInt8("schema_version", MessageCurrentSchemaVersion);
+    writer.writeUInt8("schema_version", MarkSchemaVersion);
     for (const userMarkedGroupIdIntermediate of list) {
         const { groupId, timestamp } = userMarkedGroupIdIntermediate;
         // check if list.groupId is 32 bytes
@@ -34,7 +34,7 @@ export function serializeUserMarkedGroupIdsIntermediate(writer: WriteStream, lis
 
 export function deserializeUserMarkedGroupIdsIntermediate(reader: ReadStream): IMUserMarkedGroupIdIntermediate[] {
     const schemaVersion = reader.readUInt8("schema_version");
-    if (schemaVersion !== MessageCurrentSchemaVersion) {
+    if (schemaVersion !== MarkSchemaVersion) {
         throw new Error(`schema version ${schemaVersion} is not supported`);
     }
     const list: IMUserMarkedGroupIdIntermediate[] = [];

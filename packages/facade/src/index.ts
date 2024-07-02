@@ -21,6 +21,7 @@ import {
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
 } from 'iotacat-sdk-core';
+import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
 import {
   SimpleDataExtended,
@@ -700,6 +701,7 @@ class GroupFiSDKFacade {
   async sendMessage(
     groupId: string,
     messageText: string,
+    isAnnouncement:boolean,
     memberList?: { addr: string; publicKey: string }[]
   ) {
     tracer.startStep('sendMessageToGroup','facade sendMessage');
@@ -711,7 +713,8 @@ class GroupFiSDKFacade {
     const message = await IotaCatSDKObj.prepareSendMessage(
       address,
       groupName!,
-      messageText
+      messageText,
+      isAnnouncement
     );
     if (!message) throw new Error('prepareSendMessage error');
     // call client sendMessage(addr, groupId, message)
@@ -914,6 +917,12 @@ class GroupFiSDKFacade {
   async browseModeSetupClient() {
     this._client = new GroupfiSdkClient();
     await this._client!.setup();
+
+    this._address = undefined
+    this._proxyAddress = undefined
+    this._nodeId = undefined
+    this._pairX = undefined
+    this._mode = undefined
   }
 
   async bootstrap(
@@ -1114,10 +1123,12 @@ class GroupFiSDKFacade {
     const first32BytesOfPrivateKeyHex = bytesToHex(
       pairX.privateKey.slice(0, 32)
     );
-    const encryptedPrivateKeyHex = EthEncrypt({
-      publicKey: encryptionPublicKey,
-      dataTobeEncrypted: first32BytesOfPrivateKeyHex,
-    });
+    // const encryptedPrivateKeyHex = EthEncrypt({
+    //   publicKey: encryptionPublicKey,
+    //   dataTobeEncrypted: first32BytesOfPrivateKeyHex,
+    // });
+    const encryptedPrivateKeyHex = GroupfiWalletEmbedded.encryptDataUsingPassword(first32BytesOfPrivateKeyHex, encryptionPublicKey)
+    
     const metadataObj = {
       encryptedPrivateKey: encryptedPrivateKeyHex,
       pairXPublicKey: bytesToHex(pairX.publicKey, true),

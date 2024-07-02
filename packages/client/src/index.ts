@@ -63,7 +63,7 @@ export { AddressMappingStore }
 //TODO tune concurrency
 const httpCallLimit = 5;
 const consolidateBatchSize = 29;
-const cashSplitNums = 4;
+const cashSplitNums = 8;
 setIotaCrypto({
     Bip39,
     Ed25519,
@@ -1443,6 +1443,7 @@ export class GroupfiSdkClient {
                 timestamp: message.timestamp
             };
             // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
+            const expireInDays = message.isAnnouncement ? 30 : 5;
             const basicOutput: IBasicOutput = {
                 type: BASIC_OUTPUT_TYPE,
                 amount: '',
@@ -1457,7 +1458,7 @@ export class GroupfiSdkClient {
                     },
                     {
                         type: TIMELOCK_UNLOCK_CONDITION_TYPE,
-                        unixTime: message.timestamp + 60 * 60 * 24 * 3
+                        unixTime: message.timestamp + 60 * 60 * 24 * expireInDays
                     }
                 ],
                 features: [
@@ -2313,11 +2314,14 @@ export class GroupfiSdkClient {
     async decryptPairX({privateKeyEncrypted, publicKey}: {privateKeyEncrypted: string, publicKey: string}): Promise<PairX> {
         const  proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
         const first32BytesOfPrivateKeyHex =  await proxyModeRequestAdapter.decryptPairX({encryptedData: privateKeyEncrypted})
+
         const first32BytesOfPrivateKey = Converter.hexToBytes(first32BytesOfPrivateKeyHex) 
-        console.log('===decryptPairX', first32BytesOfPrivateKeyHex)
-        console.log('first32BytesOfPrivateKey', first32BytesOfPrivateKey)
         const publicKeyBytes = Converter.hexToBytes(publicKey)
-        console.log('===>publicKeyBytes', publicKeyBytes)
+        const test = {
+            publicKey: publicKeyBytes,
+            privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)
+        }
+        console.log('===>test pairX', test)
         return {
             publicKey: publicKeyBytes,
             privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)

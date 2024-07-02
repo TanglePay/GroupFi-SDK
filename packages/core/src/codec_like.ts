@@ -1,4 +1,4 @@
-import { IMUserLikeGroupMember, IMUserLikeGroupMemberIntermediate, IMUserMuteGroupMember, IMUserMuteGroupMemberIntermediate, MessageCurrentSchemaVersion } from "./types";
+import { IMUserLikeGroupMember, IMUserLikeGroupMemberIntermediate, IMUserMuteGroupMember, IMUserMuteGroupMemberIntermediate, LikeSchemaVersion,  } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 
 export function serializeUserLikeGroupMembers(list:IMUserLikeGroupMember[]) : Uint8Array {
@@ -13,7 +13,7 @@ export function serializeUserLikeGroupMembers(list:IMUserLikeGroupMember[]) : Ui
 
 export function serializeUserLikeGroupMemberIntermediates(writer: WriteStream, list: IMUserLikeGroupMemberIntermediate[]) {
     // first write schema version
-    writer.writeUInt8("schema_version", MessageCurrentSchemaVersion);
+    writer.writeUInt8("schema_version", LikeSchemaVersion);
     for (const userLikeGroupMemberIntermediate of list) {
         const { groupId, addrSha256Hash } = userLikeGroupMemberIntermediate;
         // check if list.groupId is 32 bytes
@@ -33,7 +33,7 @@ export function serializeUserLikeGroupMemberIntermediates(writer: WriteStream, l
 
 export function deserializeUserLikeGroupMemberIntermediates(reader: ReadStream): IMUserLikeGroupMemberIntermediate[] {
     const schemaVersion = reader.readUInt8("schema_version");
-    if (schemaVersion !== MessageCurrentSchemaVersion) {
+    if (schemaVersion !== LikeSchemaVersion) {
         throw new Error(`schema version ${schemaVersion} is not supported`);
     }
     const list: IMUserLikeGroupMemberIntermediate[] = [];

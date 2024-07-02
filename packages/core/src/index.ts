@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageCurrentSchemaVersion, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -208,7 +208,7 @@ class IotaCatSDK {
     unsubscribeToAllTopics(){
         this._unsubscribeToTopics(Array.from(this._subscribedTopics))
     }
-    async prepareSendMessage(senderAddr:Address, group:string,message: string):Promise<IMMessage|undefined>  {
+    async prepareSendMessage(senderAddr:Address, group:string,message: string, isAnnouncement:boolean):Promise<IMMessage|undefined>  {
         const meta = this._groupNameToGroupMeta(group)
         if (!meta) return undefined
         const {schemaVersion,messageType,authScheme} = meta
@@ -217,6 +217,7 @@ class IotaCatSDK {
         return {
             schemaVersion,
             groupId,
+            isAnnouncement,
             messageType,
             authScheme,
             timestamp,
@@ -747,7 +748,7 @@ class IotaCatSDK {
         const recipientIntermediateList = recipients.map(recipient=>this._compileRecipient(recipient))
         const ws = new WriteStream()
         serializeRecipientList(ws,{
-            schemaVersion: MessageCurrentSchemaVersion,
+            schemaVersion: SharedSchemaVersion,
             groupId: groupBytes,
             list: recipientIntermediateList,
         })
@@ -817,9 +818,9 @@ class IotaCatSDK {
     }
     _decompileMessage(message:IMMessageIntermediate):IMMessage{
         const {schemaVersion,groupId,messageType,authScheme,timestamp,data} = message
-        const compressedString = bytesToStr(data)
         const portionOfRes = {
             schemaVersion,
+            isAnnouncement: false,
             groupId: bytesToHex(groupId,false),
             messageType,
             authScheme,
@@ -1069,7 +1070,7 @@ export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
-export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV1'
+export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV2'
 export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
 export const GROUPFILIKETAG = 'GROUPFILIKEV1'
 export const IotaCatSDKObj = instance
