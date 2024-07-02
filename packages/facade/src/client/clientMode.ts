@@ -25,7 +25,7 @@ import {
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
 
-const signText = "I acknowledge that I'm signing into GroupFi.For your security, always verify that you are signing into GroupFi. If you did not initiate this sign-in, please disconnect your wallet immediately."
+const signText = "I acknowledge that I'm signing into GroupFi.If you did not initiate this sign-in, please disconnect your wallet immediately."
 
 export class ShimmerModeRequestAdapter implements IRequestAdapter {
   private _bech32Address: string;
