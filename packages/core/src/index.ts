@@ -961,7 +961,7 @@ class IotaCatSDK {
         chain:number,
         contract:string,
         threshold?:number,
-        erc:20|721,
+        erc:20|721|0
         ts:number,
     }):Promise<{addressList:string[],signature:string}>
     {
@@ -1011,20 +1011,25 @@ class IotaCatSDK {
             let filterParam = {
                 addresses,
                 chain:groupConfig.chainId,
-                contract:'',
-                erc:20 as 20|721,
+                contract:groupConfig.contractAddress,
+                erc:20 as 20|721|0,
                 ts:getCurrentEpochInSeconds()
             }
-            if (groupConfig.qualifyType === 'nft'){
+            // check if contract address is all zero, if so, set erc to 0
+            if (groupConfig.contractAddress === '0x0000000000000000000000000000000000000000') {
+                const thresValue = groupConfig.tokenThresValue
                 filterParam = Object.assign(filterParam,{
-                    contract:groupConfig.contractAddress,
+                    erc:0,
+                    threshold: thresValue
+                })
+            } else if (groupConfig.qualifyType === 'nft'){
+                filterParam = Object.assign(filterParam,{
                     threshold: '1',
                     erc:721
                 })
             } else {
                 const thresValue = groupConfig.tokenThresValue
                 filterParam = Object.assign(filterParam,{
-                    contract:groupConfig.contractAddress,
                     erc:20,
                     threshold: thresValue
                 })
