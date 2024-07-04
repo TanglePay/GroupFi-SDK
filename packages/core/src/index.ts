@@ -442,7 +442,8 @@ class IotaCatSDK {
                 return false
             } catch (error) {
                 console.log('error',error)
-                return false
+                // return false
+                throw error
             }
     }
     // get shared output id for a group
