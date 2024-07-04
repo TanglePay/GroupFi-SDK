@@ -986,7 +986,7 @@ class IotaCatSDK {
         if (json['err-code'] != undefined) {
             return {addressList:param.addresses,signature:'s'}
         }
-        const indexes = json.indexes
+        const indexes = json.indexes ?? []
         // indexes are index of address that is not qualified
         const addressList = param.addresses.filter((_,index)=>!indexes.includes(index))
         const signature = 's'
