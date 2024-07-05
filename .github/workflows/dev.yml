@@ -25,6 +25,7 @@ jobs:
           sudo su
           export PATH="$PATH:/root/.nvm/versions/node/v18.20.3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
           echo $PATH
+          node -v
           cd /var/www/html/GroupFi-SDK
           git pull 
           pnpm install 
