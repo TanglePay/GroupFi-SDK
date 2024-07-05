@@ -10,6 +10,7 @@ import { EncryptedPayload } from 'ecies-ed25519-js';
 import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
 import { deserializePushed } from './codec_event';
+import { ethers } from 'ethers';
 export * from './types';
 export * from './codec_mark';
 export * from './codec_like';
@@ -1006,6 +1007,12 @@ class IotaCatSDK {
         const {addressList} = await this._callFilterEvmGroupQualify(filterParam)
         return addressList.length > 0
     }
+    _getActualThresholdValue(groupConfig:MessageGroupMeta):string{
+        if (groupConfig.qualifyType === 'nft') return '1'
+        const humanReadable = groupConfig.tokenThresValue!
+        const decimal = parseInt(groupConfig.tokenDecimals!)
+        return ethers.parseUnits(humanReadable,decimal).toString()
+    }
     _prepareEvmFilterPayload(addresses:string[], groupId:string) {
         try {
             const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
@@ -1016,20 +1023,19 @@ class IotaCatSDK {
                 erc:20 as 20|721|0,
                 ts:getCurrentEpochInSeconds()
             }
+            const thresValue = this._getActualThresholdValue(groupConfig)
             // check if contract address is all zero, if so, set erc to 0
             if (groupConfig.contractAddress === '0x0000000000000000000000000000000000000000') {
-                const thresValue = groupConfig.tokenThresValue
                 filterParam = Object.assign(filterParam,{
                     erc:0,
                     threshold: thresValue
                 })
             } else if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
-                    threshold: '1',
-                    erc:721
+                    erc:721,
+                    threshold: thresValue
                 })
             } else {
-                const thresValue = groupConfig.tokenThresValue
                 filterParam = Object.assign(filterParam,{
                     erc:20,
                     threshold: thresValue
