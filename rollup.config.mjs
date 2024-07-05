@@ -2,40 +2,34 @@ import resolve from "@rollup/plugin-node-resolve";
 import babel from "@rollup/plugin-babel";
 import commonjs from "@rollup/plugin-commonjs";
 import typescript from "@rollup/plugin-typescript";
-import terser from '@rollup/plugin-terser'
+import terser from '@rollup/plugin-terser';
 import nodePolyfills from 'rollup-plugin-polyfill-node';
-import filesize from 'rollup-plugin-filesize'
+import filesize from 'rollup-plugin-filesize';
+import alias from '@rollup/plugin-alias';
+import json from '@rollup/plugin-json';
 
-/*
-config[1].output[0] = Object.assign(config[1].output[0],{globals: {
-    '@iota/util.js': 'IotaUtil',
-    'big-integer':'bigInt'
-  },})
-config[1].external = [
-    '@iota/util.js',
-    'big-integer'
-  ]
-*/
-
-export function decoratePlugin(configs,plug,isFront = false){
-    configs.forEach((c)=>{
+export function decoratePlugin(configs, plug, isFront = false) {
+    configs.forEach((c) => {
         if (isFront) {
             c.plugins.unshift(plug);
         } else {
             c.plugins.push(plug);
         }
-    })
+    });
 }
-export function decorateIifeExternal(config,obj,idx=0){
-    config.output[idx] = Object.assign(config.output[idx],{globals: obj})
-    config.external = Object.keys(obj)
+
+export function decorateIifeExternal(config, obj, idx = 0) {
+    config.output[idx] = Object.assign(config.output[idx], { globals: obj });
+    config.external = Object.keys(obj);
 }
+
 export function createRollupConfig(pkg) {
     return [
         createIifeRollupConfig(pkg),
         createCommonEsmRollupConfig(pkg)
     ];
 }
+
 export function createIifeRollupConfig(pkg) {
     const moduleNameIife = pkg.moduleNameIife;
     const author = pkg.author;
@@ -95,19 +89,30 @@ export function createCommonEsmRollupConfig(pkg) {
 
 function getPlugins() {
     return [
-        typescript({
-            "declaration": true,
-            "declarationMap": true,
-            "outDir": "dist",
-            "rootDir": "src",
+        json(), // Process JSON files early
+        alias({
+            entries: {
+                crypto: 'crypto-browserify'
+            }
         }),
-        nodePolyfills(),
-        babel({ 
-            exclude: 'node_modules/**', 
-            babelHelpers: 'bundled' 
+        typescript({
+            declaration: true,
+            declarationMap: true,
+            outDir: "dist",
+            rootDir: "src",
+        }),
+        nodePolyfills({
+            exclude: ['crypto']
+        }),
+        babel({
+            exclude: 'node_modules/**',
+            babelHelpers: 'bundled'
         }),
         commonjs(),
-        resolve(),
+        resolve({
+            preferBuiltins: true,
+            browser: true
+        }),
         terser(),
         filesize()
     ];
@@ -119,4 +124,3 @@ function getExternals(pkg) {
         ...Object.keys(pkg.devDependencies || {}),
     ];
 }
-
