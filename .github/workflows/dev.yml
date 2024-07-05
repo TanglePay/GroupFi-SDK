@@ -23,7 +23,7 @@ jobs:
       run: |
         ssh -i ~/.ssh/id_rsa ubuntu@$HOST << 'ENDSSH'
           sudo su
-          ls -al /root/.nvm/versions/node/v18.20.3
+          ls -al /root/.nvm/versions/node/
           export PATH="$PATH:/root/.nvm/versions/node/v18.20.3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
           echo $PATH
           node -v
