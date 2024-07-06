@@ -985,7 +985,7 @@ class IotaCatSDK {
         // log json
         console.log('filterEvmGroupQualify json',json)
         if (json['err-code'] != undefined) {
-            return {addressList:param.addresses,signature:'s'}
+            throw new Error(`filterEvmGroupQualify error ${json['err-code']}`)
         }
         const indexes = json.indexes ?? []
         // indexes are index of address that is not qualified

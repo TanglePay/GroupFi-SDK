@@ -28,6 +28,7 @@ jobs:
           echo $PATH
           node -v
           cd /var/www/html/GroupFi-SDK
+          git checkout .
           git pull 
           pnpm install 
           pnpm run build:staging
