@@ -44,11 +44,14 @@
     "mqtt": "^5.0.5"
   },
   "dependencies": {
-    "@iota/util.js": "^2.0.0-rc.2",
-    "const": "^1.0.0",
+    "@iota/util.js": "2.0.0-rc.2",
+    "big-integer": "^1.6.51",
     "crypto-js": "^4.1.1",
-    "iotacat-sdk-utils": "workspace:*",
+    "ethers": "^6.11.1",
+    "iotacat-sdk-utils": "workspace:^",
+    "js-crypto-hkdf": "^1.0.4",
     "lz-string": "^1.5.0",
-    "protobufjs": "^7.2.3"
+    "p-limit": "^4.0.0",
+    "tanglepaysdk-client": "^0.1.10"
   }
 }

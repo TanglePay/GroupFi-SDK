@@ -10,6 +10,7 @@ import { EncryptedPayload } from 'ecies-ed25519-js';
 import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
 import { deserializePushed } from './codec_event';
+import { ethers } from 'ethers';
 export * from './types';
 export * from './codec_mark';
 export * from './codec_like';
@@ -442,7 +443,8 @@ class IotaCatSDK {
                 return false
             } catch (error) {
                 console.log('error',error)
-                return false
+                // return false
+                throw error
             }
     }
     // get shared output id for a group
@@ -961,7 +963,7 @@ class IotaCatSDK {
         chain:number,
         contract:string,
         threshold?:number,
-        erc:20|721,
+        erc:20|721|0
         ts:number,
     }):Promise<{addressList:string[],signature:string}>
     {
@@ -983,9 +985,9 @@ class IotaCatSDK {
         // log json
         console.log('filterEvmGroupQualify json',json)
         if (json['err-code'] != undefined) {
-            return {addressList:param.addresses,signature:'s'}
+            throw new Error(`filterEvmGroupQualify error ${json['err-code']}`)
         }
-        const indexes = json.indexes
+        const indexes = json.indexes ?? []
         // indexes are index of address that is not qualified
         const addressList = param.addresses.filter((_,index)=>!indexes.includes(index))
         const signature = 's'
@@ -1005,26 +1007,36 @@ class IotaCatSDK {
         const {addressList} = await this._callFilterEvmGroupQualify(filterParam)
         return addressList.length > 0
     }
+    _getActualThresholdValue(groupConfig:MessageGroupMeta):string{
+        if (groupConfig.qualifyType === 'nft') return '1'
+        const humanReadable = groupConfig.tokenThresValue!
+        const decimal = parseInt(groupConfig.tokenDecimals!)
+        return ethers.parseUnits(humanReadable,decimal).toString()
+    }
     _prepareEvmFilterPayload(addresses:string[], groupId:string) {
         try {
             const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
             let filterParam = {
                 addresses,
                 chain:groupConfig.chainId,
-                contract:'',
-                erc:20 as 20|721,
+                contract:groupConfig.contractAddress,
+                erc:20 as 20|721|0,
                 ts:getCurrentEpochInSeconds()
             }
-            if (groupConfig.qualifyType === 'nft'){
+            const thresValue = this._getActualThresholdValue(groupConfig)
+            // check if contract address is all zero, if so, set erc to 0
+            if (groupConfig.contractAddress === '0x0000000000000000000000000000000000000000') {
                 filterParam = Object.assign(filterParam,{
-                    contract:groupConfig.contractAddress,
-                    threshold: '1',
-                    erc:721
+                    erc:0,
+                    threshold: thresValue
+                })
+            } else if (groupConfig.qualifyType === 'nft'){
+                filterParam = Object.assign(filterParam,{
+                    erc:721,
+                    threshold: thresValue
                 })
             } else {
-                const thresValue = groupConfig.tokenThresValue
                 filterParam = Object.assign(filterParam,{
-                    contract:groupConfig.contractAddress,
                     erc:20,
                     threshold: thresValue
                 })
