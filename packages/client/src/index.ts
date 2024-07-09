@@ -97,10 +97,11 @@ setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
 setCryptoJS(CryptoJS)
 const tag = Converter.utf8ToBytes(IOTACATTAG)
 
-interface StorageFacade {
+export interface StorageFacade {
     prefix: string;
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
+    remove(key: string): Promise<void>;
 }
 type OutputResponseWrapper = {
     output: IOutputResponse;
@@ -198,7 +199,7 @@ export class GroupfiSdkClient {
     _curNode?:Network;
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
-    _nodeInfo?: INodeInfo;
+    // _nodeInfo?: INodeInfo;
     _protocolInfo?: INodeInfoProtocol;
     _walletKeyPair?: IKeyPair;
     _accountHexAddress?:string;
@@ -222,6 +223,7 @@ export class GroupfiSdkClient {
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
     _pairX?: PairX
+    _updateNodeProtocolInfoInterval:NodeJS.Timeout|undefined
     // get pairX publickey in hex
     getPairXPublicKey():string|undefined{
         if (!this._pairX) return
@@ -243,7 +245,8 @@ export class GroupfiSdkClient {
     async switchAddress(bech32Address: string, pairX?: PairX){
         this._pairX = pairX
         this._accountBech32Address = bech32Address
-        const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
+        // const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
+        const res = Bech32Helper.fromBech32(bech32Address, this._protocolInfo!.bech32Hrp)
         if (!res) throw new Error('Invalid bech32 address')
         const {addressType, addressBytes} = res
         if (addressType !== ED25519_ADDRESS_TYPE) throw new Error('Address type not supported')
@@ -264,16 +267,47 @@ export class GroupfiSdkClient {
         // @ts-ignore
         this._client = provider ? new SingleNodeClient(node.apiUrl, {powProvider: new provider(...rest)}) : new SingleNodeClient(node.apiUrl)
         this._indexer = new IndexerPluginClient(this._client)
-        this._nodeInfo = await this._client.info();
-        this._protocolInfo = await this._client.protocolInfo();
+        // this._nodeInfo = await this._client.info();
+        // this._protocolInfo = await this._client.protocolInfo();
+        this._protocolInfo = await this.firstGetNodeProtocolInfo(this._client)
         this._networkId = TransactionHelper.networkIdFromNetworkName(this._protocolInfo!.networkName)
         this._pubKeyCache = makeLRUCache<string>(200)
         this._sharedNotFoundRecoveringMessageCheckInterval = setInterval(()=>{
             this._tryProcessSharedNotFoundRecoveringMessage()
         }, 5000);
+        // Execute once every 10 minutes
+        this._updateNodeProtocolInfoInterval = setInterval(() => {
+            this.periodicUpdateNodeProtocolInfo()
+        }, 1000*60*10)
         this._queuePromise = Promise.resolve()
-        console.log('NodeInfo', this._nodeInfo);
+        // console.log('NodeInfo', this._nodeInfo);
         console.log('ProtocolInfo', this._protocolInfo);
+    }
+    getNodeProtocolInfoStorageKey() {
+        return `${this._storage?.prefix}.ProtocolInfo`
+    }
+    async firstGetNodeProtocolInfo(client: SingleNodeClient) {
+        this._ensureStorageInited()
+        try {
+            const key = this.getNodeProtocolInfoStorageKey()
+            const storageValue = await this._storage!.get(key)
+            if (storageValue !== null) {
+                return JSON.parse(storageValue)
+            }
+            const res = await client.protocolInfo()
+            this._storage!.set(key, JSON.stringify(res))
+            return res
+        } catch(error) {
+            console.log('getNodeProtocolInfo error: ', error)
+        }
+    }
+    async periodicUpdateNodeProtocolInfo() {
+        this._ensureStorageInited()
+        if (!this._client) return
+        const protocolInfo = await this._client.protocolInfo()
+        console.log('protocolInfo update success', protocolInfo)
+        this._protocolInfo = protocolInfo
+        this._storage!.set(this.getNodeProtocolInfoStorageKey(), JSON.stringify(protocolInfo))
     }
     getCurrentNode() {
         if (!this._curNode) {
@@ -405,7 +439,8 @@ export class GroupfiSdkClient {
         
         const addressBytes = Converter.hexToBytes(ed25519Address)
 
-        const bech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, addressBytes, this._nodeInfo!.protocol.bech32Hrp)
+        // const bech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, addressBytes, this._nodeInfo!.protocol.bech32Hrp)
+        const bech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, addressBytes, this._protocolInfo!.bech32Hrp)
         return await this._getPublicKeyFromLedger(bech32Address)
     }
     async _getPublicKeyFromLedger(bech32Address:string):Promise<string|undefined>{
@@ -943,7 +978,8 @@ export class GroupfiSdkClient {
         return new Ed25519Seed(uint8arr);
     }
     _ensureClientInited(){
-        if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
+        // if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
+        if (!this._client || !this._indexer || !this._protocolInfo) throw new Error('Client not initialized')
     }
     _ensureWalletInited(){
         // if (!this._accountHexAddress || !this._accountBech32Address) throw new Error('Wallet not initialized')
@@ -983,7 +1019,8 @@ export class GroupfiSdkClient {
         const data_ = typeof data === 'string' ? Converter.hexToBytes(data) : data
         const senderAddressBytes_ = typeof senderAddressBytes === 'string' ? Converter.hexToBytes(senderAddressBytes) : senderAddressBytes
         const messageId = IotaCatSDKObj.getMessageId(data_, senderAddressBytes_)
-        const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
+        // const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
+        const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._protocolInfo!.bech32Hrp);
 
         try {
             const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
