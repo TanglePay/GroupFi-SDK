@@ -39,6 +39,7 @@ import {
   IProxyModeRequestAdapter,
   MessageBody,
   AddressMappingStore,
+  StorageFacade
 } from 'groupfi-sdk-client';
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
@@ -89,6 +90,8 @@ class GroupFiSDKFacade {
   private _lastTimeSdkRequestResultReceived: number = 0;
 
   private _auxiliaryService = new AuxiliaryService();
+
+  private _storage: StorageFacade | null = null
 
   private _currentGroup:
     | {
@@ -914,15 +917,28 @@ class GroupFiSDKFacade {
     this._dappClient = dappClient;
   }
 
-  async browseModeSetupClient() {
+  async setupGroupfiSdkClient() {
     this._client = new GroupfiSdkClient();
+    if (this._storage) {
+      this._client.setupStorage(this._storage)
+    }
     await this._client!.setup();
+  }
+
+  async browseModeSetupClient() {
+    await this.setupGroupfiSdkClient()
+    // this._client = new GroupfiSdkClient();
+    // await this._client!.setup();
 
     this._address = undefined
     this._proxyAddress = undefined
     this._nodeId = undefined
     this._pairX = undefined
     this._mode = undefined
+  }
+
+  setupStorage(storage: StorageFacade) {
+    this._storage = storage
   }
 
   async bootstrap(
@@ -933,8 +949,9 @@ class GroupFiSDKFacade {
     mode: Mode;
     nodeId: number | undefined;
   }> {
-    this._client = new GroupfiSdkClient();
-    await this._client!.setup();
+    await this.setupGroupfiSdkClient()
+    // this._client = new GroupfiSdkClient();
+    // await this._client!.setup();
 
     let res:
       | {
@@ -962,13 +979,6 @@ class GroupFiSDKFacade {
     this.switchClientAdapter(res.mode);
     await this.initialAddress();
 
-    // await Promise.all([
-    //   this.fetchAddressQualifiedGroupConfigs({}),
-    //   this._client!.setup(),
-    // ]);
-    // this._client!.switchAddress(this._address!);
-
-    // await this.initialAddress(res.mode);
     return { address: res.address, mode: res.mode, nodeId: res.nodeId };
   }
 
