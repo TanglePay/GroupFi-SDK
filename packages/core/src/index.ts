@@ -17,6 +17,7 @@ export * from './codec_like';
 export * from './codec_mute';
 export * from './codec_vote';
 export * from './codec_evm_qualify';
+export * from './codec_groupstatesync';
 const SHA256_LEN = 32
 class IotaCatSDK {
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
@@ -1085,6 +1086,7 @@ export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV2'
 export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
 export const GROUPFILIKETAG = 'GROUPFILIKEV1'
+export const GROUPFIGROUPSTATESYNCTAG = 'GROUPFIGROUPSTATESYNCV1'
 export const IotaCatSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

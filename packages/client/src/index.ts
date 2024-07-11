@@ -50,9 +50,11 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
     GROUPFICASHTAG,MessageGroupMeta,
-    GROUPFILIKETAG,
+    GROUPFILIKETAG,GROUPFIGROUPSTATESYNCTAG,
+    serializeGroupStateSync,
     IMUserLikeGroupMember,
-    serializeUserLikeGroupMembers
+    serializeUserLikeGroupMembers,
+    GroupStateSyncItem
 } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'iotacat-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -2135,6 +2137,22 @@ export class GroupfiSdkClient {
         const {list} = await this._getUserMuteGroupMembers(userAddress)
         return list
     }
+    // get group state sync
+    async getAllGroupStateSyncs(userAddress: string){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        throw new Error('Not implemented')
+    }
+    // persist group state syncs
+    async persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const data = serializeGroupStateSync(groupStateSyncs)
+        const tag = Converter.utf8ToHex(GROUPFIGROUPSTATESYNCTAG)
+        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const toBeConsumed = consumedOutputWrapper ? [consumedOutputWrapper] : []
+        return await this._sendBasicOutput([basicOutput],toBeConsumed);
+    }
     // same sets of function for user like group members
     async likeGroupMember(groupId:string,addrSha256Hash:string, userAddress: string){
         this._ensureClientInited()
@@ -2481,4 +2499,5 @@ export class GroupfiSdkClient {
     //     return collectionOutput
     // }
 }
+
 

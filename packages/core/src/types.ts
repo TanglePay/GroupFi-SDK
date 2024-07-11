@@ -86,6 +86,10 @@ export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
 // schema version for evm qualify
 export const EvmQualifySchemaVersion = 1
+
+// schema version for group state sync
+export const GroupStateSyncSchemaVersion = 1
+
 // like
 export const LikeSchemaVersion = 1
 // mark
@@ -288,4 +292,13 @@ export const GROUPFIReservedTags = [
 
 export interface IIncludesAndExcludes {
     groupId: string
+}
+
+export interface GroupStateSyncItem {
+    groupId: string
+    lastTimeReadLatestMessageTimestamp: number
+}
+export interface GroupStateSync {
+    schemaVersion: number,
+    items: GroupStateSyncItem[]
 }
