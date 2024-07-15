@@ -20,6 +20,7 @@ import {
   IIncludesAndExcludes,
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
+  GroupStateSyncItem,
 } from 'iotacat-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -39,7 +40,8 @@ import {
   IProxyModeRequestAdapter,
   MessageBody,
   AddressMappingStore,
-  StorageFacade
+  StorageFacade,
+  BasicOutputWrapper,
 } from 'groupfi-sdk-client';
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
@@ -730,6 +732,14 @@ class GroupFiSDKFacade {
     );
     tracer.endStep('sendMessageToGroup','call client sendMessage');
     return res;
+  }
+  // call getAllGroupStateSyncs
+  async getAllGroupStateSyncs() {
+    return await this._client!.getAllGroupStateSyncs(this._address!);
+  }
+  // call persistGroupStateSyncs
+  async persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper) {
+    return await this._client!.persistGroupStateSyncs(groupStateSyncs,consumedOutputWrapper);
   }
   async fetchAddressBalance() {
     this._ensureWalletConnected();
