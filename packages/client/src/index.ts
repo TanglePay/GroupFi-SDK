@@ -54,11 +54,12 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     serializeGroupStateSync,
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers,
-    GroupStateSyncItem
+    GroupStateSyncItem,
+    GroupStateSyncStorage
 } from "iotacat-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'iotacat-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
-import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
+import { IRequestAdapter, PairX, IProxyModeRequestAdapter,GroupStateSyncStorageExtended } from './types'
 export * from './types'
 export { AddressMappingStore }
 
@@ -109,11 +110,11 @@ type OutputResponseWrapper = {
     output: IOutputResponse;
     outputId: string;
 }
-type BasicOutputWrapper = {
+export type BasicOutputWrapper = {
     output: IBasicOutput;
     outputId: string;
 }
-type OutputWrapper = {
+export type OutputWrapper = {
     output: OutputTypes;
     outputId: string;
 }
@@ -509,7 +510,25 @@ export class GroupfiSdkClient {
         cachePut(address, ledgerValue, this._pubKeyCache!)
         return ledgerValue
     }
-
+    // get group sync state from inx api
+    // /groupstatesyncunderaddress
+    async _getGroupSyncStateFromInxApi(address:string):Promise<GroupStateSyncStorage|undefined>{
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupstatesyncunderaddress?address=${address}`
+        console.log('getGroupSyncStateFromInxApi url', url);
+        const res = await fetch(url,
+        {
+            method:'GET',
+            headers:{
+            'Content-Type':'application/json'
+            }
+        })
+        if (!res.ok) {
+            console.log('getGroupSyncStateFromInxApi res not ok', res.status);
+        }
+        console.log('getGroupSyncStateFromInxApi res', res);
+        const data = await res.json() as GroupStateSyncStorage | undefined
+        return data
+    }
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
         //TODO try inx plugin 
         try {
@@ -2175,11 +2194,24 @@ export class GroupfiSdkClient {
         return list
     }
     // get group state sync
-    async getAllGroupStateSyncs(userAddress: string){
+    async getAllGroupStateSyncs(userAddress: string):Promise<GroupStateSyncStorageExtended|undefined> {
         this._ensureClientInited()
         this._ensureWalletInited()
-        throw new Error('Not implemented')
+        const groupStateSync = await this._getGroupSyncStateFromInxApi(userAddress)
+        if (!groupStateSync) return groupStateSync
+        const {outputId, ...rest} = groupStateSync
+        const outputResp = await this._client!.output(groupStateSync.outputId)
+        const resp = {
+            outputWrapper:{
+                output:outputResp.output as IBasicOutput,
+                outputId
+            },
+            ...rest
+        }
+        return resp
     }
+
+    
     // persist group state syncs
     async persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper){
         this._ensureClientInited()

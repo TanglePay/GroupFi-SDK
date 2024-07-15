@@ -302,3 +302,8 @@ export interface GroupStateSync {
     schemaVersion: number,
     items: GroupStateSyncItem[]
 }
+export interface GroupStateSyncStorage {
+    schemaVersion: number,
+    outputId: string,
+    items: GroupStateSyncItem[]
+}
