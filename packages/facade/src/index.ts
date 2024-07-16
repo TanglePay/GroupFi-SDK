@@ -77,6 +77,8 @@ const TP_SHIMMER_MAINNET_ID = 102;
 const TP_EVM_CHAIN_ID = 5;
 const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 
+const PAIRX_SIGN_PREFIX_TEXT = 'Creating account... '
+
 class GroupFiSDKFacade {
   private _address: string | undefined;
   private _proxyAddress: string | undefined;
@@ -1156,7 +1158,7 @@ class GroupFiSDKFacade {
       metadataObj.timestamp,
     ].join('');
 
-    const dataToBeSignedHex = utf8ToHex(dataTobeSignedStr, true);
+    const dataToBeSignedHex = utf8ToHex(PAIRX_SIGN_PREFIX_TEXT + dataTobeSignedStr, true); 
 
     const adapter = this._client!.getRequestAdapter();
 
