@@ -180,6 +180,10 @@ export function deserializeMuteChangedEvent(reader : ReadStream): Omit<EventGrou
     // read groupId
     const groupIdBytes = reader.readBytes("groupId", GroupIDLength);
     const groupId = Converter.bytesToHex(groupIdBytes, true);
+
+    // read addressHash
+    const addressHashBytes = reader.readBytes("addressHash", Sha256Length)
+    const addressHash = Converter.bytesToHex(addressHashBytes, true)
     // read timestamp
     const timestamp = readUint32(reader,'timestamp')
     // read isMuted
@@ -187,6 +191,7 @@ export function deserializeMuteChangedEvent(reader : ReadStream): Omit<EventGrou
 
     console.log("deserializeMuteChangedEvent res", {
         groupId,
+        addressHash,
         timestamp,
         isMuted
     });
@@ -205,12 +210,16 @@ export function deserializeLikeChangedEvent(reader : ReadStream): Omit<EventGrou
     // read groupId
     const groupIdBytes = reader.readBytes("groupId", GroupIDLength);
     const groupId = Converter.bytesToHex(groupIdBytes, true);
+    // read addressHash
+    const addressHashBytes = reader.readBytes("addressHash", Sha256Length)
+    const addressHash = Converter.bytesToHex(addressHashBytes, true)
     // read timestamp
     const timestamp = readUint32(reader,'timestamp')
     // read isLiked
     const isLiked = reader.readUInt8("isLiked") === 1;
 
     console.log('deserializeLikeChangedEvent res', {
+        addressHash,
         groupId,
         timestamp,
         isLiked
