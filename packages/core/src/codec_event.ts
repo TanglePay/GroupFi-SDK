@@ -182,13 +182,19 @@ export function deserializeMuteChangedEvent(reader : ReadStream): Omit<EventGrou
     const groupId = Converter.bytesToHex(groupIdBytes, true);
     // read timestamp
     const timestamp = readUint32(reader,'timestamp')
-    // read isNewMute
-    const isNewMute = reader.readUInt8("isNewMute") === 1;
+    // read isMuted
+    const isMuted = reader.readUInt8("isMuted") === 1;
+
+    console.log("deserializeMuteChangedEvent res", {
+        groupId,
+        timestamp,
+        isMuted
+    });
     
     return {
         groupId,
         timestamp,
-        isNewMute
+        isMuted
     };
 }
 
@@ -201,12 +207,18 @@ export function deserializeLikeChangedEvent(reader : ReadStream): Omit<EventGrou
     const groupId = Converter.bytesToHex(groupIdBytes, true);
     // read timestamp
     const timestamp = readUint32(reader,'timestamp')
-    // read isNewLike
-    const isNewLike = reader.readUInt8("isNewLike") === 1;
+    // read isLiked
+    const isLiked = reader.readUInt8("isLiked") === 1;
+
+    console.log('deserializeLikeChangedEvent res', {
+        groupId,
+        timestamp,
+        isLiked
+    })
     
     return {
         groupId,
         timestamp,
-        isNewLike
+        isLiked
     };
 }
