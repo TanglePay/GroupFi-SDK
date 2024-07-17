@@ -120,8 +120,8 @@ export type GroupConfigPlus = GroupConfig & {isPublic:boolean}
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
 export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, address:string}
 export type EventGroupMarkChanged = {type: typeof ImInboxEventTypeMarkChanged, groupId: string, timestamp: number, isNewMark: boolean} 
-export type EventGroupMuteChanged = {type: typeof ImInboxEventTypeMuteChanged, groupId: string, timestamp: number, isNewMute: boolean}
-export type EventGroupLikeChanged = {type: typeof ImInboxEventTypeLikeChanged, groupId: string, timestamp: number, isNewLike: boolean}
+export type EventGroupMuteChanged = {type: typeof ImInboxEventTypeMuteChanged, groupId: string, timestamp: number, isMuted: boolean}
+export type EventGroupLikeChanged = {type: typeof ImInboxEventTypeLikeChanged, groupId: string, timestamp: number, isLiked: boolean}
 
 export type EvmQualifyChangedEvent = {
     type: typeof ImInboxEventTypeEvmQualifyChanged
