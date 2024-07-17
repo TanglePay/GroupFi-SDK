@@ -979,7 +979,7 @@ class IotaCatSDK {
         // log res
         console.log('filterEvmGroupQualify res',res)
         if (!res.ok) {
-            return {addressList:param.addresses,signature:'s'}
+            throw new Error(`filterEvmGroupQualify error ${res.status} ${res.statusText}`)
         }
         const json = await res.json() as {'err-code'?:number,indexes:number[]}
         // log json
