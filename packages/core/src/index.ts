@@ -182,7 +182,7 @@ class IotaCatSDK {
     // subscribe to a topic
     _subscribeToTopics(topics:string[]){
         const filteredTopics = topics.filter(topic=>!this._subscribedTopics.has(topic))
-        this._mqttClient!.subscribe(filteredTopics)
+        filteredTopics.forEach(topic=>this._mqttClient!.subscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.add(topic))
     }
 
@@ -202,7 +202,7 @@ class IotaCatSDK {
     // unsubscribe to a topic
     _unsubscribeToTopics(topics:string[]){
         const filteredTopics = topics.filter(topic=>this._subscribedTopics.has(topic))
-        this._mqttClient!.unsubscribe(filteredTopics)
+        filteredTopics.forEach(topic=>this._mqttClient!.unsubscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.delete(topic))
     }
     // unsubscribe to all topics
