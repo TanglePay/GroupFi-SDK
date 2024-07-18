@@ -197,6 +197,7 @@ export function deserializeMuteChangedEvent(reader : ReadStream): Omit<EventGrou
     });
     
     return {
+        addressHash,
         groupId,
         timestamp,
         isMuted
@@ -226,6 +227,7 @@ export function deserializeLikeChangedEvent(reader : ReadStream): Omit<EventGrou
     })
     
     return {
+        addressHash,
         groupId,
         timestamp,
         isLiked
