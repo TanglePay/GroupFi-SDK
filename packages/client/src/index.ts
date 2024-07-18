@@ -180,7 +180,7 @@ const shimmerTestNet = {
     // image upload test service
     // imagePreSignedUrl: "https://pwzmabpgxc.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-stage-4-Stage/get-upload-url",
     // image upload prod service
-    imagePreSignedUrl: "https://m05fmru4b7.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-prod-Prod",
+    imagePreSignedUrl: "https://m05fmru4b7.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-prod-Prod/get-upload-url",
 }
 
 const shimmerMainNet = {
