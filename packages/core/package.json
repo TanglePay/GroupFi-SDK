@@ -1,11 +1,11 @@
 {
-  "name": "iotacat-sdk-core",
+  "name": "groupfi-sdk-core",
   "version": "0.0.1",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "moduleNameIife": "iotacatsdk",
+  "moduleNameIife": "groupfisdk",
   "scripts": {
     "clean": "rimraf dist",
     "build:type": "tsc",
@@ -48,7 +48,7 @@
     "big-integer": "^1.6.51",
     "crypto-js": "^4.1.1",
     "ethers": "^6.11.1",
-    "iotacat-sdk-utils": "workspace:^",
+    "groupfi-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",
     "lz-string": "^1.5.0",
     "p-limit": "^4.0.0",

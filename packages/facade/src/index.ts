@@ -20,7 +20,7 @@ import {
   IIncludesAndExcludes,
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
-} from 'iotacat-sdk-core';
+} from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
 import {
@@ -33,7 +33,7 @@ import {
   concatBytes,
   getCurrentEpochInSeconds,
   tracer,
-} from 'iotacat-sdk-utils';
+} from 'groupfi-sdk-utils';
 import {
   GroupfiSdkClient,
   IProxyModeRequestAdapter,
@@ -43,7 +43,7 @@ import {
 } from 'groupfi-sdk-client';
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
-import { EthEncrypt, utf8ToHex } from 'iotacat-sdk-utils';
+import { EthEncrypt, utf8ToHex } from 'groupfi-sdk-utils';
 import { Ed25519 } from '@iota/crypto.js';
 
 import {

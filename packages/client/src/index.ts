@@ -53,8 +53,8 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFILIKETAG,
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers
-} from "iotacat-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'iotacat-sdk-utils';
+} from "groupfi-sdk-core";
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
@@ -71,25 +71,25 @@ setIotaCrypto({
 })
 
 import hkdf from 'js-crypto-hkdf';
-import { IMRecipient } from "iotacat-sdk-core";
+import { IMRecipient } from "groupfi-sdk-core";
 import { EventEmitter } from 'events';
-import { GroupMemberTooManyToPublicThreshold } from "iotacat-sdk-core";
-import { MessageTypePublic } from "iotacat-sdk-core";
-import { IMessage } from 'iotacat-sdk-core';
-import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
-import { EventGroupMemberChanged } from 'iotacat-sdk-core';
-import { ImInboxEventTypeGroupMemberChanged } from 'iotacat-sdk-core';
-import { GROUPFISELFPUBLICKEYTAG } from 'iotacat-sdk-core';
-import { SharedNotFoundError } from 'iotacat-sdk-core';
-import { createBlobURLFromUint8Array } from 'iotacat-sdk-utils';
-import { releaseBlobUrl } from 'iotacat-sdk-utils';
-import { ConcurrentPipe } from 'iotacat-sdk-utils';
-import { GROUPFIReservedTags } from 'iotacat-sdk-core';
+import { GroupMemberTooManyToPublicThreshold } from "groupfi-sdk-core";
+import { MessageTypePublic } from "groupfi-sdk-core";
+import { IMessage } from 'groupfi-sdk-core';
+import { ImInboxEventTypeNewMessage } from 'groupfi-sdk-core';
+import { EventGroupMemberChanged } from 'groupfi-sdk-core';
+import { ImInboxEventTypeGroupMemberChanged } from 'groupfi-sdk-core';
+import { GROUPFISELFPUBLICKEYTAG } from 'groupfi-sdk-core';
+import { SharedNotFoundError } from 'groupfi-sdk-core';
+import { createBlobURLFromUint8Array } from 'groupfi-sdk-utils';
+import { releaseBlobUrl } from 'groupfi-sdk-utils';
+import { ConcurrentPipe } from 'groupfi-sdk-utils';
+import { GROUPFIReservedTags } from 'groupfi-sdk-core';
 
 import { Mode, DelegationMode, ImpersonationMode, ShimmerMode } from './types'
 
-import { GROUPFIQUALIFYTAG } from 'iotacat-sdk-core';
-import { serializeEvmQualify } from 'iotacat-sdk-core';
+import { GROUPFIQUALIFYTAG } from 'groupfi-sdk-core';
+import { serializeEvmQualify } from 'groupfi-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -333,6 +333,7 @@ export class GroupfiSdkClient {
 // prepare remainder hint
     // first check timeelapsed > 15 seconds since last send
     // then fetch all basic outputs for address with no timelock, no metadata
+    // also fetch all basic outputs that timelock expires
     // then pick all as inputs, and split to 3 equal amount outputs, and send, outputs will be used as remainder hint
     async prepareRemainderHint(){
         if (!this._prepareRemainderHintSwitch) return false

@@ -1,6 +1,6 @@
 import { IMUserVoteGroup, IMUserVoteGroupIntermediate, VoteSchemaVersion } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
-import { numberToBytes } from 'iotacat-sdk-utils'
+import { numberToBytes } from 'groupfi-sdk-utils'
 
 export function serializeUserVoteGroups(list:IMUserVoteGroup[]) : Uint8Array {
     const stream = new WriteStream();
