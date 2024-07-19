@@ -7,7 +7,7 @@ import {
   IProxyModeRequest,
 } from 'groupfi-sdk-client';
 import { Ed25519 } from '@iota/crypto.js';
-import { IotaCatSDKObj, IOTACATTAG } from 'iotacat-sdk-core';
+import { IotaCatSDKObj, IOTACATTAG } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 import {
   strToBytes,
@@ -20,7 +20,7 @@ import {
   utf8ToHex,
   concatBytes,
   hexToBytes,
-} from 'iotacat-sdk-utils';
+} from 'groupfi-sdk-utils';
 
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';

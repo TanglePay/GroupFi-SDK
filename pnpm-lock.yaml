@@ -153,10 +153,10 @@ importers:
       crypto-js:
         specifier: ^4.1.1
         version: 4.1.1
-      iotacat-sdk-core:
+      groupfi-sdk-core:
         specifier: workspace:^
         version: link:../core
-      iotacat-sdk-utils:
+      groupfi-sdk-utils:
         specifier: workspace:^
         version: link:../util
       js-crypto-hkdf:
@@ -190,7 +190,7 @@ importers:
       ethers:
         specifier: ^6.11.1
         version: 6.11.1
-      iotacat-sdk-utils:
+      groupfi-sdk-utils:
         specifier: workspace:^
         version: link:../util
       js-crypto-hkdf:
@@ -241,15 +241,15 @@ importers:
       groupfi-sdk-client:
         specifier: workspace:^
         version: link:../client
+      groupfi-sdk-core:
+        specifier: workspace:^
+        version: link:../core
+      groupfi-sdk-utils:
+        specifier: workspace:^
+        version: link:../util
       groupfi-walletembed:
         specifier: workspace:^
         version: link:../walletembed
-      iotacat-sdk-core:
-        specifier: workspace:^
-        version: link:../core
-      iotacat-sdk-utils:
-        specifier: workspace:^
-        version: link:../util
       tanglepaysdk-client:
         specifier: ^0.1.10
         version: 0.1.10
@@ -320,10 +320,10 @@ importers:
       crypto-js:
         specifier: ^4.1.1
         version: 4.1.1
-      iotacat-sdk-core:
+      groupfi-sdk-core:
         specifier: workspace:^
         version: link:../core
-      iotacat-sdk-utils:
+      groupfi-sdk-utils:
         specifier: workspace:^
         version: link:../util
       js-crypto-hkdf:

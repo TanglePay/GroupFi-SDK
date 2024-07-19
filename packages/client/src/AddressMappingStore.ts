@@ -1,5 +1,5 @@
 import EventEmitter from "events";
-import { IotaCatSDKObj } from "iotacat-sdk-core";
+import { IotaCatSDKObj } from "groupfi-sdk-core";
 
 class AddressMappingStore {
     private _event: EventEmitter = new EventEmitter();

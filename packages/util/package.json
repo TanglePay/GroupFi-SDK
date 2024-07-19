@@ -1,11 +1,11 @@
 {
-  "name": "iotacat-sdk-utils",
+  "name": "groupfi-sdk-utils",
   "version": "0.0.1",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "moduleNameIife": "iotacatutils",
+  "moduleNameIife": "groupfiutils",
   "scripts": {
     "bootstrap": "pnpm install -r",
     "clean": "rimraf dist",
