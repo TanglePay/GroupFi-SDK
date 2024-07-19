@@ -351,11 +351,11 @@ export class GroupfiSdkClient {
             console.log('amount', amount);
             const amountPerOutput = amount.divide(cashSplitNums)
             const outputsToSend:IBasicOutput[] = []
-            outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
-            amount = amount.subtract(amountPerOutput)
-            outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
-            amount = amount.subtract(amountPerOutput)
-            outputsToSend.push(this._makeCashBasicOutput(amount));
+            for (let i = 0; i < cashSplitNums-1; i++) {
+                outputsToSend.push(this._makeCashBasicOutput(amountPerOutput))
+                amount = amount.subtract(amountPerOutput)
+            }
+            outputsToSend.push(this._makeCashBasicOutput(amount))
             const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0],this._protocolInfo!.rentStructure)
             // check if first output is enough for deposit
             if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
@@ -1153,7 +1153,8 @@ export class GroupfiSdkClient {
     async _getOneBatchUnSpentOutputs({cursor,pageSize = 100, amountLargerThan, idsForFiltering}:{cursor?:string, amountLargerThan?:bigInt.BigNumber, pageSize?:number,idsForFiltering?:Set<string>} = {}) {
         this._ensureClientInited()
         this._ensureWalletInited()
-        const outputsResponse = await this._indexer!.basicOutputs({
+        const [outputsResponse,outputsWithTimelockResponse] = await Promise.all([
+            this._indexer!.basicOutputs({
             addressBech32: this._accountBech32Address,
             hasStorageDepositReturn: false,
             hasExpiration: false,
@@ -1161,10 +1162,21 @@ export class GroupfiSdkClient {
             hasNativeTokens: false,
             pageSize,
             cursor
-        });
+        }),
+        //TODO
+        this._indexer!.basicOutputs({
+            addressBech32: this._accountBech32Address,
+            hasStorageDepositReturn: false,
+            hasExpiration: false,
+            hasTimelock: true,
+            timelockedBefore: Math.floor(Date.now() / 1000),
+            hasNativeTokens: false,
+            pageSize,
+            cursor
+        })]);
         const nextCursor = outputsResponse.cursor
         console.log('OutputsResponse', outputsResponse);
-        let outputIds = outputsResponse.items
+        let outputIds = [...outputsResponse.items,...outputsWithTimelockResponse.items]
         if (idsForFiltering) {
             outputIds = outputIds.filter(outputId=>!idsForFiltering.has(outputId))
         }
@@ -1266,8 +1278,6 @@ export class GroupfiSdkClient {
             // filter out groupfi tag by GROUPFIReservedTags
             if (GROUPFIReservedTags.includes(tagStr)) return false
         }
-        const metadataFeature = features.find(feature=>feature.type === 2)
-        if (metadataFeature) return false
         if (outputs.output.nativeTokens && outputs.output.nativeTokens.length > 0) return false
         return true
     }
