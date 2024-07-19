@@ -39,3 +39,7 @@ export function getAddressType(address: string): AddressType {
     }
     throw new Error("Invalid address");
 }
+
+export function isSolanaChain(chainId: number) {
+  return chainId === 518
+}

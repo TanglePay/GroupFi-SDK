@@ -1487,7 +1487,7 @@ class GroupFiSDKFacade {
     groupId: string,
     addressList: string[],
     signature: string,
-    timestamp:number
+    timestamp: number
   ): Promise<IBasicOutput> {
     this._ensureWalletConnected();
     const addressType = getAddressType(this._address!);

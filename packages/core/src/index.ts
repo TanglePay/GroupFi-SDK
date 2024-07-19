@@ -11,6 +11,7 @@ import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
 import { deserializePushed } from './codec_event';
 import { ethers } from 'ethers';
+import { isSolanaChain, getAddressType, AddressTypeEvm, AddressTypeSolana } from './address_check'
 export * from './types';
 export * from './codec_mark';
 export * from './codec_like';
@@ -964,7 +965,7 @@ class IotaCatSDK {
         chain:number,
         contract:string,
         threshold?:number,
-        erc:20|721|0
+        erc:20|721|0|1
         ts:number,
     }):Promise<{addressList:string[],signature:string}>
     {
@@ -1014,14 +1015,23 @@ class IotaCatSDK {
         const decimal = parseInt(groupConfig.tokenDecimals!)
         return ethers.parseUnits(humanReadable,decimal).toString()
     }
+    _getActualAddresses(addresses: string[], chainId: number) {
+        if (isSolanaChain(chainId)) {
+            return addresses.filter(address => getAddressType(address) === AddressTypeSolana)
+        } else {
+            return addresses.filter(address => getAddressType(address) === AddressTypeEvm)
+        }
+    }
     _prepareEvmFilterPayload(addresses:string[], groupId:string) {
         try {
             const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
+            const actualAddresses = this._getActualAddresses(addresses, groupConfig.chainId)
             let filterParam = {
-                addresses,
+                addresses: actualAddresses,
                 chain:groupConfig.chainId,
                 contract:groupConfig.contractAddress,
-                erc:20 as 20|721|0,
+                // chainId 518, spl token, erc = 1
+                erc:20 as 20|721|0|1,
                 ts:getCurrentEpochInSeconds()
             }
             const thresValue = this._getActualThresholdValue(groupConfig)
@@ -1034,6 +1044,11 @@ class IotaCatSDK {
             } else if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
                     erc:721,
+                    threshold: thresValue
+                })
+            } else if(isSolanaChain(groupConfig.chainId)) {
+                filterParam = Object.assign(filterParam,{
+                    erc:1,
                     threshold: thresValue
                 })
             } else {
