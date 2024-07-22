@@ -1,6 +1,6 @@
 import { DidChangedEvent, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, PairXChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
-import { readUint16, readUint32 } from 'iotacat-sdk-utils'
+import { readUint16, readUint32 } from 'groupfi-sdk-utils'
 import { deserializeFieldWithLengthPrefixed } from "./codec_util";
 import { read } from "fs";
 
@@ -180,15 +180,27 @@ export function deserializeMuteChangedEvent(reader : ReadStream): Omit<EventGrou
     // read groupId
     const groupIdBytes = reader.readBytes("groupId", GroupIDLength);
     const groupId = Converter.bytesToHex(groupIdBytes, true);
+
+    // read addressHash
+    const addressHashBytes = reader.readBytes("addressHash", Sha256Length)
+    const addressHash = Converter.bytesToHex(addressHashBytes, true)
     // read timestamp
     const timestamp = readUint32(reader,'timestamp')
-    // read isNewMute
-    const isNewMute = reader.readUInt8("isNewMute") === 1;
+    // read isMuted
+    const isMuted = reader.readUInt8("isMuted") === 1;
+
+    console.log("deserializeMuteChangedEvent res", {
+        groupId,
+        addressHash,
+        timestamp,
+        isMuted
+    });
     
     return {
+        addressHash,
         groupId,
         timestamp,
-        isNewMute
+        isMuted
     };
 }
 
@@ -199,14 +211,25 @@ export function deserializeLikeChangedEvent(reader : ReadStream): Omit<EventGrou
     // read groupId
     const groupIdBytes = reader.readBytes("groupId", GroupIDLength);
     const groupId = Converter.bytesToHex(groupIdBytes, true);
+    // read addressHash
+    const addressHashBytes = reader.readBytes("addressHash", Sha256Length)
+    const addressHash = Converter.bytesToHex(addressHashBytes, true)
     // read timestamp
     const timestamp = readUint32(reader,'timestamp')
-    // read isNewLike
-    const isNewLike = reader.readUInt8("isNewLike") === 1;
-    
-    return {
+    // read isLiked
+    const isLiked = reader.readUInt8("isLiked") === 1;
+
+    console.log('deserializeLikeChangedEvent res', {
+        addressHash,
         groupId,
         timestamp,
-        isNewLike
+        isLiked
+    })
+    
+    return {
+        addressHash,
+        groupId,
+        timestamp,
+        isLiked
     };
 }

@@ -1,6 +1,6 @@
 
 import CryptoJS from 'crypto-js';
-import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
+import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'groupfi-sdk-utils';
 import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
@@ -182,7 +182,7 @@ class IotaCatSDK {
     // subscribe to a topic
     _subscribeToTopics(topics:string[]){
         const filteredTopics = topics.filter(topic=>!this._subscribedTopics.has(topic))
-        this._mqttClient!.subscribe(filteredTopics)
+        filteredTopics.forEach(topic=>this._mqttClient!.subscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.add(topic))
     }
 
@@ -202,7 +202,7 @@ class IotaCatSDK {
     // unsubscribe to a topic
     _unsubscribeToTopics(topics:string[]){
         const filteredTopics = topics.filter(topic=>this._subscribedTopics.has(topic))
-        this._mqttClient!.unsubscribe(filteredTopics)
+        filteredTopics.forEach(topic=>this._mqttClient!.unsubscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.delete(topic))
     }
     // unsubscribe to all topics
@@ -979,7 +979,7 @@ class IotaCatSDK {
         // log res
         console.log('filterEvmGroupQualify res',res)
         if (!res.ok) {
-            return {addressList:param.addresses,signature:'s'}
+            throw new Error(`filterEvmGroupQualify error ${res.status} ${res.statusText}`)
         }
         const json = await res.json() as {'err-code'?:number,indexes:number[]}
         // log json

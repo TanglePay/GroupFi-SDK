@@ -20,7 +20,7 @@ import {
   IIncludesAndExcludes,
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
-} from 'iotacat-sdk-core';
+} from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
 import {
@@ -33,7 +33,7 @@ import {
   concatBytes,
   getCurrentEpochInSeconds,
   tracer,
-} from 'iotacat-sdk-utils';
+} from 'groupfi-sdk-utils';
 import {
   GroupfiSdkClient,
   IProxyModeRequestAdapter,
@@ -43,7 +43,7 @@ import {
 } from 'groupfi-sdk-client';
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
-import { EthEncrypt, utf8ToHex } from 'iotacat-sdk-utils';
+import { EthEncrypt, utf8ToHex } from 'groupfi-sdk-utils';
 import { Ed25519 } from '@iota/crypto.js';
 
 import {
@@ -76,6 +76,8 @@ export * from './types';
 const TP_SHIMMER_MAINNET_ID = 102;
 const TP_EVM_CHAIN_ID = 5;
 const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
+
+const PAIRX_SIGN_PREFIX_TEXT = 'Creating account... '
 
 class GroupFiSDKFacade {
   private _address: string | undefined;
@@ -1156,7 +1158,7 @@ class GroupFiSDKFacade {
       metadataObj.timestamp,
     ].join('');
 
-    const dataToBeSignedHex = utf8ToHex(dataTobeSignedStr, true);
+    const dataToBeSignedHex = utf8ToHex(PAIRX_SIGN_PREFIX_TEXT + dataTobeSignedStr, true); 
 
     const adapter = this._client!.getRequestAdapter();
 

@@ -1,6 +1,6 @@
 import { GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, MarkSchemaVersion } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
-import { unixSecondsToBytes, bytesToUnixSeconds } from 'iotacat-sdk-utils'
+import { unixSecondsToBytes, bytesToUnixSeconds } from 'groupfi-sdk-utils'
 
 export function serializeUserMarkedGroupIds(list:IMUserMarkedGroupId[]) : Uint8Array {
     const stream = new WriteStream();

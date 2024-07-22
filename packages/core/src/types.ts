@@ -120,8 +120,8 @@ export type GroupConfigPlus = GroupConfig & {isPublic:boolean}
 export type PushedNewMessage = {type:typeof ImInboxEventTypeNewMessage, groupId:string, sender:string, meta:string}
 export type EventGroupMemberChanged = {type:typeof ImInboxEventTypeGroupMemberChanged, groupId:string, timestamp:number, isNewMember:boolean, address:string}
 export type EventGroupMarkChanged = {type: typeof ImInboxEventTypeMarkChanged, groupId: string, timestamp: number, isNewMark: boolean} 
-export type EventGroupMuteChanged = {type: typeof ImInboxEventTypeMuteChanged, groupId: string, timestamp: number, isNewMute: boolean}
-export type EventGroupLikeChanged = {type: typeof ImInboxEventTypeLikeChanged, groupId: string, timestamp: number, isNewLike: boolean}
+export type EventGroupMuteChanged = {type: typeof ImInboxEventTypeMuteChanged, groupId: string, timestamp: number, isMuted: boolean, addressHash: string}
+export type EventGroupLikeChanged = {type: typeof ImInboxEventTypeLikeChanged, groupId: string, timestamp: number, isLiked: boolean, addressHash: string}
 
 export type EvmQualifyChangedEvent = {
     type: typeof ImInboxEventTypeEvmQualifyChanged
@@ -278,8 +278,6 @@ export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 */
 export const GROUPFIReservedTags = [
-    IOTACATTAG,
-    IOTACATSHAREDTAG,
     GROUPFIMARKTAG,
     GROUPFIMUTETAG,
     GROUPFIVOTETAG,

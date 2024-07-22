@@ -39,8 +39,8 @@ import bigInt from "big-integer";
 import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
     EncryptedHexPayload
 
-} from "iotacat-sdk-core";
-import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL, EthDecrypt, tpEncrypt, tpDecrypt} from 'iotacat-sdk-utils';
+} from "groupfi-sdk-core";
+import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL, EthDecrypt, tpEncrypt, tpDecrypt} from 'groupfi-sdk-utils';
 
 import { hdkey, Wallet } from '@ethereumjs/wallet'
 import { hashPersonalMessage, ecsign, toRpcSig } from '@ethereumjs/util'
@@ -58,8 +58,8 @@ setIotaCrypto({
 
 import hkdf from 'js-crypto-hkdf';
 import { EventEmitter } from 'events';
-import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
-import { EventGroupMemberChanged } from 'iotacat-sdk-core';
+import { ImInboxEventTypeNewMessage } from 'groupfi-sdk-core';
+import { EventGroupMemberChanged } from 'groupfi-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -142,7 +142,7 @@ const shimmerMainNet = {
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "shimmer",
     networkId: "14364762045254553490",
-    inxMqttEndpoint: "wss://test.api.iotacat.com/api/iotacatmqtt/v1",
+    inxMqttEndpoint: "wss://test2.api.iotacat.com/api/iotacatmqtt/v1",
 }
 const nodes = [
     shimmerTestNet,
