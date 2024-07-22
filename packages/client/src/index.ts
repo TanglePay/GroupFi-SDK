@@ -178,9 +178,7 @@ const shimmerTestNet = {
     networkId: "1856588631910923207",
     inxMqttEndpoint: "wss://test.shimmer.node.tanglepay.com/mqtt",
     // image upload test service
-    // imagePreSignedUrl: "https://pwzmabpgxc.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-stage-4-Stage/get-upload-url",
-    // image upload prod service
-    imagePreSignedUrl: "https://m05fmru4b7.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-prod-Prod/get-upload-url",
+    imagePreSignedUrl: "https://pwzmabpgxc.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-stage-4-Stage/get-upload-url",
 }
 
 const shimmerMainNet = {
@@ -191,6 +189,8 @@ const shimmerMainNet = {
     explorerApiNetwork: "shimmer",
     networkId: "14364762045254553490",
     inxMqttEndpoint: "wss://test.api.iotacat.com/api/iotacatmqtt/v1",
+    // image upload prod service
+    imagePreSignedUrl: "https://m05fmru4b7.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-prod-Prod/get-upload-url",
 }
 const nodes = [
     shimmerTestNet,
