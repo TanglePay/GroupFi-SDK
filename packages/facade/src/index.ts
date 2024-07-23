@@ -20,6 +20,7 @@ import {
   IIncludesAndExcludes,
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
+  getAddressType,
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -1488,7 +1489,8 @@ class GroupFiSDKFacade {
     signature: string
   ): Promise<IBasicOutput> {
     this._ensureWalletConnected();
-    return await this._client!._getEvmQualify(groupId, addressList, signature);
+    const addressType = getAddressType(this._address!);
+    return await this._client!._getEvmQualify(groupId, addressList, signature, addressType);
   }
   async leaveOrUnMarkGroup(groupId: string) {
     groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
