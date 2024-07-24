@@ -85,7 +85,7 @@ export const INX_GROUPFI_DOMAIN = process.env.INX_GROUPFI_DOMAIN
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
 // schema version for evm qualify
-export const EvmQualifySchemaVersion = 1
+export const EvmQualifySchemaVersion = 2
 // like
 export const LikeSchemaVersion = 1
 // mark
