@@ -17,6 +17,7 @@ export * from './codec_like';
 export * from './codec_mute';
 export * from './codec_vote';
 export * from './codec_evm_qualify';
+export * from './address_check';
 const SHA256_LEN = 32
 class IotaCatSDK {
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
