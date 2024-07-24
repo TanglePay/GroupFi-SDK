@@ -2291,9 +2291,9 @@ export class GroupfiSdkClient {
         return {outputWrapper:existing,list:voteGroups}
     }
     // _persistEvmQualify
-    async _getEvmQualify(groupId:string,addressList:string[],signature:string, addressType:AddressType):Promise<IBasicOutput>{
+    async _getEvmQualify(groupId:string,addressList:string[],signature:string, addressType:AddressType,timestamp:number):Promise<IBasicOutput>{
         const tag = `0x${Converter.utf8ToHex(GROUPFIQUALIFYTAG)}`
-        const data = serializeEvmQualify(groupId,addressList,signature,addressType)
+        const data = serializeEvmQualify(groupId,addressList,signature,addressType,timestamp)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const twoWeekSecs =  60 * 60 * 24 * 14
         this._addTimeUnlockToBasicOutput(basicOutput, twoWeekSecs)

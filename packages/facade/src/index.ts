@@ -1486,11 +1486,12 @@ class GroupFiSDKFacade {
   async getEvmQualify(
     groupId: string,
     addressList: string[],
-    signature: string
+    signature: string,
+    timestamp:number
   ): Promise<IBasicOutput> {
     this._ensureWalletConnected();
     const addressType = getAddressType(this._address!);
-    return await this._client!._getEvmQualify(groupId, addressList, signature, addressType);
+    return await this._client!._getEvmQualify(groupId, addressList, signature, addressType,timestamp);
   }
   async leaveOrUnMarkGroup(groupId: string) {
     groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);

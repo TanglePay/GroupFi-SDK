@@ -4,7 +4,7 @@ import { AddressType, AddressTypeEvm, AddressTypeSolana } from "./address_check"
 import bs58 from 'bs58';
 
 // serialize evm qualify, including groupId, address list and signature
-export function serializeEvmQualify(groupId: string, addressList: string[], signature: string, addressType:AddressType): Uint8Array {
+export function serializeEvmQualify(groupId: string, addressList: string[], signature: string, addressType:AddressType, timestamp:number): Uint8Array {
     const signatureBytes = Converter.hexToBytes(signature);
     const signatureBytesLength = signatureBytes.length;
     // log the signatureBytesLength
@@ -26,6 +26,7 @@ export function serializeEvmQualify(groupId: string, addressList: string[], sign
     writer.writeBytes("signature", signatureBytesLength, signatureBytes);
     writer.writeBytes("groupId", groupIdBytes.length, groupIdBytes);
     writer.writeUInt8("addressType", addressType);
+    writer.writeUInt32("timestamp",timestamp)
     for (const address of addressListBytes) {
         writer.writeBytes("address", address.length, address);
     }
