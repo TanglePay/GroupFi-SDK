@@ -113,6 +113,7 @@ export interface MessageGroupMeta {
     tokenThres?: string,
     tokenThresValue?: string,
     tokenDecimals?: string,
+    symbol?: string,
 }
 export type GroupConfig = MessageGroupMeta & {groupId:string}
 export type MessageGroupMetaPlus = MessageGroupMeta & {isPublic:boolean}
