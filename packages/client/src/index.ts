@@ -52,7 +52,8 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFICASHTAG,MessageGroupMeta,
     GROUPFILIKETAG,
     IMUserLikeGroupMember,
-    serializeUserLikeGroupMembers
+    serializeUserLikeGroupMembers,
+    AddressType
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -172,7 +173,7 @@ const shimmerTestNet = {
     id: 101,
     isFaucetAvailable: true,
     faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://test2.api.groupfi.ai",//"https://test.api.groupfi.ai",//"https://mainnet.shimmer.node.tanglepay.com",
+    apiUrl: "https://test3.api.groupfi.ai",//"https://test.api.groupfi.ai",//"https://mainnet.shimmer.node.tanglepay.com",
     explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
     explorerApiNetwork: "testnet",
     networkId: "1856588631910923207",
@@ -2290,9 +2291,9 @@ export class GroupfiSdkClient {
         return {outputWrapper:existing,list:voteGroups}
     }
     // _persistEvmQualify
-    async _getEvmQualify(groupId:string,addressList:string[],signature:string):Promise<IBasicOutput>{
+    async _getEvmQualify(groupId:string,addressList:string[],signature:string, addressType:AddressType,timestamp:number):Promise<IBasicOutput>{
         const tag = `0x${Converter.utf8ToHex(GROUPFIQUALIFYTAG)}`
-        const data = serializeEvmQualify(groupId,addressList,signature)
+        const data = serializeEvmQualify(groupId,addressList,signature,addressType,timestamp)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const twoWeekSecs =  60 * 60 * 24 * 14
         this._addTimeUnlockToBasicOutput(basicOutput, twoWeekSecs)
