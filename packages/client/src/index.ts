@@ -392,14 +392,14 @@ export class GroupfiSdkClient {
     }
 
 
-    _outputIdToMessagePipe?: ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message?:IMessage,outputId:string,status:number}>;
+    _outputIdToMessagePipe?: ConcurrentPipe<{outputId:string,output?:IBasicOutput,token:string,address:string,type:number},{message?:IMessage,outputId:string,status:number}>;
     _makeOutputIdToMessagePipe(){
         const processor = async (
-            {outputId,token,address,type}:{outputId:string,address:string,type:number,token:string},
+            {outputId,output,token,address,type}:{outputId:string,output?:IBasicOutput,address:string,type:number,token:string},
             callback: (error?: Error | null) => void,
-            stream:ConcurrentPipe<{outputId:string,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined>
+            stream:ConcurrentPipe<{outputId:string,output?:IBasicOutput,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined>
         )=>{
-            const res = await this.getMessageFromOutputId({outputId,address,type})
+            const res = await this.getMessageFromOutputId({outputId,output,address,type})
             if (!res) {
                 stream.push({outputId,status:-1})
                 callback()
@@ -998,11 +998,13 @@ export class GroupfiSdkClient {
         const res = await Promise.all(tasks)
         return res
     }
-    async getMessageFromOutputId({outputId,address,type}:{outputId:string,address:string,type:number}){
+    async getMessageFromOutputId({outputId,output,address,type}:{outputId:string,output?:IBasicOutput,address:string,type:number}){
         this._ensureClientInited()
         try {
-            const outputsResponse = await this._client!.output(outputId)
-            const output = outputsResponse.output as IBasicOutput
+            if (!output) {
+                const outputsResponse = await this._client!.output(outputId)
+                output = outputsResponse.output as IBasicOutput
+            }
             const addressUnlockcondition = output.unlockConditions.find(unlockCondition=>unlockCondition.type === 0) as IAddressUnlockCondition
             const senderAddress = addressUnlockcondition.address as IEd25519Address
             const senderAddressBytes = Converter.hexToBytes(senderAddress.pubKeyHash)
@@ -1124,6 +1126,20 @@ export class GroupfiSdkClient {
             }})
         const data = await res.json() as string[]
         return data ?? []
+    }
+
+    // batchoutputidtooutput api, it is an inx api
+    async batchOutputIdToOutput(outputIds:string[]){
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/batchoutputidtooutput`
+        const res = await fetch(url,{
+            method:'POST',
+            headers:{
+            'Content-Type':'application/json',
+            },
+            body:JSON.stringify(outputIds)
+        })
+        const data = await res.json() as {outputIdHex:string,output:OutputTypes}[]
+        return data
     }
     // check then consolidate shared
     async checkThenConsolidateShared(){
