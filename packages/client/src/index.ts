@@ -53,7 +53,8 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     GROUPFILIKETAG,
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers,
-    AddressType
+    AddressType,
+    MessageResponseItemPlus
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -91,6 +92,7 @@ import { Mode, DelegationMode, ImpersonationMode, ShimmerMode } from './types'
 
 import { GROUPFIQUALIFYTAG } from 'groupfi-sdk-core';
 import { serializeEvmQualify } from 'groupfi-sdk-core';
+import addressMappingCache from './AddressMappingCache';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -439,7 +441,42 @@ export class GroupfiSdkClient {
         }
         return this._outputIdToMessagePipe!
     }
-    
+    async outputIdstoMessages (
+        params:MessageResponseItemPlus[],
+    ):Promise<{message?:IMessage,outputId:string}[]>
+    {
+        const resp = [] as {message?:IMessage,outputId:string}[]
+        for (const item of params) {
+            const res = await this.getMessageFromOutputId(item)
+            const message = res
+                            ? {
+                                type: ImInboxEventTypeNewMessage,
+                                sender: res.sender,
+                                message: res.message.data,
+                                messageId: res.messageId,
+                                timestamp: res.message.timestamp,
+                                groupId: res.message.groupId,
+                                token: item.token
+                                } as IMessage
+                            : undefined;
+            resp.push({outputId:item.outputId, message})
+        }
+        // if not shimmer mode, then map sender to evm address
+        if (this._mode !== ShimmerMode) {
+            const smrAddressSet = new Set(resp.map(o=>o.message?.sender).filter(o=>!!o)) as Set<string>
+            const smrAddressList = Array.from(smrAddressSet)
+            const mapping = await addressMappingCache.batchGetEvmAddresses(smrAddressList)
+            for (const item of resp) {
+                // skip if no message
+                if (!item.message) continue
+                const evmAddress = mapping.get(item.message.sender)
+                if (evmAddress) {
+                    item.message.sender = evmAddress
+                }
+            }
+        }
+        return resp
+    }
     async _getPublicKeyFromLedgerEd25519(ed25519Address:string):Promise<string|undefined>{
         
         const addressBytes = Converter.hexToBytes(ed25519Address)

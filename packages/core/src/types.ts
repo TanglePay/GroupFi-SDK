@@ -1,5 +1,5 @@
 import { GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIQUALIFYTAG, GROUPFIVOTETAG, IOTACATSHAREDTAG, IOTACATTAG } from ".";
-
+import { IBasicOutput } from "@iota/iota.js";
 export interface IMRecipient {
     addr: string;
     mkey: string;
@@ -262,6 +262,7 @@ export type MessageResponseItem = {
     token: string;
     timestamp: number;
 }
+export type MessageResponseItemPlus = MessageResponseItem & {output?:IBasicOutput,address:string} 
 export type PublicItemsResponse = {
     items:MessageResponseItem[]
     startToken:string

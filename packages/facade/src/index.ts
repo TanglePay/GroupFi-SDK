@@ -21,6 +21,7 @@ import {
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
   getAddressType,
+  MessageResponseItemPlus,
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -1812,6 +1813,15 @@ class GroupFiSDKFacade {
       return false
     }
     return true
+  }
+
+  async outputIdstoMessages(
+    params:MessageResponseItemPlus[]) {
+      // set address
+      params.forEach((item) => {
+        item.address = this._address!
+      })
+    return await this._client!.outputIdstoMessages(params);
   }
 }
 
