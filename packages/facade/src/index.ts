@@ -419,10 +419,11 @@ class GroupFiSDKFacade {
   }
 
   // processOneMessage
-  processOneMessage(item: MessageResponseItem): boolean {
+  processOneMessage(item: MessageResponseItem & {output?:IBasicOutput}): boolean {
     const pipe = this._client!.getOutputIdToMessagePipe();
     const res = pipe.write({
       outputId: item.outputId,
+      output: item.output,
       token: item.token,
       address: this._address!,
       type: 1,
@@ -732,6 +733,12 @@ class GroupFiSDKFacade {
       memberList
     );
     tracer.endStep('sendMessageToGroup','call client sendMessage');
+    return res;
+  }
+  // async batchOutputIdToOutput(outputIds:string[]){
+  async batchOutputIdToOutput(outputIds: string[]) {
+    this._ensureWalletConnected();
+    const res = await this._client!.batchOutputIdToOutput(outputIds);
     return res;
   }
   async fetchAddressBalance() {
