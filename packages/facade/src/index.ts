@@ -738,7 +738,6 @@ class GroupFiSDKFacade {
   }
   // async batchOutputIdToOutput(outputIds:string[]){
   async batchOutputIdToOutput(outputIds: string[]) {
-    this._ensureWalletConnected();
     const res = await this._client!.batchOutputIdToOutput(outputIds);
     return res;
   }
