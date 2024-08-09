@@ -1036,7 +1036,7 @@ class IotaCatSDK {
             }
             const thresValue = this._getActualThresholdValue(groupConfig)
             // check if contract address is all zero, if so, set erc to 0
-            if (groupConfig.contractAddress === '0x0000000000000000000000000000000000000000') {
+            if (['0x0000000000000000000000000000000000000000', '11111111111111111111111111111111'].includes(groupConfig.contractAddress) ) {
                 filterParam = Object.assign(filterParam,{
                     erc:0,
                     threshold: thresValue
