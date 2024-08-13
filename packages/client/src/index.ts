@@ -58,9 +58,10 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
+import nameMappingCache from './nameMappingCache';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
-export { AddressMappingStore }
+export { AddressMappingStore, nameMappingCache}
 
 //TODO tune concurrency
 const httpCallLimit = 5;
@@ -456,7 +457,8 @@ export class GroupfiSdkClient {
                                 messageId: res.messageId,
                                 timestamp: res.message.timestamp,
                                 groupId: res.message.groupId,
-                                token: item.token
+                                token: item.token,
+                                name: undefined
                                 } as IMessage
                             : undefined;
             resp.push({outputId:item.outputId, message})
@@ -473,6 +475,17 @@ export class GroupfiSdkClient {
                 if (evmAddress) {
                     item.message.sender = evmAddress
                 }
+            }
+        }
+        // map sender to name
+        const senderAddressSet = new Set(resp.map(o=>o.message?.sender).filter(Boolean)) as Set<string>
+        const senderAddressList = Array.from(senderAddressSet)
+        const nameMappingRes = await nameMappingCache.batchGetRes(senderAddressList)
+        for(const item of resp) {
+            if (!item.message) continue
+            const nameMap = nameMappingRes.get(item.message.sender)
+            if (nameMap) {
+                item.message.name = nameMap.name
             }
         }
         return resp
@@ -1537,6 +1550,7 @@ export class GroupfiSdkClient {
                 data: Converter.bytesToHex(pl, true)
             };
             const messageId = IotaCatSDKObj.getMessageId(pl, Converter.hexToBytes(this._accountHexAddress!))
+            const nameRes = await nameMappingCache.getRes(senderAddr)
             // IMessage = {messageId:string, groupId:string, sender:string, message:string, timestamp:number}
             const messageSent: IMessage = {
                 type: ImInboxEventTypeNewMessage,
@@ -1544,7 +1558,8 @@ export class GroupfiSdkClient {
                 groupId,
                 sender: senderAddr,
                 message: rawText,
-                timestamp: message.timestamp
+                timestamp: message.timestamp,
+                name: nameRes?.name 
             };
             // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
             const expireInDays = message.isAnnouncement ? 30 : 5;
