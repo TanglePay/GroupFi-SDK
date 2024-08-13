@@ -1,4 +1,4 @@
-name: SSH and Run Script
+name: Stage flow
 
 on:
   push:
