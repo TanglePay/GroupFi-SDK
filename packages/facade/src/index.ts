@@ -22,6 +22,7 @@ import {
   ImInboxEventTypeLikeChanged,
   getAddressType,
   MessageResponseItemPlus,
+  INX_GROUPFI_DOMAIN,
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -1062,7 +1063,7 @@ class GroupFiSDKFacade {
   }
 
   switchClientAdapter(mode: Mode) {
-    const nodeUrlHint = this._client!.getCurrentNode().apiUrl;
+    const nodeUrlHint = `https://${INX_GROUPFI_DOMAIN}`;
     switch (mode) {
       case ShimmerMode: {
         const adapter = new ShimmerModeRequestAdapter(

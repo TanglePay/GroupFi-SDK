@@ -114,40 +114,8 @@ type NftItemReponse = {
     publicKey: string;
     nftId: string;
 }
-type Network = {
-    id: number;
-    isFaucetAvailable: boolean;
-    faucetUrl?: string;
-    apiUrl: string;
-    explorerApiUrl: string;
-    explorerApiNetwork: string;
-    networkId: string;
-    inxMqttEndpoint: string;
-}
-const shimmerTestNet = {
-    id: 101,
-    isFaucetAvailable: true,
-    faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
-    explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
-    explorerApiNetwork: "testnet",
-    networkId: "1856588631910923207",
-    inxMqttEndpoint: "wss://test.shimmer.node.tanglepay.com/mqtt",
-}
 
-const shimmerMainNet = {
-    id: 102,
-    isFaucetAvailable: false,
-    apiUrl: "https://prerelease.api.iotacat.com",
-    explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
-    explorerApiNetwork: "shimmer",
-    networkId: "14364762045254553490",
-    inxMqttEndpoint: "wss://test2.api.iotacat.com/api/iotacatmqtt/v1",
-}
-const nodes = [
-    shimmerTestNet,
-    shimmerMainNet
-]
+
 class GroupfiWalletEmbedded {
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
@@ -264,10 +232,7 @@ class GroupfiWalletEmbedded {
     async setup(nodeUrlHint?:string){
         if (this._currentNodeUrl && (!nodeUrlHint || nodeUrlHint === this._currentNodeUrl)) return
         if (!nodeUrlHint) {
-            const id = parseInt(process.env.NODE_ID??'0',10)
-            const node = nodes.find(node=>node.id === id)
-            if (!node) throw new Error('Node not found')
-            nodeUrlHint = node.apiUrl
+            nodeUrlHint = `https://${INX_GROUPFI_DOMAIN}`
         }
         this._client = new SingleNodeClient(nodeUrlHint)
         this._currentNodeUrl = nodeUrlHint

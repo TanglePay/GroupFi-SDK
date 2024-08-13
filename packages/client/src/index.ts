@@ -54,7 +54,8 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers,
     AddressType,
-    MessageResponseItemPlus
+    MessageResponseItemPlus,
+    IMAGE_PRESIGN_SERVICE_URL
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -161,49 +162,11 @@ type NftItemReponse = {
     publicKey: string;
     nftId: string;
 }
-type Network = {
-    id: number;
-    isFaucetAvailable: boolean;
-    faucetUrl?: string;
-    apiUrl: string;
-    explorerApiUrl: string;
-    explorerApiNetwork: string;
-    networkId: string;
-    inxMqttEndpoint: string;
-    imagePreSignedUrl?: string;
-}
-const shimmerTestNet = {
-    id: 101,
-    isFaucetAvailable: true,
-    faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://test.api.groupfi.ai",//"https://test.api.groupfi.ai",//"https://mainnet.shimmer.node.tanglepay.com",
-    explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
-    explorerApiNetwork: "testnet",
-    networkId: "1856588631910923207",
-    inxMqttEndpoint: "wss://test.shimmer.node.tanglepay.com/mqtt",
-    // image upload test service
-    imagePreSignedUrl: "https://pwzmabpgxc.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-stage-4-Stage/get-upload-url",
-}
 
-const shimmerMainNet = {
-    id: 102,
-    isFaucetAvailable: false,
-    apiUrl: "https://prerelease.api.iotacat.com",
-    explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
-    explorerApiNetwork: "shimmer",
-    networkId: "14364762045254553490",
-    inxMqttEndpoint: "wss://test.api.iotacat.com/api/iotacatmqtt/v1",
-    // image upload prod service
-    imagePreSignedUrl: "https://m05fmru4b7.execute-api.us-east-2.amazonaws.com/groupfi-image-upload-prod-Prod/get-upload-url",
-}
-const nodes = [
-    shimmerTestNet,
-    shimmerMainNet
-]
+
 export const SharedNotFoundLaterRecoveredMessageKey = 'SharedNotFoundLaterRecovered'
 type Constructor<T> = new () => T;
 export class GroupfiSdkClient {
-    _curNode?:Network;
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
     // _nodeInfo?: INodeInfo;
@@ -264,18 +227,10 @@ export class GroupfiSdkClient {
     }
     
     _queuePromise:Promise<any>|undefined;
-    async setup(provider?:Constructor<IPowProvider>,...rest:any[]){
-        if (this._curNode) return
-        // @ts-ignore
-        const id = parseInt(process.env.NODE_ID,10)
-        const node = nodes.find(node=>node.id === id)
-        if (!node) throw new Error('Node not found')
-        this._curNode = node
-        // @ts-ignore
-        this._client = provider ? new SingleNodeClient(node.apiUrl, {powProvider: new provider(...rest)}) : new SingleNodeClient(node.apiUrl)
+    async setup(){
+        const apiUrl = `https://${INX_GROUPFI_DOMAIN}`
+        this._client = new SingleNodeClient(apiUrl)
         this._indexer = new IndexerPluginClient(this._client)
-        // this._nodeInfo = await this._client.info();
-        // this._protocolInfo = await this._client.protocolInfo();
         this._protocolInfo = await this.firstGetNodeProtocolInfo(this._client)
         this._networkId = TransactionHelper.networkIdFromNetworkName(this._protocolInfo!.networkName)
         this._pubKeyCache = makeLRUCache<string>(200)
@@ -315,12 +270,6 @@ export class GroupfiSdkClient {
         console.log('protocolInfo update success', protocolInfo)
         this._protocolInfo = protocolInfo
         this._storage!.set(this.getNodeProtocolInfoStorageKey(), JSON.stringify(protocolInfo))
-    }
-    getCurrentNode() {
-        if (!this._curNode) {
-            throw new Error('node is undefined')
-        }
-        return this._curNode
     }
     setupStorage(storage:StorageFacade){
         this._storage = storage
@@ -489,78 +438,6 @@ export class GroupfiSdkClient {
             }
         }
         return resp
-    }
-    async _getPublicKeyFromLedgerEd25519(ed25519Address:string):Promise<string|undefined>{
-        
-        const addressBytes = Converter.hexToBytes(ed25519Address)
-
-        // const bech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, addressBytes, this._nodeInfo!.protocol.bech32Hrp)
-        const bech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, addressBytes, this._protocolInfo!.bech32Hrp)
-        return await this._getPublicKeyFromLedger(bech32Address)
-    }
-    async _getPublicKeyFromLedger(bech32Address:string):Promise<string|undefined>{
-        
-        const outputId = await this._getTransactionHistory(bech32Address)
-        if (!outputId) return
-        const output = await this._client!.output(outputId)
-        console.log('Output', output);
-        const transactionId = output.metadata.transactionId
-        const publicKey = await this._getPublicKeyViaTransactionId(transactionId)
-        console.log('PublicKey', publicKey);
-        return publicKey
-    }
-    async _getTransactionHistory(bech32Address:string):Promise<string|undefined>{
-        if (!this._curNode) throw new Error('Node not initialized')
-        const url = `${this._curNode.explorerApiUrl}/transactionhistory/${this._curNode.explorerApiNetwork}/${bech32Address}?pageSize=1000&sort=newest`
-        console.log('TransactionHistoryUrl', url);
-        const response = await fetch(url)
-        const json = await response.json()
-        console.log('TransactionHistory', json);
-        if (json.items && json.items.length > 0) {
-            const item = json.items.find((item:any)=>item.isSpent == true)
-            if (!item) return
-            const outputId = item.outputId
-            return outputId
-        }
-    }
-    async _getPublicKeyViaTransactionId(transactionId:string):Promise<string|undefined>{
-        if (!this._curNode) throw new Error('Node not initialized')
-        const url = `${this._curNode.explorerApiUrl}/transaction/${this._curNode.explorerApiNetwork}/${transactionId}`
-        console.log('TransactionUrl', url);
-        const response = await fetch(url)
-        const json = await response.json()
-        console.log('Transaction', json);
-        for (const unlock of json.block.payload.unlocks) {
-            if (unlock.type === 0) {
-                const publicKey = unlock.signature.publicKey
-                return publicKey
-            }
-        }
-    }
-
-    async getPublicKey(addressRaw:string, type='bech32'):Promise<string|undefined>{
-        this._ensureClientInited()
-        const address = this._storage?.prefix + addressRaw
-        const memoryValue = cacheGet(address, this._pubKeyCache!)
-        console.log('MemoryValue', memoryValue, addressRaw);
-        if (memoryValue) return memoryValue
-
-        /*
-        const storageValue = await this._storage!.get(address)
-        console.log('StorageValue', storageValue, addressRaw, typeof storageValue);
-        if (storageValue) {
-            cachePut(address, storageValue, this._pubKeyCache!)
-            return storageValue
-        }
-        */
-        let ledgerValue = type == 'bech32'? await this._getPublicKeyFromLedger(addressRaw) : await this._getPublicKeyFromLedgerEd25519(addressRaw)
-        console.log('LedgerValue', ledgerValue, addressRaw);
-        if (!ledgerValue) {
-            ledgerValue = 'noop'
-        }
-        //await this._storage!.set(address, ledgerValue)
-        cachePut(address, ledgerValue, this._pubKeyCache!)
-        return ledgerValue
     }
 
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
@@ -1374,54 +1251,7 @@ export class GroupfiSdkClient {
         const deposit = TransactionHelper.getStorageDeposit(output, this._protocolInfo!.rentStructure)
         return bigInt(deposit)
     }
-    async _bech32AddrArrToRecipients(bech32AddrArr:string[]){
-        console.log(`_bech32AddrArrToRecipients before remove duplications size:${bech32AddrArr.length}`);
-        const set = new Set(bech32AddrArr)
-        bech32AddrArr = Array.from(set)
-        console.log(`_bech32AddrArrToRecipients after remove duplications size:${bech32AddrArr.length}`);
-        
-        const tasks = bech32AddrArr.map(addr=> async() => {
-            
-            try {
-                const pubKey = await this.getPublicKey(addr)
-                console.log('pubKey', pubKey, addr);
-                return {mkey:pubKey,addr:addr} as IMRecipient
-            } catch (error) {
-                console.log('error',error)
-                return {mkey:'noop',addr:addr} as IMRecipient
-            }
-        })
-            
-        
-        let recipients = await runBatch(tasks, httpCallLimit)
-        /*
-        let recipients:{mkey:string,addr:string}[] = []
-        let recipients2:{mkey:string,addr:string}[] = []
-        for (const addr of bech32AddrArr) {
-            let recipient:{mkey:string,addr:string}
-            try {
-                let pubKey = await this.getPublicKey(addr)
-                pubKey = pubKey??'noop'
-                console.log('pubKey', pubKey, addr, typeof pubKey);
-                recipient = {mkey:pubKey,addr:addr}
-            } catch (error) {
-                console.log('error',error)
-                recipient = {mkey:'noop',addr:addr}
-            }
-            console.log('recipient', recipient);
-            recipients.push(recipient)
-            recipients2.push({...recipient})
-        }
-        */
-        console.log('recipients with PublicKeys', recipients);
 
-        const total = recipients.length
-        recipients = recipients.filter(recipient=>recipient && recipient.mkey!=null && recipient.mkey!='noop')
-        const withKey = recipients.length
-        console.log('recipients with PublicKeys filtered', recipients)
-        console.log(`_bech32AddrArrToRecipients  recipients total:${total}, withKey:${withKey}`);
-        return recipients.filter(r=>r && r.mkey!=null && r.mkey!='noop')
-    }
     // set shared id and salt to cache
     _setSharedIdAndSaltToCache(rawSharedId:string,salt:string){
         const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
@@ -1609,7 +1439,7 @@ export class GroupfiSdkClient {
         
     }
     async _getPresignedImageUploadUrl({publicKey,signature,message,ext}:{publicKey:string,signature:string,message:string,ext:string}):Promise<{uploadURL:string,imageURL:string}>{
-        const url = this._curNode!.imagePreSignedUrl!
+        const url = IMAGE_PRESIGN_SERVICE_URL!
         const body = {publicKey,signature,message,ext}
         const res = await fetch(url, {
             method: 'POST',
