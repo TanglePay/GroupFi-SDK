@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'groupfi-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion, MessageGroupMetaKeyOmited } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -52,10 +52,10 @@ class IotaCatSDK {
         return undefined
     }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
-        let sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
+        const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
         // filter out dappGroupId
-        sortedKeys = sortedKeys.filter(key=>key !== 'dappGroupId')
-        const sortedMap = sortedKeys.reduce((acc,key)=>{
+        let sortedKeysOmited = sortedKeys.filter(key=>key !== 'dappGroupId' && key !== 'extraChains') as MessageGroupMetaKeyOmited[]
+        const sortedMap = sortedKeysOmited.reduce((acc,key)=>{
             let value = meta[key]
             if (Array.isArray(value)) {
                 value = (value as string[]).sort().join('')
@@ -960,17 +960,19 @@ class IotaCatSDK {
         const filterParam = this._prepareEvmFilterPayload(addresses,groupId)
         return await this._callFilterEvmGroupQualify(filterParam)
     }
-    async _callFilterEvmGroupQualify(param:{
-        addresses:string[], 
-        chain:number,
-        contract:string,
-        threshold?:number,
-        erc:20|721|0|1
-        ts:number,
+    async _callFilterEvmGroupQualify(param: {
+        addresses: string[], 
+        chains: Array<{
+            chain: number,
+            contract: string,
+            threshold?: string,
+            erc: 20 | 721 | 0 | 1
+        }>,
+        ts: number,
     }):Promise<{addressList:string[],signature:string}>
     {
         // post https://testapi.groupfi.ai/filter
-        const url = `https://${process.env.AUXILIARY_SERVICE_DOMAIN}/group/filter`
+        const url = `https://${process.env.AUXILIARY_SERVICE_DOMAIN}/group/filter/v2`
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -1030,6 +1032,7 @@ class IotaCatSDK {
                 addresses: actualAddresses,
                 chain:groupConfig.chainId,
                 contract:groupConfig.contractAddress,
+                threshold: '0',
                 // chainId 518, spl token, erc = 1
                 erc:20 as 20|721|0|1,
                 ts:getCurrentEpochInSeconds()
@@ -1057,7 +1060,26 @@ class IotaCatSDK {
                     threshold: thresValue
                 })
             }
-            return filterParam
+            const filterParamV2 = {
+                addresses: actualAddresses,
+                chains: [
+                    {
+                        chain: filterParam.chain,
+                        contract: filterParam.contract,
+                        erc: filterParam.erc,
+                        threshold: filterParam.threshold?.toString() // Ensure threshold is a string
+                    },
+                    ...groupConfig.extraChains?.map(extraChain => ({
+                        chain: extraChain.chainId,
+                        contract: extraChain.contractAddress,
+                        erc: filterParam.erc, // Same ERC type as the main chain
+                        threshold: filterParam.threshold?.toString() // Same threshold as the main chain
+                    })) || []
+                ],
+                ts: filterParam.ts
+            }
+            
+            return filterParamV2
         } catch (error) {
             console.log('_prepareEvmFilterPayload error',error)
             throw error
