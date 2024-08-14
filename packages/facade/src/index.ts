@@ -224,8 +224,8 @@ class GroupFiSDKFacade {
         message.sender = evmAddress;
       }
 
-      const nameRes = await nameMappingCache.getRes(message.sender)
-      message.name = nameRes.name
+      const name = await this.getNameFromNameMappingCache(message.sender)
+      message.name = name
 
       console.log('*****Enter handlePushedMessage filter');
       const filtered = await this.filterMutedMessage(groupId, message.sender);
@@ -246,6 +246,15 @@ class GroupFiSDKFacade {
     }
 
     return undefined;
+  }
+
+  async getNameFromNameMappingCache(address: string) {
+    try {
+      const nameRes = await nameMappingCache.getRes(address)
+      return nameRes.name
+    }catch(error) {
+      throw error
+    }
   }
 
   listenningNewEventItem(
