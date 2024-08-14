@@ -103,19 +103,24 @@ export const MessageTypePrivate = 1
 export const MessageTypePublic = 2
 export const MessageAuthSchemeRecipeintInMessage = 1
 export const MessageAuthSchemeRecipeintOnChain = 2
+export interface ExtraChain {
+    chainId: number;
+    contractAddress: string;
+}
 export interface MessageGroupMeta {
-    dappGroupId:string
+    dappGroupId: string;
     groupName: string;
     schemaVersion: number; 
-    messageType:typeof MessageTypePrivate | typeof MessageTypePublic,
-    authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain,
-    qualifyType: GroupQualifyTypeStr,
-    chainId: number,
-    contractAddress: string,
-    tokenThres?: string,
-    tokenThresValue?: string,
-    tokenDecimals?: string,
-    symbol?: string,
+    messageType: typeof MessageTypePrivate | typeof MessageTypePublic;
+    authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain;
+    qualifyType: GroupQualifyTypeStr;
+    chainId: number;
+    contractAddress: string;
+    tokenThres?: string;
+    tokenThresValue?: string;
+    tokenDecimals?: string;
+    symbol?: string;
+    extraChains?: ExtraChain[]; // Adding the new property
 }
 export type GroupConfig = MessageGroupMeta & {groupId:string}
 export type MessageGroupMetaPlus = MessageGroupMeta & {isPublic:boolean}
@@ -152,6 +157,7 @@ export type EventGroupUpdateMinMaxToken = {
 }
 export type PushedValue = PushedNewMessage | PushedEvent
 export type MessageGroupMetaKey = keyof MessageGroupMeta
+export type MessageGroupMetaKeyOmited = keyof Omit<MessageGroupMeta, 'dappGroupId' | 'extraChains'>;
 export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain
 
 export const AddressHashLength = 20
