@@ -1046,11 +1046,6 @@ class IotaCatSDK {
                     erc:721,
                     threshold: thresValue
                 })
-            } else if(isSolanaChain(groupConfig.chainId)) {
-                filterParam = Object.assign(filterParam,{
-                    erc:1,
-                    threshold: thresValue
-                })
             } else {
                 filterParam = Object.assign(filterParam,{
                     erc:20,
