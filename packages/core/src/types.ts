@@ -1,4 +1,3 @@
-import { GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIQUALIFYTAG, GROUPFIVOTETAG, IOTACATSHAREDTAG, IOTACATTAG } from ".";
 import { IBasicOutput } from "@iota/iota.js";
 export interface IMRecipient {
     addr: string;
@@ -276,22 +275,6 @@ export type PublicItemsResponse = {
 }
 export const GROUPFICASHTAG = 'GROUPFICASH'
 
-// tags that can not be used by user
-/*
-export const IOTACATTAG = 'GROUPFIV4'
-export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
-export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
-export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
-export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
-export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
-*/
-export const GROUPFIReservedTags = [
-    GROUPFIMARKTAG,
-    GROUPFIMUTETAG,
-    GROUPFIVOTETAG,
-    GROUPFIQUALIFYTAG,
-    'PARTICIPANTION',
-]
 
 export interface IIncludesAndExcludes {
     groupId: string
