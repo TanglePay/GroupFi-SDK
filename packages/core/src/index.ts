@@ -34,7 +34,8 @@ class IotaCatSDK {
     _groupIdToGroupMeta(groupId:string):MessageGroupMeta|undefined{
         // log enter
         console.log('_groupIdToGroupMeta enter',groupId, this._groupConfigMap)
-        return this._groupConfigMap[groupId]
+        const groupIdPrefixed = this._addHexPrefixIfAbsent(groupId)
+        return this._groupConfigMap[groupIdPrefixed]
     }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
         const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
