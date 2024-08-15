@@ -22,6 +22,7 @@ import {
   ImInboxEventTypeLikeChanged,
   getAddressType,
   MessageResponseItemPlus,
+  INX_GROUPFI_DOMAIN,
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -717,10 +718,9 @@ class GroupFiSDKFacade {
       type: ShimmerBech32Addr,
       addr: this._address!,
     };
-    const groupName = IotaCatSDKObj.groupIdToGroupName(groupId);
     const message = await IotaCatSDKObj.prepareSendMessage(
       address,
-      groupName!,
+      groupId,
       messageText,
       isAnnouncement
     );
@@ -809,10 +809,10 @@ class GroupFiSDKFacade {
       groups = groups.filter(({ chainId }) => chainId == 0);
     }
     const recommendGroups = groups
-      .map(({ groupName, qualifyType }) => ({
-        groupName,
-        groupId: IotaCatSDKObj._groupToGroupId(groupName),
-        qualifyType: qualifyType,
+      .map((meta) => ({
+        groupName: meta.groupName,
+        groupId: IotaCatSDKObj._groupMetaToGroupId(meta),
+        qualifyType: meta.qualifyType,
       }))
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
 
@@ -848,10 +848,10 @@ class GroupFiSDKFacade {
     });
     console.log('initial Address Qualified Group Configs success');
     return res
-      .map(({ groupName, qualifyType }) => ({
-        groupName,
-        groupId: IotaCatSDKObj._groupToGroupId(groupName),
-        qualifyType: qualifyType,
+      .map((meta) => ({
+        groupName: meta.groupName,
+        groupId: IotaCatSDKObj._groupMetaToGroupId(meta),
+        qualifyType: meta.qualifyType,
       }))
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
   }
@@ -1057,7 +1057,7 @@ class GroupFiSDKFacade {
   }
 
   switchClientAdapter(mode: Mode) {
-    const nodeUrlHint = this._client!.getCurrentNode().apiUrl;
+    const nodeUrlHint = `https://${INX_GROUPFI_DOMAIN}`;
     switch (mode) {
       case ShimmerMode: {
         const adapter = new ShimmerModeRequestAdapter(
@@ -1612,9 +1612,6 @@ class GroupFiSDKFacade {
     return groups as { groupId: string; groupName: string }[];
   }
 
-  groupNameToGroupId(groupName: string) {
-    return IotaCatSDKObj._groupToGroupId(groupName);
-  }
 
   async loadGroupMemberAddresses(groupId: string) {
     // this._ensureWalletConnected();

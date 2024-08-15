@@ -1,4 +1,3 @@
-import { GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIQUALIFYTAG, GROUPFIVOTETAG, IOTACATSHAREDTAG, IOTACATTAG } from ".";
 import { IBasicOutput } from "@iota/iota.js";
 export interface IMRecipient {
     addr: string;
@@ -82,6 +81,8 @@ export type Address = {
     addr: string
 }
 export const INX_GROUPFI_DOMAIN = process.env.INX_GROUPFI_DOMAIN
+export const IMAGE_PRESIGN_SERVICE_URL = process.env.IMAGE_PRESIGN_SERVICE_URL
+
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
 // schema version for evm qualify
@@ -101,19 +102,24 @@ export const MessageTypePrivate = 1
 export const MessageTypePublic = 2
 export const MessageAuthSchemeRecipeintInMessage = 1
 export const MessageAuthSchemeRecipeintOnChain = 2
+export interface ExtraChain {
+    chainId: number;
+    contractAddress: string;
+}
 export interface MessageGroupMeta {
-    dappGroupId:string
+    dappGroupId: string;
     groupName: string;
     schemaVersion: number; 
-    messageType:typeof MessageTypePrivate | typeof MessageTypePublic,
-    authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain,
-    qualifyType: GroupQualifyTypeStr,
-    chainId: number,
-    contractAddress: string,
-    tokenThres?: string,
-    tokenThresValue?: string,
-    tokenDecimals?: string,
-    symbol?: string,
+    messageType: typeof MessageTypePrivate | typeof MessageTypePublic;
+    authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain;
+    qualifyType: GroupQualifyTypeStr;
+    chainId: number;
+    contractAddress: string;
+    tokenThres?: string;
+    tokenThresValue?: string;
+    tokenDecimals?: string;
+    symbol?: string;
+    extraChains?: ExtraChain[]; // Adding the new property
 }
 export type GroupConfig = MessageGroupMeta & {groupId:string}
 export type MessageGroupMetaPlus = MessageGroupMeta & {isPublic:boolean}
@@ -150,6 +156,7 @@ export type EventGroupUpdateMinMaxToken = {
 }
 export type PushedValue = PushedNewMessage | PushedEvent
 export type MessageGroupMetaKey = keyof MessageGroupMeta
+export type MessageGroupMetaKeyOmited = keyof Omit<MessageGroupMeta, 'dappGroupId' | 'extraChains'>;
 export type MessageAuthScheme = typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain
 
 export const AddressHashLength = 20
@@ -270,22 +277,6 @@ export type PublicItemsResponse = {
 }
 export const GROUPFICASHTAG = 'GROUPFICASH'
 
-// tags that can not be used by user
-/*
-export const IOTACATTAG = 'GROUPFIV4'
-export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
-export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
-export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
-export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
-export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
-*/
-export const GROUPFIReservedTags = [
-    GROUPFIMARKTAG,
-    GROUPFIMUTETAG,
-    GROUPFIVOTETAG,
-    GROUPFIQUALIFYTAG,
-    'PARTICIPANTION',
-]
 
 export interface IIncludesAndExcludes {
     groupId: string

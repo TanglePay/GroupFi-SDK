@@ -1,4 +1,4 @@
-name: Production flow
+name: Production flow using production inx plugin
 
 on:
   workflow_dispatch:
@@ -27,5 +27,5 @@ jobs:
           git checkout .
           git pull 
           pnpm install 
-          pnpm run build:prerelease
+          pnpm run build:production
         ENDSSH

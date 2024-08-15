@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'groupfi-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion, MessageGroupMetaKeyOmited } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -25,15 +25,7 @@ class IotaCatSDK {
     
     _groupIdCache:Record<string,string[]> = {}
 
-    _groupToGroupId(group:string){
-        const meta = this._groupNameToGroupMeta(group)
-        if (!meta) return undefined
-        const groupId = this._groupMetaToGroupId(meta)
-        return groupId
-    }
-    _groupNameToGroupMeta(group:string):MessageGroupMeta|undefined{
-        return this._groupConfigMap[group]
-    }
+
     groupIdToGroupName(groupId:string):string|undefined{
         const meta = this._groupIdToGroupMeta(groupId)
         if (!meta) return undefined
@@ -42,20 +34,14 @@ class IotaCatSDK {
     _groupIdToGroupMeta(groupId:string):MessageGroupMeta|undefined{
         // log enter
         console.log('_groupIdToGroupMeta enter',groupId, this._groupConfigMap)
-        for (const group in this._groupConfigMap) {
-            const meta = this._groupConfigMap[group]
-            const groupId_ = this._groupMetaToGroupId(meta)
-            // log groupId_ groupId
-            // console.log('_groupIdToGroupMeta groupId_ groupId',groupId_,groupId)
-            if (this._addHexPrefixIfAbsent(groupId_) === this._addHexPrefixIfAbsent(groupId)) return meta
-        }
-        return undefined
+        const groupIdPrefixed = this._addHexPrefixIfAbsent(groupId)
+        return this._groupConfigMap[groupIdPrefixed]
     }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
-        let sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
+        const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
         // filter out dappGroupId
-        sortedKeys = sortedKeys.filter(key=>key !== 'dappGroupId')
-        const sortedMap = sortedKeys.reduce((acc,key)=>{
+        let sortedKeysOmited = sortedKeys.filter(key=>key !== 'dappGroupId' && key !== 'extraChains') as MessageGroupMetaKeyOmited[]
+        const sortedMap = sortedKeysOmited.reduce((acc,key)=>{
             let value = meta[key]
             if (Array.isArray(value)) {
                 value = (value as string[]).sort().join('')
@@ -211,11 +197,10 @@ class IotaCatSDK {
     unsubscribeToAllTopics(){
         this._unsubscribeToTopics(Array.from(this._subscribedTopics))
     }
-    async prepareSendMessage(senderAddr:Address, group:string,message: string, isAnnouncement:boolean):Promise<IMMessage|undefined>  {
-        const meta = this._groupNameToGroupMeta(group)
+    async prepareSendMessage(senderAddr:Address, groupId:string,message: string, isAnnouncement:boolean):Promise<IMMessage|undefined>  {
+        const meta = this._groupIdToGroupMeta(groupId)
         if (!meta) return undefined
         const {schemaVersion,messageType,authScheme} = meta
-        const groupId = this._groupMetaToGroupId(meta)
         const timestamp = getCurrentEpochInSeconds()
         return {
             schemaVersion,
@@ -483,10 +468,7 @@ class IotaCatSDK {
         });
         const json = await res.json() as MessageGroupMeta[];
         if (ifSaveGroupConfigMap) {
-            this._groupConfigMap = (json ?? []).reduce((acc, group) => {
-                acc[group.groupName] = group;
-                return acc;
-            }, {} as Record<string, MessageGroupMeta>);
+            this._groupConfigMap = this._inxApiResultToGroupConfig(json);
         }
         return this._ensureList(json);
     }
@@ -506,14 +488,20 @@ class IotaCatSDK {
             body: JSON.stringify(body)
         });
         const json = await res.json() as MessageGroupMeta[];
-        const groupConfig = (json ?? []).reduce((acc, group) => {
-            acc[group.groupName] = group;
-            return acc;
-        }, {} as Record<string, MessageGroupMeta>);
+        const groupConfig = this._inxApiResultToGroupConfig(json);
         // merge groupConfig with this._groupConfigMap
         this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
         return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group));
     }
+    _inxApiResultToGroupConfig(json:MessageGroupMeta[]):Record<string,MessageGroupMeta>{
+        const groupConfig = (json ?? []).reduce((acc, group) => {
+            const groupId = this._groupMetaToGroupId(group)
+            acc[groupId] = group;
+            return acc;
+        }, {} as Record<string, MessageGroupMeta>);
+        return groupConfig;
+    }
+
     // fetch for me group configs
     async fetchForMeGroupConfigs({address, includes, excludes}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfigPlus[]> {
         try {
@@ -530,12 +518,11 @@ class IotaCatSDK {
                 body: JSON.stringify(body)
             });
             const json = await res.json() as MessageGroupMetaPlus[];
-            const resultList = this._ensureList(json);
-            const groupConfig = resultList.reduce((acc, group) => {
-                const {isPublic,...config} = group
-                acc[group.groupName] = config;
-                return acc;
-            }, {} as Record<string, MessageGroupMeta>);
+            const resultList = this._ensureList(json)
+            const groupConfig = this._inxApiResultToGroupConfig(json.map(group => {
+                const {isPublic,...meta} = group;
+                return meta;
+            }));
             // merge groupConfig with this._groupConfigMap
             this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
             const configPlusList = resultList.map(group => {
@@ -561,10 +548,7 @@ class IotaCatSDK {
             })
             let json = await res.json()
             json = this._ensureList(json)
-            const groupConfig = json.reduce((acc:Record<string, MessageGroupMeta>, group:MessageGroupMeta) => {
-                acc[group.groupName] = group;
-                return acc;
-            }, {} as Record<string, MessageGroupMeta>);
+            const groupConfig = this._inxApiResultToGroupConfig(json);
             // merge groupConfig with this._groupConfigMap
             this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
             return json.map((group:MessageGroupMeta) => this._messageGroupMetaToGroupConfig(group))
@@ -960,17 +944,19 @@ class IotaCatSDK {
         const filterParam = this._prepareEvmFilterPayload(addresses,groupId)
         return await this._callFilterEvmGroupQualify(filterParam)
     }
-    async _callFilterEvmGroupQualify(param:{
-        addresses:string[], 
-        chain:number,
-        contract:string,
-        threshold?:number,
-        erc:20|721|0|1
-        ts:number,
+    async _callFilterEvmGroupQualify(param: {
+        addresses: string[], 
+        chains: Array<{
+            chain: number,
+            contract: string,
+            threshold?: string,
+            erc: 20 | 721 | 0 | 1
+        }>,
+        ts: number,
     }):Promise<{addressList:string[],signature:string}>
     {
         // post https://testapi.groupfi.ai/filter
-        const url = `https://${process.env.AUXILIARY_SERVICE_DOMAIN}/group/filter`
+        const url = `https://${process.env.AUXILIARY_SERVICE_DOMAIN}/group/filter/v2`
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -1030,6 +1016,7 @@ class IotaCatSDK {
                 addresses: actualAddresses,
                 chain:groupConfig.chainId,
                 contract:groupConfig.contractAddress,
+                threshold: '0',
                 // chainId 518, spl token, erc = 1
                 erc:20 as 20|721|0|1,
                 ts:getCurrentEpochInSeconds()
@@ -1057,7 +1044,26 @@ class IotaCatSDK {
                     threshold: thresValue
                 })
             }
-            return filterParam
+            const filterParamV2 = {
+                addresses: actualAddresses,
+                chains: [
+                    {
+                        chain: filterParam.chain,
+                        contract: filterParam.contract,
+                        erc: filterParam.erc,
+                        threshold: filterParam.threshold?.toString() // Ensure threshold is a string
+                    },
+                    ...groupConfig.extraChains?.map(extraChain => ({
+                        chain: extraChain.chainId,
+                        contract: extraChain.contractAddress,
+                        erc: filterParam.erc, // Same ERC type as the main chain
+                        threshold: filterParam.threshold?.toString() // Same threshold as the main chain
+                    })) || []
+                ],
+                ts: filterParam.ts
+            }
+            
+            return filterParamV2
         } catch (error) {
             console.log('_prepareEvmFilterPayload error',error)
             throw error
@@ -1101,6 +1107,14 @@ export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV2'
 export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
 export const GROUPFILIKETAG = 'GROUPFILIKEV1'
+export const GROUPFIReservedTags = [
+    GROUPFIMARKTAG,
+    GROUPFIMUTETAG,
+    GROUPFIVOTETAG,
+    GROUPFILIKETAG,
+    GROUPFIQUALIFYTAG,
+    'PARTICIPANTION',
+]
 export const IotaCatSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'
