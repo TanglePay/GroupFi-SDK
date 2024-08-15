@@ -5,6 +5,7 @@
     "clean": "pnpm run -r clean",
     "build:staging": "turbo run build:staging && npm run syncdist",
     "build:prerelease": "turbo run build:prerelease && npm run syncdist",
+    "build:production": "turbo run build:production && npm run syncdist",
     "test": "pnpm run -r test",
     "syncdist": "node syncdist.js"
   },
