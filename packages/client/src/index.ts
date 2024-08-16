@@ -461,7 +461,7 @@ export class GroupfiSdkClient {
     async _getSharedOutputIdForGroupFromInxApi(groupId: string): Promise<{ outputId: string } | undefined> {
         try {
             const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/shared/v2?groupId=${prefixedGroupId}`;
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
             try {
                 // @ts-ignore
                 const res = await fetch(url, {
