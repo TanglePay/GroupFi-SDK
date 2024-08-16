@@ -438,8 +438,6 @@ class IotaCatSDK {
         }
     }
     
-    
-    
     // get shared output id for a group
     async fetchSharedOutputId(groupId: string): Promise<{ outputId: string }> {
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId);
@@ -464,7 +462,6 @@ class IotaCatSDK {
             return { outputId: '' };
         }
     }
-    
     
     // message group meta to group config
     _messageGroupMetaToGroupConfig(meta:MessageGroupMeta):GroupConfig{

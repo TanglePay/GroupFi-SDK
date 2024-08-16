@@ -514,7 +514,6 @@ export class GroupfiSdkClient {
         return undefined;
     }
     
-    
     // make cash basic output for given amount
     _makeCashBasicOutput(amount:bigInt.BigInteger):IBasicOutput{
         const basicOutput: IBasicOutput = {
@@ -1057,8 +1056,6 @@ export class GroupfiSdkClient {
         const data = await res.json() as string[];
         return data ?? [];
     }
-    
-    
 
     // batchoutputidtooutput api, it is an inx api
     async batchOutputIdToOutput(outputIds:string[]){
