@@ -471,48 +471,49 @@ export class GroupfiSdkClient {
         }
         return []
     }
-    async _getSharedOutputIdForGroupFromInxApi(groupId:string):Promise<{outputId:string}|undefined>{
+    async _getSharedOutputIdForGroupFromInxApi(groupId: string): Promise<{ outputId: string } | undefined> {
         try {
-            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${prefixedGroupId}`
+            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v2/shared?groupId=${prefixedGroupId}`;
             try {
                 // @ts-ignore
-                const res = await fetch(url,{
-                    method:'GET',
-                    headers:{
-                    'Content-Type':'application/json'
-                    }})
+                const res = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
                 if (!res.ok) {
-                    if (res.status === 901) {
-                        throw IotaCatSDKObj.makeErrorForGroupMemberTooMany()
+                    const json = await res.json();
+                    if (json.code === 901) {
+                        throw IotaCatSDKObj.makeErrorForGroupMemberTooMany();
                     } else {
-                        // stop code logic if api for shared errors other than 901
-                        throw new Error(`_getSharedOutputIdForGroupFromInxApi res not ok, status:${res.status}`)
-                    } 
-                }                    
-                const data = await res.json() as {outputId:string}
-                return data
+                        // Stop code logic if API for shared errors other than 901
+                        throw new Error(`_getSharedOutputIdForGroupFromInxApi res not ok, code: ${json.code}`);
+                    }
+                }
+                const data = await res.json() as { outputId: string };
+                return data;
             } catch (error) {
                 /*
                 if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
-                    throw error
+                    throw error;
                 }
                 */
-                throw error
-                
+                throw error;
             }
-            
         } catch (error) {
             /*
             if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
-                throw error
+                throw error;
             }
             */
-            console.log('error',error)
-            throw error
+            console.log('error', error);
+            throw error;
         }
-        return undefined
+        return undefined;
     }
+    
     // make cash basic output for given amount
     _makeCashBasicOutput(amount:bigInt.BigInteger):IBasicOutput{
         const basicOutput: IBasicOutput = {
@@ -1041,19 +1042,21 @@ export class GroupfiSdkClient {
     }
 
     // get outputids from message consolidation shared api
-    async _getOutputIdsFromMessageConsolidationSharedApi(address:string){
-        const params = {address:`${address}`}
-        const paramStr = formatUrlParams(params)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/consolidation/shared${paramStr}`
+    async _getOutputIdsFromMessageConsolidationSharedApi(address: string): Promise<string[]> {
+        const params = { address: `${address}` };
+        const paramStr = formatUrlParams(params);
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v2/consolidation/shared${paramStr}`;
         // @ts-ignore
-        const res = await fetch(url,{
-            method:'GET',
-            headers:{
-            'Content-Type':'application/json',
-            }})
-        const data = await res.json() as string[]
-        return data ?? []
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        const data = await res.json() as string[];
+        return data ?? [];
     }
+    
 
     // batchoutputidtooutput api, it is an inx api
     async batchOutputIdToOutput(outputIds:string[]){
