@@ -414,7 +414,7 @@ class IotaCatSDK {
     }
     // get shared output for a group
     async checkIsGroupPublicFromSharedApiCall(groupId: string): Promise<boolean> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v2/shared?groupId=${this._gid(groupId)}`;
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/shared/v2?groupId=${this._gid(groupId)}`;
         try {
             const res = await fetch(url, {
                 method: 'GET',
@@ -438,10 +438,12 @@ class IotaCatSDK {
         }
     }
     
+    
+    
     // get shared output id for a group
     async fetchSharedOutputId(groupId: string): Promise<{ outputId: string }> {
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId);
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v2/shared?groupId=${prefixedGroupId}`;
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/shared/v2?groupId=${prefixedGroupId}`;
         try {
             const res = await fetch(url, {
                 method: 'GET',
@@ -462,6 +464,7 @@ class IotaCatSDK {
             return { outputId: '' };
         }
     }
+    
     
     // message group meta to group config
     _messageGroupMetaToGroupConfig(meta:MessageGroupMeta):GroupConfig{

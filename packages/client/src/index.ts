@@ -474,7 +474,7 @@ export class GroupfiSdkClient {
     async _getSharedOutputIdForGroupFromInxApi(groupId: string): Promise<{ outputId: string } | undefined> {
         try {
             const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v2/shared?groupId=${prefixedGroupId}`;
+            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/shared/v2?groupId=${prefixedGroupId}`;
             try {
                 // @ts-ignore
                 const res = await fetch(url, {
@@ -513,6 +513,7 @@ export class GroupfiSdkClient {
         }
         return undefined;
     }
+    
     
     // make cash basic output for given amount
     _makeCashBasicOutput(amount:bigInt.BigInteger):IBasicOutput{
@@ -1045,7 +1046,7 @@ export class GroupfiSdkClient {
     async _getOutputIdsFromMessageConsolidationSharedApi(address: string): Promise<string[]> {
         const params = { address: `${address}` };
         const paramStr = formatUrlParams(params);
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v2/consolidation/shared${paramStr}`;
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/consolidation/shared${paramStr}`;
         // @ts-ignore
         const res = await fetch(url, {
             method: 'GET',
@@ -1056,6 +1057,7 @@ export class GroupfiSdkClient {
         const data = await res.json() as string[];
         return data ?? [];
     }
+    
     
 
     // batchoutputidtooutput api, it is an inx api
