@@ -413,40 +413,56 @@ class IotaCatSDK {
         return this._addHexPrefixIfAbsent(groupId)
     }
     // get shared output for a group
-    async checkIsGroupPublicFromSharedApiCall(groupId:string):Promise<boolean>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${this._gid(groupId)}`
-            try {
-                // @ts-ignore
-                const res = await fetch(url,{
-                    method:'GET',
-                    headers:{
-                    'Content-Type':'application/json'
-                    }})
-                if (!res.ok) {
-                    if (res.status === 901) {
-                        return true
-                    } 
-                }                    
-                return false
-            } catch (error) {
-                console.log('error',error)
-                // return false
-                throw error
-            }
-    }
-    // get shared output id for a group
-    async fetchSharedOutputId(groupId:string):Promise<{outputId:string}>{
-        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${prefixedGroupId}`
+    async checkIsGroupPublicFromSharedApiCall(groupId: string): Promise<boolean> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared/v2?groupId=${this._gid(groupId)}`;
         try {
-            const res = await fetch(url)
-            const json = await res.json() as {outputId:string}
-            return json
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+    
+            if (res.ok) {
+                const json = await res.json();
+                if (json.code === 901) {
+                    return true;
+                }
+            } else {
+                console.log(`Unexpected status code: ${res.status}`);
+            }
+            return false;
         } catch (error) {
-            console.log('error',error)
-            return {outputId:''}
+            console.log('error', error);
+            throw error;
         }
     }
+    
+    // get shared output id for a group
+    async fetchSharedOutputId(groupId: string): Promise<{ outputId: string }> {
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId);
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+    
+            if (res.ok) {
+                const json = await res.json();
+                return { outputId: json.outputId || '' };
+            } else {
+                console.log(`Unexpected status code: ${res.status}`);
+                return { outputId: '' };
+            }
+        } catch (error) {
+            console.log('error', error);
+            return { outputId: '' };
+        }
+    }
+    
     // message group meta to group config
     _messageGroupMetaToGroupConfig(meta:MessageGroupMeta):GroupConfig{
         const groupId = this._groupMetaToGroupId(meta)
