@@ -484,15 +484,13 @@ export class GroupfiSdkClient {
                     }
                 });
                 if (!res.ok) {
-                    const json = await res.json();
-                    if (json.code === 901) {
-                        throw IotaCatSDKObj.makeErrorForGroupMemberTooMany();
-                    } else {
-                        // Stop code logic if API for shared errors other than 901
-                        throw new Error(`_getSharedOutputIdForGroupFromInxApi res not ok, code: ${json.code}`);
-                    }
+                    console.log('_getSharedOutputIdForGroupFromInxApi res not ok', res.status);
+                    throw new Error('Failed to get shared output id from inx api with status code: ' + res.status);
                 }
-                const data = await res.json() as { outputId: string };
+                const data = await res.json() as {code:number; outputId: string };
+                if (data.code === 901) {
+                    throw IotaCatSDKObj.makeErrorForGroupMemberTooMany();
+                } 
                 return data;
             } catch (error) {
                 /*
