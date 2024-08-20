@@ -42,6 +42,7 @@ import {
   IProxyModeRequestAdapter,
   MessageBody,
   AddressMappingStore,
+  nameMappingCache,
   StorageFacade
 } from 'groupfi-sdk-client';
 import { Web3 } from 'web3';
@@ -213,6 +214,7 @@ class GroupFiSDKFacade {
         sender: resUnwrapped.sender,
         message: resUnwrapped.message.data,
         timestamp: resUnwrapped.message.timestamp,
+        name: undefined
       };
 
       if (this._mode !== ShimmerMode) {
@@ -221,6 +223,9 @@ class GroupFiSDKFacade {
         );
         message.sender = evmAddress;
       }
+
+      const name = await this.getNameFromNameMappingCache(message.sender)
+      message.name = name
 
       console.log('*****Enter handlePushedMessage filter');
       const filtered = await this.filterMutedMessage(groupId, message.sender);
@@ -241,6 +246,15 @@ class GroupFiSDKFacade {
     }
 
     return undefined;
+  }
+
+  async getNameFromNameMappingCache(address: string) {
+    try {
+      const nameRes = await nameMappingCache.getRes(address)
+      return nameRes.name
+    }catch(error) {
+      throw error
+    }
   }
 
   listenningNewEventItem(
