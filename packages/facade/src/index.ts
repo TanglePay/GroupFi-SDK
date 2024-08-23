@@ -725,6 +725,7 @@ class GroupFiSDKFacade {
     groupId: string,
     messageText: string,
     isAnnouncement:boolean,
+    isGroupPublic:boolean,
     memberList?: { addr: string; publicKey: string }[]
   ) {
     tracer.startStep('sendMessageToGroup','facade sendMessage');
@@ -744,6 +745,7 @@ class GroupFiSDKFacade {
     const res = await this._client!.sendMessage(
       this._address!,
       groupId,
+      isGroupPublic,
       message!,
       memberList
     );
@@ -884,7 +886,11 @@ class GroupFiSDKFacade {
     });
     return res;
   }
-
+  // batchFetchGroupIsPublic
+  async batchFetchGroupIsPublic(groupIds: string[]): Promise<{ [key: string]: boolean }> {
+    const res = await IotaCatSDKObj.batchFetchGroupIsPublic(groupIds);
+    return res;
+  }
   // upload image to s3    
   async uploadImageToS3({fileGetter, fileObj}: {fileGetter?: () => Promise<File>, fileObj?: File}): Promise<{ imageURL: string, dimensionsPromise: Promise<{ width: number; height: number }>, uploadPromise: Promise<void> }> {
     return await this._client!.uploadImageToS3({fileGetter, pairX: this._pairX!, 
