@@ -55,7 +55,8 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     serializeUserLikeGroupMembers,
     AddressType,
     MessageResponseItemPlus,
-    IMAGE_PRESIGN_SERVICE_URL
+    IMAGE_PRESIGN_SERVICE_URL,
+    MessageTypePrivate
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -1336,6 +1337,7 @@ export class GroupfiSdkClient {
             if (isGroupPublic) {
                 message.messageType = MessageTypePublic
             } else {
+                message.messageType = MessageTypePrivate
                 try {
                     
                     if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
