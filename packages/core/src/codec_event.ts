@@ -1,8 +1,8 @@
-import { DidChangedEvent, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, PairXChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
+import { DidChangedEvent, EventGroupIsPublicChanged, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, PairXChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { readUint16, readUint32 } from 'groupfi-sdk-utils'
 import { deserializeFieldWithLengthPrefixed } from "./codec_util";
-import { read } from "fs";
+
 
 export function deserializePushed(data: Uint8Array): PushedValue {
     // log enter deserializePushed, data in hex
@@ -52,7 +52,12 @@ export function deserializePushed(data: Uint8Array): PushedValue {
             type: ImInboxEventTypeLikeChanged,
             ...deserializeLikeChangedEvent(reader)
         };
-    } 
+    } else if (eventType === ImInboxEventTypeGroupIsPublicChanged) {
+        return {
+            type: ImInboxEventTypeGroupIsPublicChanged,
+            ...deserializeGroupIsPublicChangedEvent(reader)
+        };
+    }
     
     
     else {
@@ -91,6 +96,35 @@ export function deserializeGroupMemberChangedEvent(reader : ReadStream): Omit<Ev
         address
     };
 }
+
+export function deserializeGroupIsPublicChangedEvent(reader: ReadStream): Omit<EventGroupIsPublicChanged, 'type'> {
+    console.log("deserializeGroupIsPublicChangedEvent");
+
+    // read groupId
+    const groupIdBytes = reader.readBytes("groupId", GroupIDLength);
+    const groupId = Converter.bytesToHex(groupIdBytes, true);
+    console.log("groupId", groupId);
+
+    // read milestone index
+    const milestoneIndex = readUint32(reader, 'milestoneIndex');
+    console.log("milestoneIndex", milestoneIndex);
+
+    // read timestamp
+    const timestamp = readUint32(reader, 'timestamp');
+    console.log("timestamp", timestamp);
+
+    // read isPublic
+    const isPublic = reader.readUInt8("isPublic") === 1;
+    console.log("isPublic", isPublic);
+
+    return {
+        groupId,
+        timestamp,
+        isPublic
+    };
+}
+
+
 export function deserializeEvmQualifyChangedEvent(reader : ReadStream): Omit<EvmQualifyChangedEvent,'type'> {
     // log enter deserializeEvmQualifyChangedEvent
     console.log("deserializeEvmQualifyChangedEvent");

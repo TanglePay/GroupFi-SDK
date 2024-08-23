@@ -55,7 +55,8 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     serializeUserLikeGroupMembers,
     AddressType,
     MessageResponseItemPlus,
-    IMAGE_PRESIGN_SERVICE_URL
+    IMAGE_PRESIGN_SERVICE_URL,
+    MessageTypePrivate
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -1317,7 +1318,7 @@ export class GroupfiSdkClient {
             }
         }
     }
-    async sendMessage(senderAddr:string, groupId:string,message: IMMessage, memberList?:{addr:string,publicKey:string}[])
+    async sendMessage(senderAddr:string, groupId:string,isGroupPublic:boolean,message: IMMessage, memberList?:{addr:string,publicKey:string}[])
     :Promise<
     {
         sentMessagePromise:Promise<IMessage>,
@@ -1333,33 +1334,38 @@ export class GroupfiSdkClient {
             console.log('ProtocolInfo', protocolInfo);
             const groupSaltMap:Record<string,string> = {}
             const groupSaltResolver = async (groupId:string)=>groupSaltMap[groupId]
-            try {
-                
-                if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
-                    const memberRes = await IotaCatSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
-                    const recipients = memberRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
-         
-                    message.recipients = recipients
-                } else {
-                    // get shared output
+            if (isGroupPublic) {
+                message.messageType = MessageTypePublic
+            } else {
+                message.messageType = MessageTypePrivate
+                try {
                     
-                    const {salt, outputId,outputs,isHA} = await this._getSaltForGroup(groupId,senderAddr,memberList)
-                    if (isHA) {
-                        const {outputId:outputIdFromHA} = await this._sendBasicOutput(outputs!);
-                        // set shared id and salt to cache
-                        this._setSharedIdAndSaltToCache(outputIdFromHA,salt)
-                        message.recipientOutputid = outputIdFromHA
+                    if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
+                        const memberRes = await IotaCatSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
+                        const recipients = memberRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
+            
+                        message.recipients = recipients
                     } else {
-                        message.recipientOutputid = outputId
+                        // get shared output
+                        
+                        const {salt, outputId,outputs,isHA} = await this._getSaltForGroup(groupId,senderAddr,memberList)
+                        if (isHA) {
+                            const {outputId:outputIdFromHA} = await this._sendBasicOutput(outputs!);
+                            // set shared id and salt to cache
+                            this._setSharedIdAndSaltToCache(outputIdFromHA,salt)
+                            message.recipientOutputid = outputIdFromHA
+                        } else {
+                            message.recipientOutputid = outputId
+                        }
+                        groupSaltMap[groupId] = salt
+                        
                     }
-                    groupSaltMap[groupId] = salt
-                    
-                }
-            } catch (error) {
-                if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
-                    message.messageType = MessageTypePublic
-                } else {
-                    throw error
+                } catch (error) {
+                    if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+                        message.messageType = MessageTypePublic
+                    } else {
+                        throw error
+                    }
                 }
             }
             console.log('MessageWithPublicKeys', message);

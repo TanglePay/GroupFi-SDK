@@ -997,6 +997,29 @@ class IotaCatSDK {
         const signature = 's'
         return {addressList,signature}
     }
+    // call /batchfetchgroupispublic, method POST
+    async batchFetchGroupIsPublic(groupIds: string[]): Promise<{[key: string]: boolean}> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/batchfetchgroupispublic`;
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(groupIds)
+            });
+            const result = await res.json() as { groupId: string, isPublic: boolean }[];
+            const map: { [key: string]: boolean } = {};
+            result.forEach(item => {
+                map[item.groupId] = item.isPublic;
+            });
+            return map;
+        } catch (error) {
+            console.log('error', error);
+            return {};
+        }
+    }
+
     _chainNameToChainId(chainName:string):number{
         if (chainName === 'shimmer-evm') return 148;
         return 0
