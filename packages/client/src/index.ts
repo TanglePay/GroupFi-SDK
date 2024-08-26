@@ -627,6 +627,8 @@ export class GroupfiSdkClient {
                     // if numOfChecks > 3, or timeelapsed > 30 seconds, bypass
                     const timeElapsed = Date.now() - item.lastCheckTime
                     if (item.numOfChecks > 3 || timeElapsed > 30 * 1000) {
+                        // if not found, add to failed cache
+                        this._sharedSaltFailedCache.add(outputId)
                         continue
                     }
                     // increase numOfChecks, update lastCheckTime
@@ -753,8 +755,7 @@ export class GroupfiSdkClient {
                     throw IotaCatSDKObj.makeErrorForSharedOutputNotFound(outputId)
                 }
             }
-            // if not found, add to failed cache
-            this._sharedSaltFailedCache.add(outputId)
+            
             // check if in waiting cache
             const waiting = this._sharedSaltWaitingCache[outputId]
             if (waiting) {
