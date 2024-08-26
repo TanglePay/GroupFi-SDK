@@ -606,24 +606,23 @@ export class GroupfiSdkClient {
             const sharedNotFoundRecoveringMessage = this._sharedNotFoundRecoveringMessage
             const keys = Object.keys(sharedNotFoundRecoveringMessage)
             console.log('keys', keys);
-            const existing = []
+            const existing = new Map()
             for (const outputId of keys) {
                 try {
                     const res = await this._client!.output(outputId)
                     if (res) {
-                        existing.push(outputId)
+                        existing.set(outputId,res)
                     }
                 } catch (error) {
                 }
             }
-            if (existing.length === 0) return
-            const existingSet = new Set(existing)
+            if (existing.size === 0) return
             const neoObject:Record<string,{payload:{data:Uint8Array,senderAddressBytes:Uint8Array,address:string}[],lastCheckTime:number,numOfChecks:number}> = {}
             const payloadToBeProcessed:{data:Uint8Array,senderAddressBytes:Uint8Array,address:string}[] = []
             for (const outputId of keys) {
                 const item = sharedNotFoundRecoveringMessage[outputId]
                     
-                if (!existingSet.has(outputId)) {
+                if (!existing.has(outputId)) {
                     // if numOfChecks > 3, or timeelapsed > 30 seconds, bypass
                     const timeElapsed = Date.now() - item.lastCheckTime
                     if (item.numOfChecks > 3 || timeElapsed > 30 * 1000) {
@@ -636,7 +635,8 @@ export class GroupfiSdkClient {
                     item.lastCheckTime = Date.now()
                     neoObject[outputId] = item
                 } else {
-                    const {salt} = await this._getSaltFromSharedOutputId(outputId,item.payload[0].address)
+                    const sharedOutputResponse = existing.get(outputId)
+                    const {salt} = await this._getSaltFromSharedOutput({sharedOutput:sharedOutputResponse.output as IBasicOutput, address:item.payload[0].address,isHA:false})
                     this._resolveSharedSaltWaitingCache(outputId,salt)
                     payloadToBeProcessed.push(...item.payload)
                 }
