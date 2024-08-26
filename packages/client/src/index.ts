@@ -636,6 +636,8 @@ export class GroupfiSdkClient {
                     item.lastCheckTime = Date.now()
                     neoObject[outputId] = item
                 } else {
+                    const {salt} = await this._getSaltFromSharedOutputId(outputId,item.payload[0].address)
+                    this._resolveSharedSaltWaitingCache(outputId,salt)
                     payloadToBeProcessed.push(...item.payload)
                 }
             }
@@ -740,14 +742,7 @@ export class GroupfiSdkClient {
             // log
             console.log('cache miss fetch from network,output fetched', output);
             const {salt} = await this._getSaltFromSharedOutput({sharedOutputId:outputId, sharedOutput:output, address, isHA:false})
-            // check if in waiting cache
-            const waiting = this._sharedSaltWaitingCache[outputId]
-            if (waiting) {
-                for (const item of waiting) {
-                    item.resolve(salt)
-                }
-                delete this._sharedSaltWaitingCache[outputId]
-            }
+            this._resolveSharedSaltWaitingCache(outputId,salt)
             return {salt}
         } catch (error) {
             if (error instanceof ClientError) {
@@ -768,7 +763,16 @@ export class GroupfiSdkClient {
         }
         
     }
-
+   // resolve _sharedSaltWaitingCache with outputId and salt
+    async _resolveSharedSaltWaitingCache(outputId:string,salt:string){
+        const waiting = this._sharedSaltWaitingCache[outputId]
+        if (waiting) {
+            for (const item of waiting) {
+                item.resolve(salt)
+            }
+            delete this._sharedSaltWaitingCache[outputId]
+        }
+    }
     // get evm qualify list
     async getEvmQualifyList(groupId:string, memberSelf?:{addr:string,publicKey:string}):Promise<{addressKeyList:{addr:string,publicKey:string}[],signature:string,isSelfInList:boolean}>{
         let previouslyQualified =  (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? []
