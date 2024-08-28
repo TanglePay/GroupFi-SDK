@@ -990,6 +990,152 @@ export class GroupfiSdkClient {
             throw error
         }
     }
+    processMessageOutput(output: IBasicOutput): { senderAddressBytes: Uint8Array, data: Uint8Array } {
+        // Find the address unlock condition
+        const addressUnlockCondition = output.unlockConditions.find(unlockCondition => unlockCondition.type === 0) as IAddressUnlockCondition;
+        if (!addressUnlockCondition) {
+            throw new Error('No address unlock condition found');
+        }
+    
+        // Extract the sender address and convert it to bytes
+        const senderAddress = addressUnlockCondition.address as IEd25519Address;
+        const senderAddressBytes = Converter.hexToBytes(senderAddress.pubKeyHash);
+    
+        // Ensure the output has features
+        const features = output.features;
+        if (!features) {
+            throw new Error('No features');
+        }
+    
+        // Find the metadata feature and convert its data to bytes
+        const metadataFeature = features.find(feature => feature.type === 2) as IMetadataFeature;
+        if (!metadataFeature) {
+            throw new Error('No metadata feature');
+        }
+        const data = Converter.hexToBytes(metadataFeature.data);
+    
+        return { senderAddressBytes, data };
+    }
+    convertIMMessageToIMessage(imMessage: IMMessage, messageId: string, sender: string): IMessage {
+        return {
+            type: ImInboxEventTypeNewMessage,
+            messageId,
+            groupId: imMessage.groupId,
+            sender,
+            message: imMessage.data, // Assuming `data` holds the message content
+            timestamp: imMessage.timestamp,
+            // Optionally include other fields like `token` or `name` if they exist in `IMMessage`
+        };
+    }
+    
+    async batchConvertOutputIdsToMessages(outputIds: string[], address: string): Promise<{ messages: IMessage[], missedMessageOutputIds: string[] }> {
+        const completedMessages: IMessage[] = [];
+        const missedMessageOutputIds: string[] = [];
+        
+        try {
+            // Step 1: Batch convert outputIds to outputs
+            const outputIdToOutput = await this.batchOutputIdToOutput(outputIds);
+            const foundOutputIds = outputIdToOutput.map(({ outputIdHex }) => outputIdHex);
+    
+            // Calculate the diff to find the outputIds that were not found
+            const initialMissedMessageOutputIds = outputIds.filter(outputId => !foundOutputIds.includes(outputId));
+            missedMessageOutputIds.push(...initialMissedMessageOutputIds);
+    
+            // Step 2: Loop through the outputs and attempt to deserialize each message without extra
+            const sharedOutputIdToMsgMap: { [sharedOutputId: string]: { imMessage: IMMessage, data: Uint8Array, senderAddressBytes: Uint8Array, messageId: string } } = {};
+            const sharedOutputIds: string[] = [];
+            for (const { outputIdHex, output } of outputIdToOutput) {
+                try {
+                    // Cast the output to IBasicOutput
+                    const basicOutput = output as IBasicOutput;
+    
+                    // Process the message output
+                    const { senderAddressBytes, data } = this.processMessageOutput(basicOutput);
+    
+                    // Get the messageId
+                    const messageId = IotaCatSDKObj.getMessageId(data, senderAddressBytes);
+    
+                    // Attempt to deserialize the message without extra
+                    const { sharedOutputId, msg: imMessage } = await IotaCatSDKObj.deserializeMessageWithoutExtra(data, address);
+                    const sender = ''; // You'll need to determine the sender value based on your context
+    
+                    if (sharedOutputId) {
+                        sharedOutputIdToMsgMap[sharedOutputId] = { imMessage, data, senderAddressBytes, messageId };
+                        sharedOutputIds.push(sharedOutputId);
+                    } else {
+                        const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender);
+                        completedMessages.push(iMessage); // Fully processed message
+                    }
+                } catch (error) {
+                    console.log(`Error deserializing message for outputId: ${outputIdHex}`, error);
+                }
+            }
+    
+            // Step 3: Handle messages requiring salts (SharedOutputId handling)
+            if (sharedOutputIds.length > 0) {
+                // Fetch salts from cache first
+                const { results, cacheMissedIds: stillMissingSaltSharedIds } = await this._batchFetchSaltFromCache(sharedOutputIds);
+    
+                // Complete the messages using the cached salts
+                for (const { outputId, salt } of results) {
+                    const { imMessage, messageId, senderAddressBytes } = sharedOutputIdToMsgMap[outputId];
+                    const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
+                    const sender = ''; // You'll need to determine the sender value based on your context
+                    const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender);
+                    completedMessages.push(iMessage);
+                    delete sharedOutputIdToMsgMap[outputId];
+                }
+    
+                // Fetch missing shared outputs and then the salts
+                if (stillMissingSaltSharedIds.length > 0) {
+                    // Batch convert still missing shared outputs
+                    const sharedOutputResults = await this.batchOutputIdToOutput(stillMissingSaltSharedIds);
+                    const sharedOutputIdsFound = sharedOutputResults.map(({ outputIdHex }) => outputIdHex);
+    
+                    // Calculate the diff to find the sharedOutputIds that were not found (treated as shared not found)
+                    const sharedNotFoundIds = stillMissingSaltSharedIds.filter(id => !sharedOutputIdsFound.includes(id));
+    
+                    // Handle the remaining salts
+                    for (const { outputIdHex, output } of sharedOutputResults) {
+                        const basicOutput = output as IBasicOutput;
+                        const { salt } = await this._getSaltFromSharedOutput({ sharedOutputId: outputIdHex, sharedOutput: basicOutput, address, isHA: false });
+                        const { imMessage, messageId, senderAddressBytes } = sharedOutputIdToMsgMap[outputIdHex];
+                        const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
+                        const sender = ''; // You'll need to determine the sender value based on your context
+                        const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender);
+                        completedMessages.push(iMessage);
+                    }
+    
+                    // Additional handling for shared output not found
+                    for (const sharedOutputId of sharedNotFoundIds) {
+                        console.log(`Shared output not found for sharedOutputId: ${sharedOutputId}`);
+                        if (!this._sharedNotFoundRecoveringMessage[sharedOutputId]) {
+                            this._sharedNotFoundRecoveringMessage[sharedOutputId] = {
+                                payload: [],
+                                lastCheckTime: 0,
+                                numOfChecks: 0,
+                            };
+                        }
+                        const { data, senderAddressBytes } = sharedOutputIdToMsgMap[sharedOutputId];
+                        this._sharedNotFoundRecoveringMessage[sharedOutputId].payload.push({
+                            data,
+                            senderAddressBytes,
+                            address,
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            console.log('Error in batchConvertOutputIdsToMessages:', error);
+            throw error;
+        }
+    
+        return { messages: completedMessages, missedMessageOutputIds };
+    }
+    
+    
+    
+    
     async _getUnSpentOutputs({numbersWanted, amountLargerThan, idsForFiltering}:{numbersWanted:number,amountLargerThan?:bigInt.BigNumber, idsForFiltering?:Set<string>} = {numbersWanted : 100}) {
         this._ensureClientInited()
         this._ensureWalletInited()
@@ -1280,6 +1426,31 @@ export class GroupfiSdkClient {
         }
         return cachedValue
     }
+    async _batchFetchSaltFromCache(sharedOutputIds: string[]): Promise<{ results: { outputId: string, salt: string }[], cacheMissedIds: string[] }> {
+        const results: { outputId: string, salt: string }[] = [];
+        const cacheMissedIds: string[] = [];
+    
+        for (const rawSharedId of sharedOutputIds) {
+            const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId);
+            const cachedValue = this._sharedSaltCache[sharedId!];
+    
+            if (cachedValue) {
+                console.log('salt cache hit', sharedId);
+                results.push({ outputId: sharedId, salt: cachedValue });
+            } else if (this._sharedSaltFailedCache.has(sharedId!)) {
+                console.log('salt failed cache hit', sharedId);
+                // If a failed cache hit is considered a miss, you can add it to cacheMissedIds as well
+                cacheMissedIds.push(sharedId);
+            } else {
+                console.log('salt cache miss', sharedId);
+                cacheMissedIds.push(sharedId);
+            }
+        }
+    
+        // Return the results and the list of cache-missed IDs
+        return { results, cacheMissedIds };
+    }
+    
     _preloadGroupSaltCacheWaits:Record<string,{resolve:(value:undefined)=>void,reject:(error:Error)=>void}[]> = {}
     async preloadGroupSaltCache({
         senderAddr,
