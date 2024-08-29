@@ -746,7 +746,40 @@ class IotaCatSDK {
         return msg as IMMessage
     }
     
-
+    async deserializeMessageWithoutExtra(messageBytes: Uint8Array, address: string): Promise<{ sharedOutputId?: string, msg: IMMessage }> {
+        const rs = new ReadStream(messageBytes);
+        const msg_ = deserializeIMMessage(rs);
+        const msg = this._decompileMessage(msg_);
+        
+        // Decryption handling
+        if (msg.messageType === MessageTypePrivate) {
+            if (msg.authScheme === MessageAuthSchemeRecipeintInMessage) {
+                throw new Error('decryptUsingPrivateKey is required for MessageAuthSchemeRecipeintInMessage');
+            } else if (msg.authScheme === MessageAuthSchemeRecipeintOnChain) {
+                if (!msg.recipientOutputid) {
+                    console.log('invalid message', msg, msg_);
+                    throw new Error('invalid message');
+                }
+                return { sharedOutputId: msg.recipientOutputid, msg };  // Return the sharedOutputId and partially done message
+            }
+        }
+        this._decompressMessageText(msg);
+        return { msg };  // Return the fully processed message
+    }
+    completeMessageWithSalt(msg: IMMessage, salt: string): IMMessage {
+        if (!salt) {
+            throw new Error('Salt is required to complete the message');
+        }
+        
+        // Decrypt the message data using the provided salt
+        msg.data = this._decrypt(msg.data, salt);
+        
+        // Decompress the message text
+        this._decompressMessageText(msg);
+        
+        return msg;  // Return the fully processed message
+    }
+    
     serializeRecipientList(recipients:IMRecipient[], groupId:string):Uint8Array{
         const groupBytes = hexToBytes(groupId)
         const recipientIntermediateList = recipients.map(recipient=>this._compileRecipient(recipient))
