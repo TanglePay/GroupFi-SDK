@@ -757,6 +757,14 @@ class GroupFiSDKFacade {
     const res = await this._client!.batchOutputIdToOutput(outputIds);
     return res;
   }
+  // async batchConvertOutputIdsToMessages(outputIds: string[], address: string): Promise<{ messages: IMessage[], missedMessageOutputIds: string[] }> {
+  async batchConvertOutputIdsToMessages(outputIds: string[]) {
+    const res = await this._client!.batchConvertOutputIdsToMessages(
+      outputIds,
+      this._address!
+    );
+    return res;
+  }
   async fetchAddressBalance() {
     this._ensureWalletConnected();
     const addr = this._proxyAddress ?? this._address!;
