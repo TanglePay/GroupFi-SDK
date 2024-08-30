@@ -64,7 +64,13 @@ import nameMappingCache from './nameMappingCache';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
 export * from './types'
 export { AddressMappingStore, nameMappingCache}
-
+type IntermediateResult = {
+    outputIdHex: string;
+    senderAddress: string;
+    senderAddressBytes: Uint8Array;
+    name?: string;
+    data: Uint8Array;
+};
 //TODO tune concurrency
 const httpCallLimit = 5;
 const consolidateBatchSize = 29;
@@ -990,7 +996,7 @@ export class GroupfiSdkClient {
             throw error
         }
     }
-    processMessageOutput(output: IBasicOutput): { senderAddressBytes: Uint8Array, data: Uint8Array } {
+    processMessageOutput(output: IBasicOutput): { senderAddress:string,senderAddressBytes: Uint8Array, data: Uint8Array } {
         // Find the address unlock condition
         const addressUnlockCondition = output.unlockConditions.find(unlockCondition => unlockCondition.type === 0) as IAddressUnlockCondition;
         if (!addressUnlockCondition) {
@@ -1000,6 +1006,7 @@ export class GroupfiSdkClient {
         // Extract the sender address and convert it to bytes
         const senderAddress = addressUnlockCondition.address as IEd25519Address;
         const senderAddressBytes = Converter.hexToBytes(senderAddress.pubKeyHash);
+        const smrAddress = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes, this._protocolInfo!.bech32Hrp);
     
         // Ensure the output has features
         const features = output.features;
@@ -1014,9 +1021,9 @@ export class GroupfiSdkClient {
         }
         const data = Converter.hexToBytes(metadataFeature.data);
     
-        return { senderAddressBytes, data };
+        return { senderAddressBytes, senderAddress:smrAddress, data };
     }
-    convertIMMessageToIMessage(imMessage: IMMessage, messageId: string, sender: string): IMessage {
+    convertIMMessageToIMessage(imMessage: IMMessage, messageId: string, sender: string, name?:string): IMessage {
         return {
             type: ImInboxEventTypeNewMessage,
             messageId,
@@ -1024,6 +1031,7 @@ export class GroupfiSdkClient {
             sender,
             message: imMessage.data, // Assuming `data` holds the message content
             timestamp: imMessage.timestamp,
+            name
             // Optionally include other fields like `token` or `name` if they exist in `IMMessage`
         };
     }
@@ -1048,32 +1056,54 @@ export class GroupfiSdkClient {
             console.log('batchConvertOutputIdsToMessages Step 1 counts, outputIds count:', outputIds.length, 'foundOutputIds count:', foundOutputIds.length, 'failedMessageOutputIds count:', failedMessageOutputIds.length);
     
             // Step 2: Loop through the outputs and attempt to deserialize each message without extra
-            const sharedOutputIdToMsgMap: { [sharedOutputId: string]: Array<{ imMessage: IMMessage, data: Uint8Array, senderAddressBytes: Uint8Array, messageId: string, messageOutputId: string }> } = {};
+            const sharedOutputIdToMsgMap: { [sharedOutputId: string]: Array<{ imMessage: IMMessage, data: Uint8Array, senderAddressBytes: Uint8Array,name?:string, messageId: string, messageOutputId: string }> } = {};
             let totalMessagesNeedingSharedOutput = 0;
-    
+            
+            
+            // Array to hold the intermediate results
+            const intermediateResults: IntermediateResult[] = [];
+            
             for (const { outputIdHex, output } of outputIdToOutput) {
                 try {
                     // Cast the output to IBasicOutput
                     const basicOutput = output as IBasicOutput;
-    
-                    // Process the message output
-                    const { senderAddressBytes, data } = this.processMessageOutput(basicOutput);
-    
+            
+                    // Process the message output and store the result
+                    const { senderAddressBytes, senderAddress, data } = this.processMessageOutput(basicOutput);
+            
+                    // Store the intermediate result
+                    intermediateResults.push({ outputIdHex, senderAddressBytes, senderAddress, data });
+                } catch (error) {
+                    console.log(`Error processing message output for outputId: ${outputIdHex}`, error);
+                    failedMessageOutputIds.push(outputIdHex);
+                }
+            }
+            const addressList = intermediateResults.map(({ senderAddress }) => senderAddress);
+            const nameRes = await nameMappingCache.batchGetRes(addressList);
+            for (const intermediateResult of intermediateResults) {
+                const { senderAddress } = intermediateResult;
+                const name = nameRes.get(senderAddress);
+                if (name) {
+                    intermediateResult.name = name?.name;
+                }
+            }
+            for (const { outputIdHex, senderAddressBytes, name, data } of intermediateResults) {
+                try {
                     // Get the messageId
                     const messageId = IotaCatSDKObj.getMessageId(data, senderAddressBytes);
-    
+            
                     // Attempt to deserialize the message without extra
                     const { sharedOutputId, msg: imMessage } = await IotaCatSDKObj.deserializeMessageWithoutExtra(data, address);
                     const sender = ''; // You'll need to determine the sender value based on your context
-    
+            
                     if (sharedOutputId) {
                         if (!sharedOutputIdToMsgMap[sharedOutputId]) {
                             sharedOutputIdToMsgMap[sharedOutputId] = [];
                         }
-                        sharedOutputIdToMsgMap[sharedOutputId].push({ imMessage, data, senderAddressBytes, messageId, messageOutputId: outputIdHex });
+                        sharedOutputIdToMsgMap[sharedOutputId].push({ imMessage, data, senderAddressBytes, name, messageId, messageOutputId: outputIdHex });
                         totalMessagesNeedingSharedOutput++;
                     } else {
-                        const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender);
+                        const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender, name);
                         onMessageCompleted(iMessage, outputIdHex); // Trigger the callback immediately
                     }
                 } catch (error) {
@@ -1081,6 +1111,7 @@ export class GroupfiSdkClient {
                     failedMessageOutputIds.push(outputIdHex);
                 }
             }
+            
     
             // Log step 2 counts, completedMessages count, totalMessagesNeedingSharedOutput count
             console.log('batchConvertOutputIdsToMessages Step 2 counts, totalMessagesNeedingSharedOutput count:', totalMessagesNeedingSharedOutput);
@@ -1095,11 +1126,11 @@ export class GroupfiSdkClient {
                 // Complete the messages using the cached salts
                 for (const { outputId, salt } of results) {
                     const messageList = sharedOutputIdToMsgMap[outputId];
-                    for (const { imMessage, messageId, senderAddressBytes, messageOutputId } of messageList) {
+                    for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name } of messageList) {
                         try {
                             const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
                             const sender = ''; // You'll need to determine the sender value based on your context
-                            const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender);
+                            const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender,name);
                             onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                         } catch (error) {
                             console.log('Error converting completed message to IMessage:', error);
@@ -1134,11 +1165,11 @@ export class GroupfiSdkClient {
                             continue;
                         }
                         const messageList = sharedOutputIdToMsgMap[outputIdHex];
-                        for (const { imMessage, messageId, senderAddressBytes, messageOutputId } of messageList) {
+                        for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name } of messageList) {
                             try {
                                 const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
                                 const sender = ''; // You'll need to determine the sender value based on your context
-                                const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender);
+                                const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender, name);
                                 onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                             } catch (error) {
                                 console.log('Error converting completed message to IMessage:', error);
