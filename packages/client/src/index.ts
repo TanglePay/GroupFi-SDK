@@ -1028,10 +1028,13 @@ export class GroupfiSdkClient {
         };
     }
     
-    async batchConvertOutputIdsToMessages(outputIds: string[], address: string): Promise<{ messages: {msg:IMessage,outputId:string}[], failedMessageOutputIds: string[] }> {
-        const completedMessages: {msg:IMessage,outputId:string}[] = [];
+    async batchConvertOutputIdsToMessages(
+        outputIds: string[], 
+        address: string, 
+        onMessageCompleted: (msg: IMessage, outputId: string) => void
+    ): Promise<{ failedMessageOutputIds: string[] }> {
         const failedMessageOutputIds: string[] = [];
-        
+    
         try {
             // Step 1: Batch convert outputIds to outputs
             const outputIdToOutput = await this.batchOutputIdToOutput(outputIds);
@@ -1071,7 +1074,7 @@ export class GroupfiSdkClient {
                         totalMessagesNeedingSharedOutput++;
                     } else {
                         const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender);
-                        completedMessages.push({msg:iMessage, outputId: outputIdHex}); // Fully processed message
+                        onMessageCompleted(iMessage, outputIdHex); // Trigger the callback immediately
                     }
                 } catch (error) {
                     console.log(`Error deserializing message for outputId: ${outputIdHex}`, error);
@@ -1080,7 +1083,7 @@ export class GroupfiSdkClient {
             }
     
             // Log step 2 counts, completedMessages count, totalMessagesNeedingSharedOutput count
-            console.log('batchConvertOutputIdsToMessages Step 2 counts, completedMessages count:', completedMessages.length, 'totalMessagesNeedingSharedOutput count:', totalMessagesNeedingSharedOutput);
+            console.log('batchConvertOutputIdsToMessages Step 2 counts, totalMessagesNeedingSharedOutput count:', totalMessagesNeedingSharedOutput);
     
             // Step 3: Handle messages requiring salts (SharedOutputId handling)
             if (totalMessagesNeedingSharedOutput > 0) {
@@ -1097,7 +1100,7 @@ export class GroupfiSdkClient {
                             const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
                             const sender = ''; // You'll need to determine the sender value based on your context
                             const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender);
-                            completedMessages.push({msg:iMessage, outputId: messageOutputId});
+                            onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                         } catch (error) {
                             console.log('Error converting completed message to IMessage:', error);
                             failedMessageOutputIds.push(messageOutputId);
@@ -1107,18 +1110,15 @@ export class GroupfiSdkClient {
                 }
     
                 // Log step 3 counts, completedMessages count after using cache, stillMissingSaltSharedIds count
-                console.log('batchConvertOutputIdsToMessages Step 3 counts, completedMessages count after using cache:', completedMessages.length, 'stillMissingSaltSharedIds count:', stillMissingSaltSharedIds.length);
+                console.log('batchConvertOutputIdsToMessages Step 3 counts, completedMessages count after using cache:', stillMissingSaltSharedIds.length);
     
                 // Fetch missing shared outputs and then the salts
                 if (stillMissingSaltSharedIds.length > 0) {
-                    // Batch convert still missing shared outputs
                     const sharedOutputResults = await this.batchOutputIdToOutput(stillMissingSaltSharedIds);
                     const sharedOutputIdsFound = sharedOutputResults.map(({ outputIdHex }) => outputIdHex);
     
-                    // Calculate the diff to find the sharedOutputIds that were not found (treated as shared not found)
                     const sharedNotFoundIds = stillMissingSaltSharedIds.filter(id => !sharedOutputIdsFound.includes(id));
     
-                    // Handle the remaining salts
                     for (const { outputIdHex, output } of sharedOutputResults) {
                         const basicOutput = output as IBasicOutput;
                         let salt = '';
@@ -1126,7 +1126,7 @@ export class GroupfiSdkClient {
                             const getSaltFromSharedOutputRes = await this._getSaltFromSharedOutput({ sharedOutputId: outputIdHex, sharedOutput: basicOutput, address, isHA: false });
                             salt = getSaltFromSharedOutputRes.salt;
                         } catch (error) {
-                            console.log('Error fetching salt for shared output:', outputIdHex , error);
+                            console.log('Error fetching salt for shared output:', outputIdHex, error);
                             const messageList = sharedOutputIdToMsgMap[outputIdHex];
                             messageList.forEach(({ messageOutputId }) => {
                                 failedMessageOutputIds.push(messageOutputId);
@@ -1139,7 +1139,7 @@ export class GroupfiSdkClient {
                                 const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
                                 const sender = ''; // You'll need to determine the sender value based on your context
                                 const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender);
-                                completedMessages.push({msg:iMessage, outputId: messageOutputId});
+                                onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                             } catch (error) {
                                 console.log('Error converting completed message to IMessage:', error);
                                 failedMessageOutputIds.push(messageOutputId);
@@ -1149,9 +1149,8 @@ export class GroupfiSdkClient {
                     }
     
                     // Log step 3 counts, completedMessages count after fetching missing shared outputs, sharedNotFoundIds count
-                    console.log('batchConvertOutputIdsToMessages Step 3 counts, completedMessages count after fetching missing shared outputs:', completedMessages.length, 'sharedNotFoundIds count:', sharedNotFoundIds.length);
+                    console.log('batchConvertOutputIdsToMessages Step 3 counts, completedMessages count after fetching missing shared outputs:', sharedNotFoundIds.length);
     
-                    // Additional handling for shared output not found
                     for (const sharedOutputId of sharedNotFoundIds) {
                         console.log(`Shared output not found for sharedOutputId: ${sharedOutputId}`);
                         const messageList = sharedOutputIdToMsgMap[sharedOutputId];
@@ -1166,8 +1165,9 @@ export class GroupfiSdkClient {
             throw error;
         }
     
-        return { messages: completedMessages, failedMessageOutputIds };
+        return { failedMessageOutputIds };
     }
+    
     
     
     
