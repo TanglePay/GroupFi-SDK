@@ -999,7 +999,7 @@ class IotaCatSDK {
             chain: number,
             contract: string,
             threshold?: string,
-            erc: 20 | 721 | 0 | 1
+            erc: 20 | 721 | 0 | 1 | 10000
         }>,
         ts: number,
     }):Promise<{addressList:string[],signature:string}>
@@ -1068,7 +1068,7 @@ class IotaCatSDK {
         return addressList.length > 0
     }
     _getActualThresholdValue(groupConfig:MessageGroupMeta):string{
-        if (groupConfig.qualifyType === 'nft') return '1'
+        if (['nft','mangomarket'].includes(groupConfig.qualifyType)) return '1'
         const humanReadable = groupConfig.tokenThresValue!
         const decimal = parseInt(groupConfig.tokenDecimals!)
         return ethers.parseUnits(humanReadable,decimal).toString()
@@ -1100,7 +1100,13 @@ class IotaCatSDK {
                     erc:0,
                     threshold: thresValue
                 })
-            } else if (groupConfig.qualifyType === 'nft'){
+            } else if (groupConfig.qualifyType === 'mangomarket'){
+                filterParam = Object.assign(filterParam,{
+                    erc:10000,
+                    threshold: thresValue
+                })
+            } 
+             else if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
                     erc:721,
                     threshold: thresValue

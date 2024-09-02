@@ -112,7 +112,7 @@ export interface MessageGroupMeta {
     schemaVersion: number; 
     messageType: typeof MessageTypePrivate | typeof MessageTypePublic;
     authScheme: typeof MessageAuthSchemeRecipeintInMessage | typeof MessageAuthSchemeRecipeintOnChain;
-    qualifyType: GroupQualifyTypeStr;
+    qualifyType: GroupQualifyTypeStr | any;
     chainId: number;
     contractAddress: string;
     tokenThres?: string;
