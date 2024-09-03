@@ -71,7 +71,7 @@ import {
   DelegationModeRequestAdapter,
 } from './client/clientMode';
 
-import { AuxiliaryService, config } from './auxiliaryService';
+import { AuxiliaryService, config, ChainList, ChainInfo } from './auxiliaryService';
 import { IBasicOutput } from '@iota/iota.js';
 
 export { SimpleDataExtended };
@@ -412,15 +412,6 @@ class GroupFiSDKFacade {
     if (isAddressChanged) {
       await this.initialAddress();
     }
-
-    // this._address = newAddress;
-    // this.clearAddress();
-    // await this.initialAddress(nodeId);
-    // this._address = newAddress;
-    // this._muteMap = undefined;
-    // await this.fetchAddressQualifiedGroupConfigs({});
-    // IotaCatSDKObj.switchMqttAddress(newAddress);
-    // this._client!.switchAddress(this._address!);
   }
 
   async fetchMessageOutputList(
@@ -757,6 +748,15 @@ class GroupFiSDKFacade {
     const res = await this._client!.batchOutputIdToOutput(outputIds);
     return res;
   }
+  // async batchConvertOutputIdsToMessages(outputIds: string[], address: string): Promise<{ messages: IMessage[], missedMessageOutputIds: string[] }> {
+  async batchConvertOutputIdsToMessages(outputIds: string[],onMessageCompleted: (msg: IMessage, outputId: string) => void) {
+    const res = await this._client!.batchConvertOutputIdsToMessages(
+      outputIds,
+      this._address!,
+      onMessageCompleted
+    );
+    return res;
+  }
   async fetchAddressBalance() {
     this._ensureWalletConnected();
     const addr = this._proxyAddress ?? this._address!;
@@ -956,7 +956,7 @@ class GroupFiSDKFacade {
   }
 
   async browseModeSetupClient() {
-    await this.setupGroupfiSdkClient()
+    await Promise.all([this.setupGroupfiSdkClient(), this.fetchChainList()])
     // this._client = new GroupfiSdkClient();
     // await this._client!.setup();
 
@@ -979,7 +979,7 @@ class GroupFiSDKFacade {
     mode: Mode;
     nodeId: number | undefined;
   }> {
-    await this.setupGroupfiSdkClient()
+    await Promise.all([this.setupGroupfiSdkClient(), this.fetchChainList()])
     // this._client = new GroupfiSdkClient();
     // await this._client!.setup();
 
@@ -1838,6 +1838,37 @@ class GroupFiSDKFacade {
         item.address = this._address!
       })
     return await this._client!.outputIdstoMessages(params);
+  }
+
+  
+  _chainList?:ChainList = undefined
+  async fetchChainList() {
+    if (this._chainList === undefined) {
+      this._chainList = await this._auxiliaryService.getChainList()
+    }
+  }
+  _ensureChainList() {
+    if (!this._chainList) {
+      throw new Error('ChainList is undefined')
+    }
+  }
+  // get chain info
+  getChainByChainId(chainId: number): ChainInfo | null {
+    this._ensureChainList()
+    return this._chainList![chainId] ?? null
+  }
+  // get group token uri
+  getGroupTokenUri(groupId: string): string {
+    const groupMeta = this.getGroupMetaByGroupId(groupId)
+    if (groupMeta === undefined) {
+      return ''
+    }
+    const chainInfo = this.getChainByChainId(groupMeta.chainId)
+    if (!chainInfo) return ''
+    if (chainInfo.picUri && groupMeta.contractAddress) {
+      return `${chainInfo.picUri}/${groupMeta.contractAddress}/logo.png`
+    }
+    return ''
   }
 }
 
