@@ -204,20 +204,7 @@ export class DelegationModeRequestAdapter
       method: 'personal_sign',
       params: [signTextHex, this._evmAddress!],
     });
-    console.log('===>test decryptPairX publickey:', res)
-    const test = GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
-    console.log('===>test decryptPairX res', test)
     return GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
-    // const res = await this._dappClient.request({
-    //   method: 'eth_decrypt',
-    //   params: [params.encryptedData, this._evmAddress!],
-    // });
-    // console.log('===> Groupfi facade res', res);
-    // return res;
-    // return (await window.ethereum.request({
-    //   method: 'eth_decrypt',
-    //   params: [params.encryptedData, this._evmAddress!],
-    // })) as string;
   }
 
   async registerPairX(metadataObjWithSignature: Object): Promise<string> {

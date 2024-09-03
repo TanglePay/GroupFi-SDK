@@ -11,7 +11,7 @@ import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
 import { deserializePushed } from './codec_event';
 import { ethers } from 'ethers';
-import { isSolanaChain, getAddressType, AddressTypeEvm, AddressTypeSolana } from './address_check'
+import { isSolanaChain, isSolanaAddress, isEvmAddress } from './address_check'
 export * from './types';
 export * from './codec_mark';
 export * from './codec_like';
@@ -1075,9 +1075,9 @@ class IotaCatSDK {
     }
     _getActualAddresses(addresses: string[], chainId: number) {
         if (isSolanaChain(chainId)) {
-            return addresses.filter(address => getAddressType(address) === AddressTypeSolana)
+            return addresses.filter(isSolanaAddress)
         } else {
-            return addresses.filter(address => getAddressType(address) === AddressTypeEvm)
+            return addresses.filter(isEvmAddress)
         }
     }
     _prepareEvmFilterPayload(addresses:string[], groupId:string) {
