@@ -20,9 +20,10 @@ import {
   IIncludesAndExcludes,
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
-  getAddressType,
   MessageResponseItemPlus,
   INX_GROUPFI_DOMAIN,
+  isUniversalProfileAddress,
+  getEvmOrSolanaAddressType
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -48,7 +49,6 @@ import {
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
 import { EthEncrypt, utf8ToHex } from 'groupfi-sdk-utils';
-import { Ed25519 } from '@iota/crypto.js';
 
 import {
   WalletType,
@@ -1168,7 +1168,19 @@ class GroupFiSDKFacade {
     //   dataTobeEncrypted: first32BytesOfPrivateKeyHex,
     // });
     const encryptedPrivateKeyHex = GroupfiWalletEmbedded.encryptDataUsingPassword(first32BytesOfPrivateKeyHex, encryptionPublicKey)
-    
+
+    const extraObj: {[key: string]: boolean} = {}
+    const isUpAddress = await isUniversalProfileAddress(this._address!)
+
+    if (isUpAddress) {
+      extraObj.lsp = true
+    }
+
+    let extraStrHex = ''
+    if (Object.keys(extraObj).length) {
+      extraStrHex = utf8ToHex(JSON.stringify(extraObj), true)
+    }
+
     const metadataObj = {
       encryptedPrivateKey: encryptedPrivateKeyHex,
       pairXPublicKey: bytesToHex(pairX.publicKey, true),
@@ -1176,6 +1188,7 @@ class GroupFiSDKFacade {
       timestamp: getCurrentEpochInSeconds(),
       // 1: tp  2: mm
       scenery: this._mode === DelegationMode ? 2 : 1,
+      extra: extraStrHex
     };
 
     const dataTobeSignedStr = [
@@ -1184,6 +1197,7 @@ class GroupFiSDKFacade {
       metadataObj.pairXPublicKey,
       metadataObj.scenery,
       metadataObj.timestamp,
+      metadataObj.extra
     ].join('');
 
     const dataToBeSignedHex = utf8ToHex(PAIRX_SIGN_PREFIX_TEXT + dataTobeSignedStr, true); 
@@ -1517,7 +1531,7 @@ class GroupFiSDKFacade {
     timestamp: number
   ): Promise<IBasicOutput> {
     this._ensureWalletConnected();
-    const addressType = getAddressType(this._address!);
+    const addressType = getEvmOrSolanaAddressType(this._address!);
     return await this._client!._getEvmQualify(groupId, addressList, signature, addressType,timestamp);
   }
   async leaveOrUnMarkGroup(groupId: string) {

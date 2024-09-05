@@ -12,7 +12,7 @@ export function serializeEvmQualify(groupId: string, addressList: string[], sign
     const groupIdBytes = Converter.hexToBytes(groupId);
 
     const addressListBytes = addressList.map((val)=>{
-        if (addressType == AddressTypeEvm) {
+        if (addressType === AddressTypeEvm) {
             return Converter.hexToBytes(val);
         }
         if (addressType == AddressTypeSolana) {

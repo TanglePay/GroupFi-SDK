@@ -192,10 +192,24 @@ export class AuxiliaryService {
 
     return res;
   }
+
+  async getChainRpc(chainId: number): Promise<string | undefined> {
+    const rawRes = await fetch(
+      `https://${this._domain}/rpc?chainid=${chainId}`
+    );
+    const rawJson = (await rawRes.json()) as {
+      result: boolean;
+      rpc: string;
+    };
+    if (rawJson.result) {
+      return rawJson.rpc;
+    }
+    return undefined;
+  }
 }
 
 export type ChainList = {
-  [chainId: string]: ChainInfo
+  [chainId: string]: ChainInfo;
 };
 
 export interface ChainInfo {
@@ -205,7 +219,7 @@ export interface ChainInfo {
   decimal: number;
   contract: string;
   picUri: string;
-};
+}
 
 const instance = new AuxiliaryService();
 export default instance;
