@@ -164,7 +164,48 @@ export class AuxiliaryService {
       blockId: json.block_id,
     };
   }
+
+  async getChainList(): Promise<ChainList> {
+    const rawRes = await fetch(`https://${this._domain}/chains`);
+    const json = (await rawRes.json()) as {
+      [chainId: string]: {
+        chainid: number;
+        name: string;
+        Symbol: string;
+        decimal: number;
+        contract: string;
+        pic_uri: string;
+      };
+    };
+    const res: ChainList = {};
+    for (let key in json) {
+      const value = json[key];
+      res[key] = {
+        chainId: value.chainid,
+        name: value.name,
+        symbol: value.Symbol,
+        decimal: value.decimal,
+        contract: value.contract,
+        picUri: value.pic_uri,
+      };
+    }
+
+    return res;
+  }
 }
+
+export type ChainList = {
+  [chainId: string]: ChainInfo
+};
+
+export interface ChainInfo {
+  chainId: number;
+  name: string;
+  symbol: string;
+  decimal: number;
+  contract: string;
+  picUri: string;
+};
 
 const instance = new AuxiliaryService();
 export default instance;
