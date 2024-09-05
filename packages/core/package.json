@@ -44,6 +44,7 @@
     "mqtt": "^5.0.5"
   },
   "dependencies": {
+    "@erc725/erc725.js": "^0.27.1",
     "@iota/util.js": "2.0.0-rc.2",
     "big-integer": "^1.6.51",
     "bs58": "^6.0.0",
