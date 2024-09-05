@@ -1068,7 +1068,7 @@ class IotaCatSDK {
         return addressList.length > 0
     }
     _getActualThresholdValue(groupConfig:MessageGroupMeta):string{
-        if (['nft','mangomarket'].includes(groupConfig.qualifyType)) return '1'
+        if (['nft','event'].includes(groupConfig.qualifyType)) return '1'
         const humanReadable = groupConfig.tokenThresValue!
         const decimal = parseInt(groupConfig.tokenDecimals!)
         return ethers.parseUnits(humanReadable,decimal).toString()
@@ -1100,7 +1100,7 @@ class IotaCatSDK {
                     erc:0,
                     threshold: thresValue
                 })
-            } else if (groupConfig.qualifyType === 'mangomarket'){
+            } else if (groupConfig.qualifyType === 'event'){
                 filterParam = Object.assign(filterParam,{
                     erc:10000,
                     threshold: thresValue
