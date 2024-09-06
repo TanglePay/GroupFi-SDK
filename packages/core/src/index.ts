@@ -60,11 +60,16 @@ class IotaCatSDK {
         return '0x'+hex
     }
     addressToInboxId(address:string):string{
-        return this._sha256Hash(address)
+        return this._sha256HashAddress(address)
     }
     _sha256Hash(str:string):string{
         const hash = CryptoJS.SHA256(str).toString(CryptoJS.enc.Hex)
         return this._addHexPrefixIfAbsent(hash)
+    }
+    // _sha256HashAddress
+    _sha256HashAddress(address:string):string{
+        const lowerCaseAddress = address.toLowerCase()
+        return this._sha256Hash(lowerCaseAddress)
     }
     _groupIdToGroupMembers(groupId:string):string[]{
         return this._groupIdCache[groupId] || []
@@ -151,7 +156,7 @@ class IotaCatSDK {
     async switchMqttAddress(address:string){
         this._ensureMqttClient()
         const topics = []
-        let addressSha256Hash = this._sha256Hash(address.toLowerCase())
+        let addressSha256Hash = this._sha256HashAddress(address)
         addressSha256Hash = this._addHexPrefixIfAbsent(addressSha256Hash)
         console.log('===> subscribeToAddressSha256Hash',address, addressSha256Hash)
         topics.push(`inbox/${addressSha256Hash}`)

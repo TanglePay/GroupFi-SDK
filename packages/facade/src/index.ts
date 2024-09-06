@@ -1740,7 +1740,7 @@ class GroupFiSDKFacade {
     this._ensureWalletConnected();
     groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
     const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
-      IotaCatSDKObj._sha256Hash(memberAddress)
+      IotaCatSDKObj._sha256HashAddress(memberAddress)
     );
 
     // call client unmuteGroupMember(groupId, addrHash)
