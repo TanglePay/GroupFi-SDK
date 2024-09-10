@@ -21,6 +21,7 @@ import {
   concatBytes,
   hexToBytes,
 } from 'groupfi-sdk-utils';
+import { ethers } from 'ethers'
 
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
@@ -58,7 +59,7 @@ export class ShimmerModeRequestAdapter implements IRequestAdapter {
     )) as string;
 
     releaseBlobUrl(recipientPayloadUrl);
-    return res;
+    return res
   }
 
   async sendTransaction({ essence }: IRequestAdapterSendTransationParams) {
@@ -115,7 +116,7 @@ export class ImpersonationModeRequestAdapter
 
   async decryptPairX(params: { encryptedData: string }) {
     console.log('Enter client mode decryptPairX');
-    return (await IotaSDK.request({
+    const res = (await IotaSDK.request({
       method: 'iota_im_eth_decrypt',
       params: {
         content: {
@@ -125,6 +126,10 @@ export class ImpersonationModeRequestAdapter
         },
       },
     })) as string;
+    return {
+      password: '',
+      decryptedResult: res
+    }
   }
 
   async ethSign(params: { dataToBeSignedHex: string }) {
@@ -198,13 +203,21 @@ export class DelegationModeRequestAdapter
     GroupfiWalletEmbedded.setup(this._nodeUrlHint);
   }
 
-  async decryptPairX(params: { encryptedData: string }) {
+  async decryptPairX(params: { encryptedData: string }): Promise<{
+    password: string,
+    decryptedResult: string | undefined
+  }> {
     const signTextHex = utf8ToHex(signText, true)
-    const res = await this._dappClient.request({
+    const password = await this._dappClient.request({
       method: 'personal_sign',
       params: [signTextHex, this._evmAddress!],
     });
-    return GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
+    console.log('decryptPairX res:', password)
+    const decryptedResult = GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, password)
+    return {
+      decryptedResult,
+      password: password
+    }
   }
 
   async registerPairX(metadataObjWithSignature: Object): Promise<{proxyAccount:string,remainderIds:string[]}> {

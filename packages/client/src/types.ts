@@ -43,7 +43,10 @@ export interface IRequestAdapter {
 export interface IProxyModeRequest {
   getEncryptionPublicKey: () => Promise<string>;
   ethSign: (params: { dataToBeSignedHex: string}) => Promise<string>;
-  decryptPairX: (params: {encryptedData: string}) => Promise<string> 
+  decryptPairX: (params: {encryptedData: string}) => Promise<{
+    password: string,
+    decryptedResult: string | undefined
+  }> 
 }
 
 export type IProxyModeRequestAdapter = IProxyModeRequest & IRequestAdapter
