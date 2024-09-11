@@ -106,6 +106,10 @@ export interface ExtraChain {
     chainId: number;
     contractAddress: string;
 }
+export interface CustomField {
+    key: string;
+    value: string;
+}
 export interface MessageGroupMeta {
     dappGroupId: string;
     groupName: string;
@@ -120,6 +124,8 @@ export interface MessageGroupMeta {
     tokenDecimals?: string;
     symbol?: string;
     extraChains?: ExtraChain[]; // Adding the new property
+    icon?: string;
+    customFields?: CustomField[];
 }
 export type GroupConfig = MessageGroupMeta & {groupId:string}
 export type MessageGroupMetaPlus = MessageGroupMeta & {isPublic:boolean}
