@@ -694,7 +694,17 @@ export class GroupfiSdkClient {
             }
             // const recipientPayloadUrl = createBlobURLFromUint8Array(recipientPayload)
             const salt = await this._decryptAesKeyFromRecipientsWithPayload(recipientPayload)
-            if (!salt) throw new Error('Salt not found')
+            if (!salt) {
+                if (isHA && groupId) {
+                    // log ha and groupid and memberList
+                    console.log('isHA and groupId and memberList', isHA, groupId, memberList);
+                    const memberSelf = this._getMemberSelfFromAddress(address)
+                    const {outputs,salt} = await this._makeSharedOutputForGroup({groupId,memberList,memberSelf})
+                    return {salt,outputs}
+                } else {
+                    throw new Error('Salt not found')
+                }
+            }
             // successfully got salt from shared output, cache it
             if (sharedOutputId) {
                 this._setSharedIdAndSaltToCache(sharedOutputId,salt)
