@@ -1633,20 +1633,16 @@ class GroupFiSDKFacade {
   }
 
   async loadAddressMemberGroups(address: string) {
-    // this._ensureWalletConnected();
-    const groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
+    let groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
       address
     );
-    const groups = groupIds
-      .map((groupId) => ({
-        groupId,
-        groupName: this.groupIdToGroupName(groupId),
-      }))
-      .filter(({ groupName }) => groupName !== undefined);
-    return groups as { groupId: string; groupName: string }[];
+    groupIds = groupIds.filter(groupId => {
+      const groupMeta = this.getGroupMetaByGroupId(groupId)
+      return groupMeta !== undefined
+    })
+    return groupIds
   }
-
-
+  
   async loadGroupMemberAddresses(groupId: string) {
     // this._ensureWalletConnected();
     return await IotaCatSDKObj.fetchGroupMemberAddresses(groupId);
