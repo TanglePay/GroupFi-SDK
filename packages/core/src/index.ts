@@ -20,6 +20,7 @@ export * from './codec_vote';
 export * from './codec_evm_qualify';
 export * from './address_check';
 const SHA256_LEN = 32
+const GroupIdExemptedFields = ['dappGroupId','extraChains','icon','customFields']
 class IotaCatSDK {
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
     
@@ -39,8 +40,9 @@ class IotaCatSDK {
     }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
         const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
-        // filter out dappGroupId
-        let sortedKeysOmited = sortedKeys.filter(key=>key !== 'dappGroupId' && key !== 'extraChains') as MessageGroupMetaKeyOmited[]
+        // filter out exempted fields
+        
+        let sortedKeysOmited = sortedKeys.filter(key=>!GroupIdExemptedFields.includes(key)) as MessageGroupMetaKeyOmited[]
         const sortedMap = sortedKeysOmited.reduce((acc,key)=>{
             let value = meta[key]
             if (Array.isArray(value)) {
