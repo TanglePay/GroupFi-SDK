@@ -20,14 +20,7 @@ export * from './codec_vote';
 export * from './codec_evm_qualify';
 export * from './address_check';
 const SHA256_LEN = 32
-/*
-configFieldsMap := map[string]string{
-		"chainId":         fmt.Sprintf("%d", chainId),
-		"qualifyType":     qualifyType,
-		"contractAddress": contractAddress,
-		"tokenThres":      messageGroupMeta.TokenThres,
-	}
-        */
+
 const GroupIdIncludedFields:MessageGroupMetaKey[] = ['chainId','qualifyType','contractAddress','tokenThres']
 class IotaCatSDK {
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
