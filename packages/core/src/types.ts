@@ -123,6 +123,7 @@ export interface MessageGroupMeta {
     tokenThresValue?: string;
     tokenDecimals?: string;
     symbol?: string;
+    collectionName?: string;
     extraChains?: ExtraChain[]; // Adding the new property
     icon?: string;
     customFields?: CustomField[];
