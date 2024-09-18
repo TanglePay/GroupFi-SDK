@@ -543,7 +543,7 @@ class IotaCatSDK {
             });
             const json = await res.json() as MessageGroupMetaPlus[];
             const resultList = this._ensureList(json)
-            const groupConfig = this._inxApiResultToGroupConfig(json.map(group => {
+            const groupConfig = this._inxApiResultToGroupConfig(resultList.map(group => {
                 const {isPublic,...meta} = group;
                 return meta;
             }));
