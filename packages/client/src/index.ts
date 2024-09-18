@@ -979,9 +979,9 @@ export class GroupfiSdkClient {
 
         try {
             const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
-                const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
-                return decrypted.payload
-                //throw new Error('decryptUsingPrivateKey not supported')
+                //const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
+                //return decrypted.payload
+                throw new Error('decryptUsingPrivateKey not supported')
             },sharedOutputSaltResolver:async (sharedOutputId:string)=>{
                 const {salt} = await this._getSaltFromSharedOutputId(sharedOutputId,address)
                 return salt
