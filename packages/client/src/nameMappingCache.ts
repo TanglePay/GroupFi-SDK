@@ -146,8 +146,8 @@ class MappingCache<T> {
   }
 }
 
-const nameMappingCache = new MappingCache<{ name: string }>(
-  IotaCatSDKObj.fetchAddressNames
+const nameMappingCache = new MappingCache<{ name: string, avatar?: string }>(
+  IotaCatSDKObj.batchFetchAddressProfile.bind(IotaCatSDKObj)
 );
 
 export default nameMappingCache;

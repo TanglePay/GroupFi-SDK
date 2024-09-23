@@ -1,4 +1,4 @@
-import { PairX } from './types';
+import { Profile } from './types';
 
 export const config = [
   {
@@ -205,6 +205,73 @@ export class AuxiliaryService {
       return rawJson.rpc;
     }
     return undefined;
+  }
+
+  async isNameDuplicate(
+    name: string
+  ): Promise<{ result: boolean; errCode?: number; reason?: string }> {
+    const rawRes = await fetch(`https://${this._domain}/group/checkname?n=${name}`);
+    const rawJson = (await rawRes.json()) as {
+      result: boolean;
+      'err-msg'?: string;
+      'err-code'?: number;
+    };
+
+    return {
+      result: rawJson.result,
+      errCode: rawJson['err-code'],
+      reason: rawJson['err-msg']
+    }
+  }
+
+  async getAddressProfileList(
+    body: string
+  ): Promise<{ [address: string]: Profile[] }> {
+    try {
+      const rawRes = await fetch(`https://${this._domain}/group/dids`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      });
+      const rawJson = (await rawRes.json()) as {
+        result: boolean;
+        dids: {
+          [addr: string]: {
+            [chainId: string]: {
+              name: string;
+              image_url: string;
+            };
+          };
+        };
+      };
+      console.log('tryRefreshProfileList rawJson', rawJson);
+      const profileListMap: { [addr: string]: Profile[] } = {};
+      if (!rawJson.result) {
+        return profileListMap;
+      }
+      for (const address in rawJson.dids) {
+        const profileList: Profile[] = [];
+        for (const chainId in rawJson.dids[address]) {
+          const { name, image_url } = rawJson.dids[address][chainId];
+          if (name || image_url) {
+            profileList.push({
+              chainId: Number(chainId),
+              name,
+              avatar: image_url,
+            });
+          }
+        }
+        if (profileList.length) {
+          profileListMap[address] = profileList;
+        }
+      }
+      return profileListMap;
+    } catch (error) {
+      console.error('AuxiliaryService Failed to getAddressProfileList', error);
+      return {};
+    }
   }
 }
 
