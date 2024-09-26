@@ -71,6 +71,7 @@ type IntermediateResult = {
     senderAddress: string;
     senderAddressBytes: Uint8Array;
     name?: string;
+    avatar?: string
     data: Uint8Array;
 };
 //TODO tune concurrency
@@ -1035,7 +1036,7 @@ export class GroupfiSdkClient {
     
         return { senderAddressBytes, senderAddress:smrAddress, data };
     }
-    convertIMMessageToIMessage(imMessage: IMMessage, messageId: string, sender: string, name?:string): IMessage {
+    convertIMMessageToIMessage(imMessage: IMMessage, messageId: string, sender: string, name?:string, avatar?: string): IMessage {
         return {
             type: ImInboxEventTypeNewMessage,
             messageId,
@@ -1043,7 +1044,8 @@ export class GroupfiSdkClient {
             sender,
             message: imMessage.data, // Assuming `data` holds the message content
             timestamp: imMessage.timestamp,
-            name
+            name,
+            avatar
             // Optionally include other fields like `token` or `name` if they exist in `IMMessage`
         };
     }
@@ -1068,7 +1070,7 @@ export class GroupfiSdkClient {
             console.log('batchConvertOutputIdsToMessages Step 1 counts, outputIds count:', outputIds.length, 'foundOutputIds count:', foundOutputIds.length, 'failedMessageOutputIds count:', failedMessageOutputIds.length);
     
             // Step 2: Loop through the outputs and attempt to deserialize each message without extra
-            const sharedOutputIdToMsgMap: { [sharedOutputId: string]: Array<{ imMessage: IMMessage, data: Uint8Array, senderAddressBytes: Uint8Array,name?:string, messageId: string, messageOutputId: string, sender: string }> } = {};
+            const sharedOutputIdToMsgMap: { [sharedOutputId: string]: Array<{ imMessage: IMMessage, data: Uint8Array, senderAddressBytes: Uint8Array,name?:string, avatar?: string, messageId: string, messageOutputId: string, sender: string }> } = {};
             let totalMessagesNeedingSharedOutput = 0;
             
             
@@ -1113,13 +1115,16 @@ export class GroupfiSdkClient {
             const nameRes = await nameMappingCache.batchGetRes(addressUniqueList);
             for (const intermediateResult of intermediateResults) {
                 const { senderAddress } = intermediateResult;
-                const name = nameRes.get(senderAddress);
-                if (name) {
-                    intermediateResult.name = name?.name;
+                const profile = nameRes.get(senderAddress);
+                if (profile?.name) {
+                    intermediateResult.name = profile?.name
+                }
+                if (profile?.avatar) {
+                    intermediateResult.avatar = profile.avatar
                 }
             }
 
-            for (const { outputIdHex, senderAddressBytes, name, data, senderAddress: sender } of intermediateResults) {
+            for (const { outputIdHex, senderAddressBytes, name, avatar, data, senderAddress: sender } of intermediateResults) {
                 try {
                     // Get the messageId
                     const messageId = IotaCatSDKObj.getMessageId(data, senderAddressBytes);
@@ -1132,10 +1137,10 @@ export class GroupfiSdkClient {
                         if (!sharedOutputIdToMsgMap[sharedOutputId]) {
                             sharedOutputIdToMsgMap[sharedOutputId] = [];
                         }
-                        sharedOutputIdToMsgMap[sharedOutputId].push({ imMessage, data, senderAddressBytes, name, messageId, messageOutputId: outputIdHex, sender });
+                        sharedOutputIdToMsgMap[sharedOutputId].push({ imMessage, data, senderAddressBytes, name, avatar, messageId, messageOutputId: outputIdHex, sender });
                         totalMessagesNeedingSharedOutput++;
                     } else {
-                        const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender, name);
+                        const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender, name, avatar);
                         onMessageCompleted(iMessage, outputIdHex); // Trigger the callback immediately
                     }
                 } catch (error) {
@@ -1158,11 +1163,11 @@ export class GroupfiSdkClient {
                 // Complete the messages using the cached salts
                 for (const { outputId, salt } of results) {
                     const messageList = sharedOutputIdToMsgMap[outputId];
-                    for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, sender} of messageList) {
+                    for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, avatar, sender} of messageList) {
                         try {
                             const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
                             // const sender = ''; // You'll need to determine the sender value based on your context
-                            const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender,name);
+                            const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender,name, avatar);
                             onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                         } catch (error) {
                             console.log('Error converting completed message to IMessage:', error);
@@ -1197,11 +1202,11 @@ export class GroupfiSdkClient {
                             continue;
                         }
                         const messageList = sharedOutputIdToMsgMap[outputIdHex];
-                        for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, sender } of messageList) {
+                        for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, avatar, sender } of messageList) {
                             try {
                                 const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
                                 // const sender = ''; // You'll need to determine the sender value based on your context
-                                const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender, name);
+                                const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender, name, avatar);
                                 onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                             } catch (error) {
                                 console.log('Error converting completed message to IMessage:', error);
