@@ -17,6 +17,7 @@ import {
     UnlockTypes,
     ITagFeature,
     IMetadataFeature,
+    HexEncodedString,
     IKeyPair,
     INodeInfo,
     INodeInfoProtocol,
@@ -49,6 +50,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserMuteGroupMember,serializeUserMuteGroupMembers, deserializeUserMuteGroupMembers,
     IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
+    GROUPFIPROFILETAG,
     GROUPFICASHTAG,MessageGroupMeta,
     GROUPFILIKETAG,
     IMUserLikeGroupMember,
@@ -2271,6 +2273,28 @@ export class GroupfiSdkClient {
         const createdOutputs = extraOutputs ? [basicOutput, ...extraOutputs] : [basicOutput]
         return await this._sendBasicOutput(createdOutputs,toBeConsumed);
     }
+    async setProfile(profileJsonStr: string, outputIdToBeConsumed?: string) {
+        console.log('===>setProfile params', profileJsonStr, outputIdToBeConsumed)
+        const res = await this._persistSelectedProfile(profileJsonStr, outputIdToBeConsumed)
+        console.log('===>setProfile res', res)
+        return res
+    }
+    async _persistSelectedProfile(metadataJsonStr: string, outputIdToBeConsumed?: string) {
+        const tag = `0x${Converter.utf8ToHex(GROUPFIPROFILETAG)}`
+        const metadataHex = Converter.utf8ToHex(metadataJsonStr, true)
+        const basicOutput = await this._dataAndTagToBasicOutput(metadataHex, tag)
+        let toBeConsumed: BasicOutputWrapper[] = []
+        if (outputIdToBeConsumed) {
+            const outputResponse = await this._client!.output(outputIdToBeConsumed)
+            const output = outputResponse.output as IBasicOutput
+            toBeConsumed.push({
+                output,
+                outputId: outputIdToBeConsumed
+            })
+        }
+        const createdOutputs = [basicOutput]
+        return await this._sendBasicOutput(createdOutputs, toBeConsumed)
+    }
     // async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
     //     const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
     //     console.log('_getMarkedGroupIds existing', existing);
@@ -2295,14 +2319,14 @@ export class GroupfiSdkClient {
         }
     }
 
-    async _dataAndTagToBasicOutput(data:Uint8Array,tag:string):Promise<IBasicOutput>{
+    async _dataAndTagToBasicOutput(data:Uint8Array | HexEncodedString,tag:string):Promise<IBasicOutput>{
         const tagFeature: ITagFeature = {
             type: 3,
             tag
         };
         const metadataFeature: IMetadataFeature = {
             type: 2,
-            data: Converter.bytesToHex(data, true)
+            data: typeof data === 'string' ? data : Converter.bytesToHex(data, true)
         };
         const basicOutput: IBasicOutput = {
             type: BASIC_OUTPUT_TYPE,
