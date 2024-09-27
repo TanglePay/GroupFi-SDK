@@ -1939,10 +1939,12 @@ export class GroupfiSdkClient {
         // remove old hints
         this._remainderHintSet = []
         // log reset all remainder hints
-        console.log('reset all remainder hints');
+        console.log('reset all remainder hints',remainderHints);
         for (const {output,outputId} of remainderHints) {
             this._setRemainderHint(output,outputId)
         }
+        // log reset all remainder hints done
+        console.log('reset all remainder hints done', this._remainderHintSet);
         this._lastSendTimestamp = Date.now()
     }
     _tryGetCashFromRemainderHint():BasicOutputWrapper|undefined{
