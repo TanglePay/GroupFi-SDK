@@ -21,7 +21,6 @@ import {
   concatBytes,
   hexToBytes,
 } from 'groupfi-sdk-utils';
-import { ethers } from 'ethers'
 
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
