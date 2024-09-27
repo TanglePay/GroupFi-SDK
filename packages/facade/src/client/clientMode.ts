@@ -25,6 +25,7 @@ import { ethers } from 'ethers'
 
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
+import { IBasicOutput } from '@iota/iota.js';
 
 const signText = "I acknowledge that I'm signing into GroupFi. If you did not initiate this sign-in, please disconnect your wallet immediately."
 
@@ -220,14 +221,14 @@ export class DelegationModeRequestAdapter
     }
   }
 
-  async registerPairX(metadataObjWithSignature: Object): Promise<{proxyAccount:string,remainderIds:string[]}> {
+  async registerPairX(metadataObjWithSignature: Object): Promise<{proxyAccount:string,remainderIds:string[],remainderOutputs:IBasicOutput[]}> {
     try {
       const body = JSON.stringify(metadataObjWithSignature);
       
       const res = await auxiliaryService.register(body);
 
       if (res.result) {
-        return {proxyAccount:res.proxy_account,remainderIds:res.outputids};
+        return {proxyAccount:res.proxy_account,remainderIds:res.outputids,remainderOutputs:res.outputs};
       } else {
         throw new Error('Failed to register pairX');
       }

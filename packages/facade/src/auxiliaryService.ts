@@ -1,3 +1,4 @@
+import { IBasicOutput } from '@iota/iota.js';
 import { Profile } from './types';
 
 export const config = [
@@ -97,6 +98,7 @@ export class AuxiliaryService {
       result: boolean;
       proxy_account: string;
       outputids: string[];
+      outputs: IBasicOutput[];
     };
 
     return resJson;
