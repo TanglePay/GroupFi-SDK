@@ -1943,6 +1943,7 @@ export class GroupfiSdkClient {
         for (const {output,outputId} of remainderHints) {
             this._setRemainderHint(output,outputId)
         }
+        this._lastSendTimestamp = Date.now()
     }
     _tryGetCashFromRemainderHint():BasicOutputWrapper|undefined{
         // log enter try get cash from remainder hint
