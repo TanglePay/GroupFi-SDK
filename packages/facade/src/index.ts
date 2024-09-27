@@ -1251,9 +1251,19 @@ class GroupFiSDKFacade {
       this._pairX = pairX;
       (adapter as ImpersonationModeRequestAdapter).importProxyAccount();
     } else if (this._mode === DelegationMode) {
-      const smrAddress = await (adapter as DelegationModeRequestAdapter).registerPairX(metadataObjWithSignature)
+      const {proxyAccount:smrAddress,remainderIds:outputids} = await (adapter as DelegationModeRequestAdapter).registerPairX(metadataObjWithSignature)
       this._proxyAddress = smrAddress
       this._pairX = pairX
+      if (outputids.length) {
+        const outputs = await this._client!.batchOutputIdToOutput(outputids)
+        const outputsAsWrapper = outputs.map((output) => {
+          return {
+            outputId: output.outputIdHex,
+            output: output.output as IBasicOutput
+          }
+        })
+        this._client!.resetAllRemainderHints(outputsAsWrapper)
+      }
     }
   }
 
