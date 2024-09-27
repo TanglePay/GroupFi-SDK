@@ -2564,20 +2564,32 @@ export class GroupfiSdkClient {
     //     return this._queuePromise
     // }
 
-    async decryptPairX({privateKeyEncrypted, publicKey}: {privateKeyEncrypted: string, publicKey: string}): Promise<PairX> {
+    async decryptPairX({privateKeyEncrypted, publicKey}: {privateKeyEncrypted: string, publicKey: string}): Promise<{
+        password: string,
+        pairX: PairX | null
+    }> {
         const  proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
-        const first32BytesOfPrivateKeyHex =  await proxyModeRequestAdapter.decryptPairX({encryptedData: privateKeyEncrypted})
+        const {password, decryptedResult:first32BytesOfPrivateKeyHex} = await proxyModeRequestAdapter.decryptPairX({encryptedData: privateKeyEncrypted})
+        console.log('decryptPairX first32BytesOfPrivateKeyHex', first32BytesOfPrivateKeyHex, first32BytesOfPrivateKeyHex === '')
+
+        if (!first32BytesOfPrivateKeyHex) {
+            return {
+                password,
+                pairX: null
+            }
+        }
 
         const first32BytesOfPrivateKey = Converter.hexToBytes(first32BytesOfPrivateKeyHex) 
+        console.log('decryptPairX first32BytesOfPrivateKey', first32BytesOfPrivateKey)
         const publicKeyBytes = Converter.hexToBytes(publicKey)
-        const test = {
+        const pairX = {
             publicKey: publicKeyBytes,
             privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)
         }
-        console.log('===>test pairX', test)
+        console.log('===>decryptPairX pairX', pairX)
         return {
-            publicKey: publicKeyBytes,
-            privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)
+            pairX,
+            password
         }
     }
 

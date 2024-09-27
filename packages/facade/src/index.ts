@@ -1050,47 +1050,14 @@ class GroupFiSDKFacade {
     privateKeyEncrypted: string
   }) {
     const { publicKey, privateKeyEncrypted } = encryptedPairX
-    const pairX = await this._client!.decryptPairX({
+    const { password, pairX } = await this._client!.decryptPairX({
       publicKey: publicKey,
       privateKeyEncrypted: privateKeyEncrypted,
     });
-    this._pairX = pairX
-    return pairX
-  }
-
-  async fetchRegisteredInfo(
-    isPairXPresent: boolean
-  ): Promise<RegisteredInfo | undefined> {
-    const res = await IotaCatSDKObj.fetchAddressPairX(this._address!);
-    console.log('===>fetchRegisteredInfo res', res, isPairXPresent);
-    if (!res) {
-      return undefined;
+    if (pairX) {
+      this._pairX = pairX
     }
-    let registeredInfo: RegisteredInfo = {};
-    if (res.mmProxyAddress) {
-      registeredInfo[DelegationMode] = {
-        account: res.mmProxyAddress,
-      };
-    }
-    if (res.tpProxyAddress) {
-      registeredInfo[ImpersonationMode] = {
-        account: res.tpProxyAddress,
-      };
-    }
-    if (isPairXPresent) {
-      return registeredInfo;
-    }
-    if (this._pairX) {
-      registeredInfo.pairX = this._pairX;
-    } else {
-      const pairX = await this._client!.decryptPairX({
-        publicKey: res.publicKey,
-        privateKeyEncrypted: res.privateKeyEncrypted,
-      });
-      this._pairX = pairX;
-      registeredInfo.pairX = pairX;
-    }
-    return registeredInfo;
+    return {password, pairX}
   }
 
   switchClientAdapter(mode: Mode) {
@@ -1854,9 +1821,12 @@ class GroupFiSDKFacade {
     return res;
   }
 
-  async checkIsRegisteredInServiceEnv(publicKey: string, proxyAddressToConfirm: string) {
+  async checkIsRegisteredInServiceEnv(publicKey: string | Uint8Array, proxyAddressToConfirm: string) {
     if (this._mode !== DelegationMode) {
       return true
+    }
+    if (typeof publicKey !== 'string') {
+      publicKey = bytesToHex(publicKey, true)
     }
     const proxyAddressFromServiceEnv = await this._auxiliaryService.fetchProxyAccount(publicKey)
     if (proxyAddressFromServiceEnv === undefined) {
