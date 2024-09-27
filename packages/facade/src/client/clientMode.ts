@@ -207,14 +207,14 @@ export class DelegationModeRequestAdapter
     return GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
   }
 
-  async registerPairX(metadataObjWithSignature: Object): Promise<string> {
+  async registerPairX(metadataObjWithSignature: Object): Promise<{proxyAccount:string,remainderIds:string[]}> {
     try {
       const body = JSON.stringify(metadataObjWithSignature);
       
       const res = await auxiliaryService.register(body);
 
       if (res.result) {
-        return res.proxy_account;
+        return {proxyAccount:res.proxy_account,remainderIds:res.outputids};
       } else {
         throw new Error('Failed to register pairX');
       }

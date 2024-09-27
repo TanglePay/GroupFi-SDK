@@ -96,6 +96,7 @@ export class AuxiliaryService {
     const resJson = (await res.json()) as {
       result: boolean;
       proxy_account: string;
+      outputids: string[];
     };
 
     return resJson;

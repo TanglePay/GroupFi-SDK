@@ -330,13 +330,12 @@ export class GroupfiSdkClient {
             // log outputsToSend and outputs in one line
             console.log('outputsToSend', outputsToSend, 'outputs', outputs);
             const {transactionId} = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs,outputsToSend)
-            this._remainderHintSet = []
+            const newRemainderHints = [] as BasicOutputWrapper[]
             for (let idx =0;idx<outputsToSend.length;idx++) {
                 const output = outputsToSend[idx]
-                this._remainderHintSet.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx),timestamp:Date.now()})
+                newRemainderHints.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx)})
             }
-            // log remainderHintSet
-            console.log('remainderHintSet', this._remainderHintSet);
+            this.resetAllRemainderHints(newRemainderHints);
             return true
         } catch (error) {
             console.log('prepareRemainderHint error', error);
@@ -1927,14 +1926,24 @@ export class GroupfiSdkClient {
     _isRemainderHintSetDirty = false
     _setRemainderHint(output?:IBasicOutput,outputId?:string){
         // log set remainder hint, outputId and output
-        console.log('set remainder hint', outputId, output);
+        // console.log('set remainder hint', outputId, output);
         if (!output || !outputId) {
             return
         }
         // log actual set remainder hint
-        console.log('actual set remainder hint');
+        // console.log('actual set remainder hint');
 
         this._remainderHintSet.push({output,outputId,timestamp:Date.now()})
+    }
+    resetAllRemainderHints(remainderHints:BasicOutputWrapper[]){
+        // remove old hints
+        this._remainderHintSet = []
+        // log reset all remainder hints
+        console.log('reset all remainder hints');
+        for (const {output,outputId} of remainderHints) {
+            this._setRemainderHint(output,outputId)
+        }
+        this._lastSendTimestamp = Date.now()
     }
     _tryGetCashFromRemainderHint():BasicOutputWrapper|undefined{
         // log enter try get cash from remainder hint
@@ -2456,7 +2465,7 @@ export class GroupfiSdkClient {
         }
         return await this._persistUserVoteGroups(list,outputWrapper)
     }
-
+    
     async unvoteGroup(groupId:string, userAddress: string){
         this._ensureClientInited()
         this._ensureWalletInited()
@@ -2523,22 +2532,6 @@ export class GroupfiSdkClient {
             essenceOutputsLength: transactionEssence.outputs.length
         })
 
-        
-        // console.log('===> Test send res', res)
-        // console.log('===>start iota_im_sign_and_send_transaction_to_self')
-        // const res = await this._sdkRequest({
-        //     method: 'iota_im_sign_and_send_transaction_to_self',
-        //     params: {
-        //       content: {
-        //         addr: this._accountBech32Address,
-        //         transactionEssenceUrl,
-        //         nodeUrlHint:this._curNode!.apiUrl
-        //       },
-        //     },
-        //   }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
-
-        // releaseBlobUrl(transactionEssenceUrl)
-        // update _lastSendTimestamp
         this._lastSendTimestamp = Date.now()
         return res
     }
