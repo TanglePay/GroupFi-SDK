@@ -231,7 +231,16 @@ export class GroupfiSdkClient {
         const {addressType, addressBytes} = res
         if (addressType !== ED25519_ADDRESS_TYPE) throw new Error('Address type not supported')
         this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
-        this._remainderHintSet = []
+        // reset _remainderHintSet only if bech32Address is different
+        if (this._remainderHintSet.length > 0) {
+            const first = this._remainderHintSet[0]
+            const firstAddress = first.output.unlockConditions.filter((unlockCondition)=>unlockCondition.type === ADDRESS_UNLOCK_CONDITION_TYPE)[0].address as IEd25519Address
+            const addressBytes = Converter.hexToBytes(firstAddress.pubKeyHash)
+            const firstBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE,addressBytes, this._protocolInfo!.bech32Hrp)
+            if (firstBech32Address !== bech32Address) {
+                this._remainderHintSet = []
+            }
+        }
         this._lastSendTimestamp = 0;
         this._sharedSaltCache = {}
     }
