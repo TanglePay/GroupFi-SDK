@@ -1986,7 +1986,10 @@ class GroupFiSDKFacade {
           })
         } else {
           console.warn('select profile not found in profile list')
-          // return await this.getAddressProfileList(true)
+          profileList.push({
+            ...activeProfile,
+            isActive: true
+          })
         }
       }
     }
