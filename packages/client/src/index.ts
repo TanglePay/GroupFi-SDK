@@ -2547,10 +2547,16 @@ export class GroupfiSdkClient {
         return res
     }
     async _decryptAesKeyFromRecipientsWithPayload(recipientPayload:Uint8Array):Promise<string>{
-        const res = this._requestAdapter!.decrypt({
-            dataTobeDecrypted: recipientPayload,
-            pairX:this._pairX
-        })
+        try {
+            const res = await this._requestAdapter!.decrypt({
+                dataTobeDecrypted: recipientPayload,
+                pairX:this._pairX
+            })
+            return res
+        } catch(error) {
+            return ''
+        }
+        
         // const res = await this._sdkRequest({
         //     method: 'iota_im_decrypt_key',
         //     params: {
@@ -2562,7 +2568,7 @@ export class GroupfiSdkClient {
         //     },
         //   }) as string;
         // releaseBlobUrl(recipientPayloadUrl) 
-        return res
+        // return res
     }
     async _sdkRequest(call: (...args: any[]) => Promise<any>) {
         this._queuePromise = this._queuePromise!.then(call, call)
