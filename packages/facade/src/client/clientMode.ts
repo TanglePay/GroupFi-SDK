@@ -24,6 +24,7 @@ import {
 
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
+import { IBasicOutput } from '@iota/iota.js';
 
 const signText = "I acknowledge that I'm signing into GroupFi. If you did not initiate this sign-in, please disconnect your wallet immediately."
 
@@ -58,7 +59,7 @@ export class ShimmerModeRequestAdapter implements IRequestAdapter {
     )) as string;
 
     releaseBlobUrl(recipientPayloadUrl);
-    return res;
+    return res
   }
 
   async sendTransaction({ essence }: IRequestAdapterSendTransationParams) {
@@ -115,7 +116,7 @@ export class ImpersonationModeRequestAdapter
 
   async decryptPairX(params: { encryptedData: string }) {
     console.log('Enter client mode decryptPairX');
-    return (await IotaSDK.request({
+    const res = (await IotaSDK.request({
       method: 'iota_im_eth_decrypt',
       params: {
         content: {
@@ -125,6 +126,10 @@ export class ImpersonationModeRequestAdapter
         },
       },
     })) as string;
+    return {
+      password: '',
+      decryptedResult: res
+    }
   }
 
   async ethSign(params: { dataToBeSignedHex: string }) {
@@ -198,23 +203,31 @@ export class DelegationModeRequestAdapter
     GroupfiWalletEmbedded.setup(this._nodeUrlHint);
   }
 
-  async decryptPairX(params: { encryptedData: string }) {
+  async decryptPairX(params: { encryptedData: string }): Promise<{
+    password: string,
+    decryptedResult: string | undefined
+  }> {
     const signTextHex = utf8ToHex(signText, true)
-    const res = await this._dappClient.request({
+    const password = await this._dappClient.request({
       method: 'personal_sign',
       params: [signTextHex, this._evmAddress!],
     });
-    return GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
+    console.log('decryptPairX res:', password)
+    const decryptedResult = GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, password)
+    return {
+      decryptedResult,
+      password: password
+    }
   }
 
-  async registerPairX(metadataObjWithSignature: Object): Promise<string> {
+  async registerPairX(metadataObjWithSignature: Object): Promise<{proxyAccount:string,remainderIds:string[],remainderOutputs:IBasicOutput[]}> {
     try {
       const body = JSON.stringify(metadataObjWithSignature);
       
       const res = await auxiliaryService.register(body);
 
       if (res.result) {
-        return res.proxy_account;
+        return {proxyAccount:res.proxy_account,remainderIds:res.outputids,remainderOutputs:res.outputs};
       } else {
         throw new Error('Failed to register pairX');
       }

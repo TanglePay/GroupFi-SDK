@@ -639,34 +639,48 @@ class GroupfiWalletEmbedded {
         return encryptedData.toString(CryptoJS.enc.Hex);
     }
     
-     decryptDataUsingPassword(encryptedData:string, password:string) {
-        // Convert the encrypted data from hexadecimal to WordArray
-        const encryptedBytes = CryptoJS.enc.Hex.parse(encryptedData);
+    // return undefined means decryption was not successful.
+    decryptDataUsingPassword(encryptedData:string, password:string) {
+        try {
+            console.log('===>up decrypt encryptedData', encryptedData)
+            console.log('===>up decrypt password', password)
+            // Convert the encrypted data from hexadecimal to WordArray
+            const encryptedBytes = CryptoJS.enc.Hex.parse(encryptedData);
+        
+            // Extract the salt (16 bytes), IV (16 bytes), and ciphertext
+            const salt = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(0, 4), 16);
+            const iv = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(4, 8), 16);
+            const ciphertext = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(8), encryptedBytes.sigBytes - 32);
+        
+            // Derive the key using PBKDF2 with the same salt
+            const key = CryptoJS.PBKDF2(password, salt, {
+                keySize: 256 / 32,
+                iterations: 1000 // Ensure the same number of iterations as used during encryption
+            });
     
-        // Extract the salt (16 bytes), IV (16 bytes), and ciphertext
-        const salt = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(0, 4), 16);
-        const iv = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(4, 8), 16);
-        const ciphertext = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(8), encryptedBytes.sigBytes - 32);
-    
-        // Derive the key using PBKDF2 with the same salt
-        const key = CryptoJS.PBKDF2(password, salt, {
-            keySize: 256 / 32,
-            iterations: 1000 // Ensure the same number of iterations as used during encryption
-        });
-    
-        // Decrypt the data using the derived key and extracted IV
-        const decrypted = CryptoJS.AES.decrypt(
-            CryptoJS.lib.CipherParams.create({ ciphertext: ciphertext }),
-            key,
-            {
-                mode: CryptoJS.mode.CBC,
-                padding: CryptoJS.pad.Pkcs7,
-                iv: iv
+            // Decrypt the data using the derived key and extracted IV
+            const decrypted = CryptoJS.AES.decrypt(
+                CryptoJS.lib.CipherParams.create({ ciphertext: ciphertext }),
+                key,
+                {
+                    mode: CryptoJS.mode.CBC,
+                    padding: CryptoJS.pad.Pkcs7,
+                    iv: iv
+                }
+            );
+
+            const res = decrypted.toString(CryptoJS.enc.Utf8)
+            console.log('===>up decrypt res', res, typeof res, res === '')
+            if (res == '') {
+                throw new Error('decrypt pairX failed')
             }
-        );
-    
-        // Return the decrypted data as a UTF-8 string
-        return decrypted.toString(CryptoJS.enc.Utf8);
+            console.log('===>up decrypt success', res)
+            // Return the decrypted data as a UTF-8 string
+            return res
+        } catch(error) {
+            console.log('===>up decrypt error')
+            return undefined
+        }
     }
 }
 

@@ -20,7 +20,11 @@ export * from './codec_vote';
 export * from './codec_evm_qualify';
 export * from './address_check';
 const SHA256_LEN = 32
-
+export type ProfileResponse = {
+    address: string;
+    data: string;
+    outputId: string;
+};
 const GroupIdIncludedFields:MessageGroupMetaKey[] = ['chainId','qualifyType','contractAddress','tokenThres']
 class IotaCatSDK {
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
@@ -611,7 +615,7 @@ class IotaCatSDK {
         const res = await fetch(url)
         const json = await res.json()
         return json
-    }    
+    }
 
     async fetchAddressNames(addressList: string[]): Promise<{[key: string]: {name: string}}> {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressdid`
@@ -663,6 +667,21 @@ class IotaCatSDK {
         const json = await res.json()
         return json
     }
+    async _fetchProfilesByEvmAddresses(addresses: string[]): Promise<ProfileResponse[]> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/batchprofileunderevmaddress`;
+        
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(addresses),
+        });
+    
+        const json = await res.json();
+        return json as ProfileResponse[];
+    }
+    
     _compressMessageText(message:IMMessage){
         const compressed = LZString.compressToUint8Array(message.data)
         message.data = bytesToHex(compressed)
@@ -1175,6 +1194,55 @@ class IotaCatSDK {
             return {}
         }
     }
+
+    async batchFetchAddressProfile(addressList: string[]): Promise<{[key: string]: {name: string, avatar?: string}}> {
+        console.log('batchFetchAddressProfile addressList', addressList, this)
+        try {
+            const [nameMap, profileResponse] = await Promise.all([this.fetchAddressNames(addressList), this._fetchProfilesByEvmAddresses(addressList)])
+            console.log('batchFetchAddressProfile first res', nameMap, profileResponse)
+            const profileMap: {[key: string]: {name: string, avatar?: string}} = {}
+            const  profileResponseList = this._ensureList(profileResponse)
+            for(const item of profileResponseList) {
+                const profileData = JSON.parse(item.data)
+                const profile: {name: string, avatar?: string} = {
+                    name: profileData.name
+                }
+                if (profileData.avatar) {
+                    profile.avatar = profileData.avatar
+                }
+                profileMap[item.address] = profile
+            }
+            console.log('batchFetchAddressProfile profileMap', profileMap)
+            const res = {
+                ...nameMap,
+                ...profileMap
+            }
+            console.log('batchFetchAddressProfile final res', res)
+            return {
+                ...nameMap,
+                ...profileMap,
+            } 
+        } catch(error) {
+            console.log('batchFetchAddressProfile error', error)
+            return {}
+        }
+    }
+
+    async fetchAddressProfile(address: string): Promise<{data: any, outputId: string} | null> {
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/profileunderevmaddress?address=${address}`
+        try {
+            const res = await fetch(url, {
+                method:'GET',
+                headers:{
+                'Content-Type':'application/json',
+            }})
+            const json = await res.json()
+            return json
+        } catch(error) {
+            console.log('error',error)
+            return null
+        }
+    }
 }
 
 const instance = new IotaCatSDK
@@ -1188,12 +1256,14 @@ export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV2'
 export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
 export const GROUPFILIKETAG = 'GROUPFILIKEV1'
+export const GROUPFIPROFILETAG = 'GROUPFIPROFILEV1'
 export const GROUPFIReservedTags = [
     GROUPFIMARKTAG,
     GROUPFIMUTETAG,
     GROUPFIVOTETAG,
     GROUPFILIKETAG,
     GROUPFIQUALIFYTAG,
+    GROUPFIPROFILETAG,
     'PARTICIPANTION',
 ]
 export const IotaCatSDKObj = instance

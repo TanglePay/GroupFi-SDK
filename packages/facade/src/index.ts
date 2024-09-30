@@ -23,7 +23,8 @@ import {
   MessageResponseItemPlus,
   INX_GROUPFI_DOMAIN,
   isUniversalProfileAddress,
-  getEvmOrSolanaAddressType
+  getEvmOrSolanaAddressType,
+  ImInboxEventTypeProfileChangedEvent
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -63,6 +64,7 @@ import {
   RegisteredInfo,
   ModeInfo,
   PairX,
+  Profile
 } from './types';
 
 import {
@@ -224,8 +226,13 @@ class GroupFiSDKFacade {
         message.sender = evmAddress;
       }
 
-      const name = await this.getNameFromNameMappingCache(message.sender)
-      message.name = name
+      const profile = await this.getProfileFromNameMappingCache(message.sender)
+      if (profile?.name) {
+        message.name = profile.name
+      }
+      if (profile?.avatar) {
+        message.avatar = profile.avatar
+      }
 
       console.log('*****Enter handlePushedMessage filter');
       const filtered = await this.filterMutedMessage(groupId, message.sender);
@@ -248,11 +255,19 @@ class GroupFiSDKFacade {
     return undefined;
   }
 
-  async getNameFromNameMappingCache(address: string) {
+  async getProfileFromNameMappingCache(address: string) {
     try {
-      const nameRes = await nameMappingCache.getRes(address)
-      return nameRes.name
+      const profileRes = await nameMappingCache.getRes(address)
+      return profileRes
     }catch(error) {
+      throw error
+    }
+  }
+
+  async batchGetProfileFromNameMappingCache(addressList: string[]) {
+    try {
+      return await nameMappingCache.batchGetRes(addressList)
+    } catch(error) {
       throw error
     }
   }
@@ -278,6 +293,8 @@ class GroupFiSDKFacade {
       } else if (pushed.type === ImInboxEventTypeMuteChanged) {
         item = pushed
       } else if (pushed.type === ImInboxEventTypeLikeChanged) {
+        item = pushed
+      } else if (pushed.type === ImInboxEventTypeProfileChangedEvent) {
         item = pushed
       }
       if (item) {
@@ -1033,47 +1050,14 @@ class GroupFiSDKFacade {
     privateKeyEncrypted: string
   }) {
     const { publicKey, privateKeyEncrypted } = encryptedPairX
-    const pairX = await this._client!.decryptPairX({
+    const { password, pairX } = await this._client!.decryptPairX({
       publicKey: publicKey,
       privateKeyEncrypted: privateKeyEncrypted,
     });
-    this._pairX = pairX
-    return pairX
-  }
-
-  async fetchRegisteredInfo(
-    isPairXPresent: boolean
-  ): Promise<RegisteredInfo | undefined> {
-    const res = await IotaCatSDKObj.fetchAddressPairX(this._address!);
-    console.log('===>fetchRegisteredInfo res', res, isPairXPresent);
-    if (!res) {
-      return undefined;
+    if (pairX) {
+      this._pairX = pairX
     }
-    let registeredInfo: RegisteredInfo = {};
-    if (res.mmProxyAddress) {
-      registeredInfo[DelegationMode] = {
-        account: res.mmProxyAddress,
-      };
-    }
-    if (res.tpProxyAddress) {
-      registeredInfo[ImpersonationMode] = {
-        account: res.tpProxyAddress,
-      };
-    }
-    if (isPairXPresent) {
-      return registeredInfo;
-    }
-    if (this._pairX) {
-      registeredInfo.pairX = this._pairX;
-    } else {
-      const pairX = await this._client!.decryptPairX({
-        publicKey: res.publicKey,
-        privateKeyEncrypted: res.privateKeyEncrypted,
-      });
-      this._pairX = pairX;
-      registeredInfo.pairX = pairX;
-    }
-    return registeredInfo;
+    return {password, pairX}
   }
 
   switchClientAdapter(mode: Mode) {
@@ -1234,9 +1218,20 @@ class GroupFiSDKFacade {
       this._pairX = pairX;
       (adapter as ImpersonationModeRequestAdapter).importProxyAccount();
     } else if (this._mode === DelegationMode) {
-      const smrAddress = await (adapter as DelegationModeRequestAdapter).registerPairX(metadataObjWithSignature)
+      const {proxyAccount:smrAddress,remainderIds:outputids,
+        remainderOutputs:outputs
+      } = await (adapter as DelegationModeRequestAdapter).registerPairX(metadataObjWithSignature)
       this._proxyAddress = smrAddress
       this._pairX = pairX
+      if (outputids.length) {
+        const outputsAsWrapper = outputids.map((outputIdHex, index) => {
+          return {
+            outputId: outputIdHex,
+            output: outputs[index]
+          }
+        })
+        this._client!.resetAllRemainderHints(outputsAsWrapper)
+      }
     }
   }
 
@@ -1827,9 +1822,12 @@ class GroupFiSDKFacade {
     return res;
   }
 
-  async checkIsRegisteredInServiceEnv(publicKey: string, proxyAddressToConfirm: string) {
+  async checkIsRegisteredInServiceEnv(publicKey: string | Uint8Array, proxyAddressToConfirm: string) {
     if (this._mode !== DelegationMode) {
       return true
+    }
+    if (typeof publicKey !== 'string') {
+      publicKey = bytesToHex(publicKey, true)
     }
     const proxyAddressFromServiceEnv = await this._auxiliaryService.fetchProxyAccount(publicKey)
     if (proxyAddressFromServiceEnv === undefined) {
@@ -1879,6 +1877,123 @@ class GroupFiSDKFacade {
       return `${chainInfo.picUri}/${groupMeta.contractAddress}/logo.png`
     }
     return ''
+  }
+
+  async isNameDuplicate(name: string) {
+    return await this._auxiliaryService.isNameDuplicate(name)
+  }
+
+  async getActiveProfile(): Promise<{profile: Profile, outputId: string} | null> {
+    try {
+      this._ensureWalletConnected()
+      const res = await IotaCatSDKObj.fetchAddressProfile(this._address!)
+      if (res === null) return res
+      const profile = JSON.parse(res.data)
+      return {profile, outputId: res.outputId}
+    } catch (error) {
+      return null
+    }
+  }
+
+  async getGroupFiProfile(): Promise<Profile | null> {
+    this._ensureWalletConnected();
+    const res = await this.fetchAddressNames([this._address!])
+    const profile = res[this._address!]
+    if (!profile) {
+      return null
+    }
+    return {
+      chainId: 148,
+      name: profile.name
+    }
+  }
+
+  async setProfile(profile: Profile) {
+    this._ensureWalletConnected();
+    const old = await this.getActiveProfile()
+    console.log('setProfile old', old)
+    let outputIdToBeConsumed: string | undefined = undefined
+    if (old !== null) {
+      const {profile: oldProfile, outputId} = old
+      // if (this.isSameProfile(oldProfile, profile)) {
+      //   console.log('Set the same profile')
+      //   return
+      // }
+      outputIdToBeConsumed = outputId
+    }
+    const profileJsonStr = JSON.stringify(profile)
+    return await this._client!.setProfile(profileJsonStr, outputIdToBeConsumed)
+  }
+
+  isSameProfile(profile1: Profile, profile2: Profile) {
+    if (profile1.chainId !== profile2.chainId) {
+      return false
+    }
+    if (profile1.name !== profile2.name) {
+      return false
+    }
+    if ((profile1.avatar ?? '') !== (profile2.avatar ?? '')) {
+      return false
+    }
+    return true
+  }
+
+  _isGroupFiProfile(profile: Profile) {
+    return profile.chainId === 148
+  }
+
+  async getAddressProfileList(update = false): Promise<{profileList: Profile[], profileToBeUpdateOnChain?: boolean }> {
+    console.log('profile getAddressProfileList update', update)
+    this._ensureWalletConnected()
+    const addressList = [this._address!]
+    const updates = [update]
+    const body = JSON.stringify({
+      addresses: addressList,
+      updates
+    })
+    const [profileListMap, groupFiProfile, activeProfile] = await Promise.all([
+      this._auxiliaryService.getAddressProfileList(body), 
+      this.getGroupFiProfile(),
+      this.getActiveProfile().then(res => res?.profile ?? null)
+    ])
+    let profileList = profileListMap[this._address!] ?? []
+    let profileToBeUpdateOnChain: Profile | undefined = undefined
+    
+    console.log('getAddressProfileList groupFi Profile', groupFiProfile)
+
+    if (groupFiProfile && !profileList.find(this._isGroupFiProfile)) {
+      profileList.push(groupFiProfile)
+    }
+
+    if (activeProfile !== null) {
+      let isActiveProfileFound = false
+      profileList = profileList.map(profile => {
+        if (profile.chainId === activeProfile.chainId) {
+          isActiveProfileFound = true
+          if (!this.isSameProfile(profile, activeProfile)) {
+            profileToBeUpdateOnChain = {...profile}
+          }
+          profile.isActive = true
+        }
+        return profile
+      })
+      if (!isActiveProfileFound) {
+        if (this._isGroupFiProfile(activeProfile)) {
+          console.log('select groupfi profile not found in profile list, push it')
+          profileList.push({
+            ...activeProfile,
+            isActive: true
+          })
+        } else {
+          console.warn('select profile not found in profile list')
+          profileList.push({
+            ...activeProfile,
+            isActive: true
+          })
+        }
+      }
+    }
+    return {profileList, profileToBeUpdateOnChain }
   }
 }
 

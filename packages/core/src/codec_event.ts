@@ -1,4 +1,4 @@
-import { DidChangedEvent, EventGroupIsPublicChanged, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, PairXChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
+import { DidChangedEvent, EventGroupIsPublicChanged, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, ImInboxEventTypeProfileChangedEvent, PairXChangedEvent, ProfileChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { readUint16, readUint32 } from 'groupfi-sdk-utils'
 import { deserializeFieldWithLengthPrefixed } from "./codec_util";
@@ -57,6 +57,11 @@ export function deserializePushed(data: Uint8Array): PushedValue {
             type: ImInboxEventTypeGroupIsPublicChanged,
             ...deserializeGroupIsPublicChangedEvent(reader)
         };
+    } else if (eventType === ImInboxEventTypeProfileChangedEvent) {
+        return {
+            type: ImInboxEventTypeProfileChangedEvent,
+           ...deserializeProfileChangedEvent(reader)
+        }
     }
     
     
@@ -176,6 +181,17 @@ export function deserializePairXChangedEvent(reader : ReadStream): Omit<PairXCha
 export function deserializeDidChangedEvent(reader : ReadStream): Omit<DidChangedEvent,'type'> {
     // log enter deserializeDidChangedEvent
     console.log("deserializeDidChangedEvent");
+    // read addressSha256Hash
+    const addressSha256Hash = Converter.bytesToHex(reader.readBytes("addressSha256Hash", 32), true);
+    // read timestamp
+    const timestamp = readUint32(reader,'timestamp')
+    return {
+        addressSha256Hash,
+        timestamp
+    };
+}
+
+export function deserializeProfileChangedEvent(reader: ReadStream): Omit<ProfileChangedEvent,'type'> {
     // read addressSha256Hash
     const addressSha256Hash = Converter.bytesToHex(reader.readBytes("addressSha256Hash", 32), true);
     // read timestamp

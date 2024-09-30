@@ -39,6 +39,7 @@
     "@iota/crypto.js": "^1.8.6",
     "@iota/iota.js": "2.0.0-rc.4",
     "@metamask/sdk": "^0.18.1",
+    "ethers": "^6.11.1",
     "groupfi-sdk-client": "workspace:^",
     "groupfi-sdk-core": "workspace:^",
     "groupfi-sdk-utils": "workspace:^",
