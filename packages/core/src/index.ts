@@ -1200,8 +1200,9 @@ class IotaCatSDK {
         try {
             const [nameMap, profileResponse] = await Promise.all([this.fetchAddressNames(addressList), this._fetchProfilesByEvmAddresses(addressList)])
             console.log('batchFetchAddressProfile first res', nameMap, profileResponse)
-            const profileMap: {[key: string]: {name: string, avatar?: string}} = {} 
-            for(const item of profileResponse) {
+            const profileMap: {[key: string]: {name: string, avatar?: string}} = {}
+            const  profileResponseList = this._ensureList(profileResponse)
+            for(const item of profileResponseList) {
                 const profileData = JSON.parse(item.data)
                 const profile: {name: string, avatar?: string} = {
                     name: profileData.name
