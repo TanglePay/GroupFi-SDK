@@ -52,3 +52,10 @@ export interface RegisteredInfo {
   [ImpersonationMode]?: ModeDetail
   [DelegationMode]?: ModeDetail
 }
+
+export interface Profile {
+  chainId: number
+  name: string
+  avatar?: string
+  isActive?: boolean
+}

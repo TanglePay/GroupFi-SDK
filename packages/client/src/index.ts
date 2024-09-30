@@ -17,6 +17,7 @@ import {
     UnlockTypes,
     ITagFeature,
     IMetadataFeature,
+    HexEncodedString,
     IKeyPair,
     INodeInfo,
     INodeInfoProtocol,
@@ -49,6 +50,7 @@ import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LR
     IMUserMuteGroupMember,serializeUserMuteGroupMembers, deserializeUserMuteGroupMembers,
     IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
+    GROUPFIPROFILETAG,
     GROUPFICASHTAG,MessageGroupMeta,
     GROUPFILIKETAG,
     IMUserLikeGroupMember,
@@ -69,6 +71,7 @@ type IntermediateResult = {
     senderAddress: string;
     senderAddressBytes: Uint8Array;
     name?: string;
+    avatar?: string
     data: Uint8Array;
 };
 //TODO tune concurrency
@@ -228,7 +231,16 @@ export class GroupfiSdkClient {
         const {addressType, addressBytes} = res
         if (addressType !== ED25519_ADDRESS_TYPE) throw new Error('Address type not supported')
         this._accountHexAddress = Converter.bytesToHex(addressBytes,true)
-        this._remainderHintSet = []
+        // reset _remainderHintSet only if bech32Address is different
+        if (this._remainderHintSet.length > 0) {
+            const first = this._remainderHintSet[0]
+            const firstAddress = (first.output.unlockConditions.filter((unlockCondition)=>unlockCondition.type === ADDRESS_UNLOCK_CONDITION_TYPE)[0] as IAddressUnlockCondition).address as IEd25519Address
+            const addressBytes = Converter.hexToBytes(firstAddress.pubKeyHash)
+            const firstBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE,addressBytes, this._protocolInfo!.bech32Hrp)
+            if (firstBech32Address !== bech32Address) {
+                this._remainderHintSet = []
+            }
+        }
         this._lastSendTimestamp = 0;
         this._sharedSaltCache = {}
     }
@@ -327,13 +339,12 @@ export class GroupfiSdkClient {
             // log outputsToSend and outputs in one line
             console.log('outputsToSend', outputsToSend, 'outputs', outputs);
             const {transactionId} = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs,outputsToSend)
-            this._remainderHintSet = []
+            const newRemainderHints = [] as BasicOutputWrapper[]
             for (let idx =0;idx<outputsToSend.length;idx++) {
                 const output = outputsToSend[idx]
-                this._remainderHintSet.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx),timestamp:Date.now()})
+                newRemainderHints.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx)})
             }
-            // log remainderHintSet
-            console.log('remainderHintSet', this._remainderHintSet);
+            this.resetAllRemainderHints(newRemainderHints);
             return true
         } catch (error) {
             console.log('prepareRemainderHint error', error);
@@ -1033,7 +1044,7 @@ export class GroupfiSdkClient {
     
         return { senderAddressBytes, senderAddress:smrAddress, data };
     }
-    convertIMMessageToIMessage(imMessage: IMMessage, messageId: string, sender: string, name?:string): IMessage {
+    convertIMMessageToIMessage(imMessage: IMMessage, messageId: string, sender: string, name?:string, avatar?: string): IMessage {
         return {
             type: ImInboxEventTypeNewMessage,
             messageId,
@@ -1041,7 +1052,8 @@ export class GroupfiSdkClient {
             sender,
             message: imMessage.data, // Assuming `data` holds the message content
             timestamp: imMessage.timestamp,
-            name
+            name,
+            avatar
             // Optionally include other fields like `token` or `name` if they exist in `IMMessage`
         };
     }
@@ -1066,7 +1078,7 @@ export class GroupfiSdkClient {
             console.log('batchConvertOutputIdsToMessages Step 1 counts, outputIds count:', outputIds.length, 'foundOutputIds count:', foundOutputIds.length, 'failedMessageOutputIds count:', failedMessageOutputIds.length);
     
             // Step 2: Loop through the outputs and attempt to deserialize each message without extra
-            const sharedOutputIdToMsgMap: { [sharedOutputId: string]: Array<{ imMessage: IMMessage, data: Uint8Array, senderAddressBytes: Uint8Array,name?:string, messageId: string, messageOutputId: string, sender: string }> } = {};
+            const sharedOutputIdToMsgMap: { [sharedOutputId: string]: Array<{ imMessage: IMMessage, data: Uint8Array, senderAddressBytes: Uint8Array,name?:string, avatar?: string, messageId: string, messageOutputId: string, sender: string }> } = {};
             let totalMessagesNeedingSharedOutput = 0;
             
             
@@ -1111,13 +1123,16 @@ export class GroupfiSdkClient {
             const nameRes = await nameMappingCache.batchGetRes(addressUniqueList);
             for (const intermediateResult of intermediateResults) {
                 const { senderAddress } = intermediateResult;
-                const name = nameRes.get(senderAddress);
-                if (name) {
-                    intermediateResult.name = name?.name;
+                const profile = nameRes.get(senderAddress);
+                if (profile?.name) {
+                    intermediateResult.name = profile?.name
+                }
+                if (profile?.avatar) {
+                    intermediateResult.avatar = profile.avatar
                 }
             }
 
-            for (const { outputIdHex, senderAddressBytes, name, data, senderAddress: sender } of intermediateResults) {
+            for (const { outputIdHex, senderAddressBytes, name, avatar, data, senderAddress: sender } of intermediateResults) {
                 try {
                     // Get the messageId
                     const messageId = IotaCatSDKObj.getMessageId(data, senderAddressBytes);
@@ -1130,10 +1145,10 @@ export class GroupfiSdkClient {
                         if (!sharedOutputIdToMsgMap[sharedOutputId]) {
                             sharedOutputIdToMsgMap[sharedOutputId] = [];
                         }
-                        sharedOutputIdToMsgMap[sharedOutputId].push({ imMessage, data, senderAddressBytes, name, messageId, messageOutputId: outputIdHex, sender });
+                        sharedOutputIdToMsgMap[sharedOutputId].push({ imMessage, data, senderAddressBytes, name, avatar, messageId, messageOutputId: outputIdHex, sender });
                         totalMessagesNeedingSharedOutput++;
                     } else {
-                        const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender, name);
+                        const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender, name, avatar);
                         onMessageCompleted(iMessage, outputIdHex); // Trigger the callback immediately
                     }
                 } catch (error) {
@@ -1156,11 +1171,11 @@ export class GroupfiSdkClient {
                 // Complete the messages using the cached salts
                 for (const { outputId, salt } of results) {
                     const messageList = sharedOutputIdToMsgMap[outputId];
-                    for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, sender} of messageList) {
+                    for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, avatar, sender} of messageList) {
                         try {
                             const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
                             // const sender = ''; // You'll need to determine the sender value based on your context
-                            const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender,name);
+                            const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender,name, avatar);
                             onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                         } catch (error) {
                             console.log('Error converting completed message to IMessage:', error);
@@ -1195,11 +1210,11 @@ export class GroupfiSdkClient {
                             continue;
                         }
                         const messageList = sharedOutputIdToMsgMap[outputIdHex];
-                        for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, sender } of messageList) {
+                        for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, avatar, sender } of messageList) {
                             try {
                                 const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
                                 // const sender = ''; // You'll need to determine the sender value based on your context
-                                const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender, name);
+                                const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender, name, avatar);
                                 onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                             } catch (error) {
                                 console.log('Error converting completed message to IMessage:', error);
@@ -1920,14 +1935,26 @@ export class GroupfiSdkClient {
     _isRemainderHintSetDirty = false
     _setRemainderHint(output?:IBasicOutput,outputId?:string){
         // log set remainder hint, outputId and output
-        console.log('set remainder hint', outputId, output);
+        // console.log('set remainder hint', outputId, output);
         if (!output || !outputId) {
             return
         }
         // log actual set remainder hint
-        console.log('actual set remainder hint');
+        // console.log('actual set remainder hint');
 
         this._remainderHintSet.push({output,outputId,timestamp:Date.now()})
+    }
+    resetAllRemainderHints(remainderHints:BasicOutputWrapper[]){
+        // remove old hints
+        this._remainderHintSet = []
+        // log reset all remainder hints
+        console.log('reset all remainder hints',remainderHints);
+        for (const {output,outputId} of remainderHints) {
+            this._setRemainderHint(output,outputId)
+        }
+        // log reset all remainder hints done
+        console.log('reset all remainder hints done', this._remainderHintSet);
+        this._lastSendTimestamp = Date.now()
     }
     _tryGetCashFromRemainderHint():BasicOutputWrapper|undefined{
         // log enter try get cash from remainder hint
@@ -2271,6 +2298,28 @@ export class GroupfiSdkClient {
         const createdOutputs = extraOutputs ? [basicOutput, ...extraOutputs] : [basicOutput]
         return await this._sendBasicOutput(createdOutputs,toBeConsumed);
     }
+    async setProfile(profileJsonStr: string, outputIdToBeConsumed?: string) {
+        console.log('===>setProfile params', profileJsonStr, outputIdToBeConsumed)
+        const res = await this._persistSelectedProfile(profileJsonStr, outputIdToBeConsumed)
+        console.log('===>setProfile res', res)
+        return res
+    }
+    async _persistSelectedProfile(metadataJsonStr: string, outputIdToBeConsumed?: string) {
+        const tag = `0x${Converter.utf8ToHex(GROUPFIPROFILETAG)}`
+        const metadataHex = Converter.utf8ToHex(metadataJsonStr, true)
+        const basicOutput = await this._dataAndTagToBasicOutput(metadataHex, tag)
+        let toBeConsumed: BasicOutputWrapper[] = []
+        if (outputIdToBeConsumed) {
+            const outputResponse = await this._client!.output(outputIdToBeConsumed)
+            const output = outputResponse.output as IBasicOutput
+            toBeConsumed.push({
+                output,
+                outputId: outputIdToBeConsumed
+            })
+        }
+        const createdOutputs = [basicOutput]
+        return await this._sendBasicOutput(createdOutputs, toBeConsumed)
+    }
     // async _getMarkedGroupIds():Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMarkedGroupId[]}>{
     //     const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
     //     console.log('_getMarkedGroupIds existing', existing);
@@ -2295,14 +2344,14 @@ export class GroupfiSdkClient {
         }
     }
 
-    async _dataAndTagToBasicOutput(data:Uint8Array,tag:string):Promise<IBasicOutput>{
+    async _dataAndTagToBasicOutput(data:Uint8Array | HexEncodedString,tag:string):Promise<IBasicOutput>{
         const tagFeature: ITagFeature = {
             type: 3,
             tag
         };
         const metadataFeature: IMetadataFeature = {
             type: 2,
-            data: Converter.bytesToHex(data, true)
+            data: typeof data === 'string' ? data : Converter.bytesToHex(data, true)
         };
         const basicOutput: IBasicOutput = {
             type: BASIC_OUTPUT_TYPE,
@@ -2427,7 +2476,7 @@ export class GroupfiSdkClient {
         }
         return await this._persistUserVoteGroups(list,outputWrapper)
     }
-
+    
     async unvoteGroup(groupId:string, userAddress: string){
         this._ensureClientInited()
         this._ensureWalletInited()
@@ -2494,30 +2543,20 @@ export class GroupfiSdkClient {
             essenceOutputsLength: transactionEssence.outputs.length
         })
 
-        
-        // console.log('===> Test send res', res)
-        // console.log('===>start iota_im_sign_and_send_transaction_to_self')
-        // const res = await this._sdkRequest({
-        //     method: 'iota_im_sign_and_send_transaction_to_self',
-        //     params: {
-        //       content: {
-        //         addr: this._accountBech32Address,
-        //         transactionEssenceUrl,
-        //         nodeUrlHint:this._curNode!.apiUrl
-        //       },
-        //     },
-        //   }) as {blockId:string,outputId:string,transactionId:string,remainderOutputId?:string};
-
-        // releaseBlobUrl(transactionEssenceUrl)
-        // update _lastSendTimestamp
         this._lastSendTimestamp = Date.now()
         return res
     }
     async _decryptAesKeyFromRecipientsWithPayload(recipientPayload:Uint8Array):Promise<string>{
-        const res = this._requestAdapter!.decrypt({
-            dataTobeDecrypted: recipientPayload,
-            pairX:this._pairX
-        })
+        try {
+            const res = await this._requestAdapter!.decrypt({
+                dataTobeDecrypted: recipientPayload,
+                pairX:this._pairX
+            })
+            return res
+        } catch(error) {
+            return ''
+        }
+        
         // const res = await this._sdkRequest({
         //     method: 'iota_im_decrypt_key',
         //     params: {
@@ -2529,7 +2568,7 @@ export class GroupfiSdkClient {
         //     },
         //   }) as string;
         // releaseBlobUrl(recipientPayloadUrl) 
-        return res
+        // return res
     }
     async _sdkRequest(call: (...args: any[]) => Promise<any>) {
         this._queuePromise = this._queuePromise!.then(call, call)
@@ -2542,20 +2581,32 @@ export class GroupfiSdkClient {
     //     return this._queuePromise
     // }
 
-    async decryptPairX({privateKeyEncrypted, publicKey}: {privateKeyEncrypted: string, publicKey: string}): Promise<PairX> {
+    async decryptPairX({privateKeyEncrypted, publicKey}: {privateKeyEncrypted: string, publicKey: string}): Promise<{
+        password: string,
+        pairX: PairX | null
+    }> {
         const  proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
-        const first32BytesOfPrivateKeyHex =  await proxyModeRequestAdapter.decryptPairX({encryptedData: privateKeyEncrypted})
+        const {password, decryptedResult:first32BytesOfPrivateKeyHex} = await proxyModeRequestAdapter.decryptPairX({encryptedData: privateKeyEncrypted})
+        console.log('decryptPairX first32BytesOfPrivateKeyHex', first32BytesOfPrivateKeyHex, first32BytesOfPrivateKeyHex === '')
+
+        if (!first32BytesOfPrivateKeyHex) {
+            return {
+                password,
+                pairX: null
+            }
+        }
 
         const first32BytesOfPrivateKey = Converter.hexToBytes(first32BytesOfPrivateKeyHex) 
+        console.log('decryptPairX first32BytesOfPrivateKey', first32BytesOfPrivateKey)
         const publicKeyBytes = Converter.hexToBytes(publicKey)
-        const test = {
+        const pairX = {
             publicKey: publicKeyBytes,
             privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)
         }
-        console.log('===>test pairX', test)
+        console.log('===>decryptPairX pairX', pairX)
         return {
-            publicKey: publicKeyBytes,
-            privateKey: concatBytes(first32BytesOfPrivateKey, publicKeyBytes)
+            pairX,
+            password
         }
     }
 
