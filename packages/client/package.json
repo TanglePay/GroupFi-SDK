@@ -46,8 +46,7 @@
     "groupfi-sdk-core": "workspace:^",
     "groupfi-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",
-    "p-limit": "^4.0.0",
-    "tanglepaysdk-client": "^0.1.10"
+    "p-limit": "^4.0.0"
   },
   "devDependencies": {
     "@types/crypto-js": "^4.1.1",

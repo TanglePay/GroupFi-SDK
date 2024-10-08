@@ -22,6 +22,7 @@
   },
   "scripts": {
     "clean": "rimraf dist",
+    "remove_deps": "find . -name \"node_modules\" -type d -prune -exec rm -rf '{}' +", 
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
@@ -44,7 +45,7 @@
     "groupfi-sdk-core": "workspace:^",
     "groupfi-sdk-utils": "workspace:^",
     "groupfi-walletembed": "workspace:^",
-    "tanglepaysdk-client": "^0.1.10",
+    "tanglepaysdk-client": "^0.1.16",
     "web3": "^4.7.0"
   }
 }
