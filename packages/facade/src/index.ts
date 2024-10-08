@@ -1993,7 +1993,11 @@ class GroupFiSDKFacade {
         }
       }
     }
-    return {profileList, profileToBeUpdateOnChain }
+    const formatedProfileList = profileList.map(profile => ({
+      ...profile,
+      name: IotaCatSDKObj.formatProfileName(profile.chainId, profile.name)
+    }))
+    return {profileList: formatedProfileList, profileToBeUpdateOnChain }
   }
 }
 

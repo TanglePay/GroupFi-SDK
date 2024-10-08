@@ -8,29 +8,50 @@ import filesize from 'rollup-plugin-filesize';
 import alias from '@rollup/plugin-alias';
 import json from '@rollup/plugin-json';
 
-export function decoratePlugin(configs, plug, isFront = false) {
-    configs.forEach((c) => {
+// Abstracted external decorator for handling IIFE, CJS, and ESM
+export function decorateExternal(configs, obj, idx) {
+    const globals = {};
+    for (const [key, value] of Object.entries(obj)) {
+        if (value !== true) { // If value is not `true`, include it in `globals`
+            globals[key] = value;
+        }
+    }
+
+    configs[idx].external = [...(configs[idx].external || []), ...Object.keys(obj)]; // Add everything to external
+
+    if (Object.keys(globals).length > 0) {
+        configs[idx].output[0] = Object.assign(configs[idx].output[0], { globals });
+    }
+}
+
+// Specific decorator for CJS
+export function decorateCjsExternal(configs, obj) {
+    decorateExternal(configs, obj, 1); // Call abstracted function with index 1 for CJS
+}
+
+// Specific decorator for ESM
+export function decorateEsmExternal(configs, obj) {
+    decorateExternal(configs, obj, 2); // Call abstracted function with index 2 for ESM
+}
+
+// Specific decorator for IIFE
+export function decorateIifeExternal(configs, obj) {
+    decorateExternal(configs, obj, 0); // Call abstracted function with index 0 for IIFE
+}
+
+// Plugin decorator
+export function decoratePlugin(configs, plugin, isFront = false) {
+    configs.forEach((config) => {
         if (isFront) {
-            c.plugins.unshift(plug);
+            config.plugins.unshift(plugin); // Add plugin to the front of the array
         } else {
-            c.plugins.push(plug);
+            config.plugins.push(plugin); // Add plugin to the end of the array
         }
     });
 }
 
-export function decorateIifeExternal(config, obj, idx = 0) {
-    config.output[idx] = Object.assign(config.output[idx], { globals: obj });
-    config.external = Object.keys(obj);
-}
-
-export function createRollupConfig(pkg) {
-    return [
-        createIifeRollupConfig(pkg),
-        createCommonEsmRollupConfig(pkg)
-    ];
-}
-
-export function createIifeRollupConfig(pkg) {
+// Function to create the IIFE configuration
+export function createIifeRollupConfig(pkg, options = {}) {
     const moduleNameIife = pkg.moduleNameIife;
     const author = pkg.author;
     const banner = `/**
@@ -43,19 +64,22 @@ export function createIifeRollupConfig(pkg) {
 
     return {
         input: 'src/index.ts',
-        output: [{
-            file: 'dist/iife/index.js',
-            format: 'iife',
-            name: moduleNameIife,
-            sourcemap: true,
-            banner
-        }],
-        plugins: getPlugins(),
-        external: getExternals(pkg)
+        output: [
+            {
+                file: 'dist/iife/index.js',
+                format: 'iife',
+                name: moduleNameIife,
+                sourcemap: true,
+                banner
+            }
+        ],
+        plugins: getPlugins(options),
+        external: getExternals(pkg) // Default external handling for IIFE
     };
 }
 
-export function createCommonEsmRollupConfig(pkg) {
+// Function to create the CJS configuration
+export function createCjsRollupConfig(pkg, options = {}) {
     const moduleName = pkg.name;
     const author = pkg.author;
     const banner = `/**
@@ -70,11 +94,32 @@ export function createCommonEsmRollupConfig(pkg) {
         input: 'src/index.ts',
         output: [
             {
-                file: 'dist/cjs/index.js',
+                file: 'dist/cjs/index.cjs',
                 format: 'cjs',
                 sourcemap: true,
                 banner
-            },
+            }
+        ],
+        plugins: getPlugins(options),
+        external: getExternals(pkg) // Default external handling for CJS
+    };
+}
+
+// Function to create the ESM configuration
+export function createEsmRollupConfig(pkg, options = {}) {
+    const moduleName = pkg.name;
+    const author = pkg.author;
+    const banner = `/**
+                       * @license
+                       * author: ${author}
+                       * ${moduleName}.js v${pkg.version}
+                       * Released under the ${pkg.license} license.
+                       */
+                    `;
+
+    return {
+        input: 'src/index.ts',
+        output: [
             {
                 file: 'dist/esm/index.js',
                 format: 'esm',
@@ -82,17 +127,27 @@ export function createCommonEsmRollupConfig(pkg) {
                 banner
             }
         ],
-        plugins: getPlugins(),
-        external: getExternals(pkg)
+        plugins: getPlugins(options),
+        external: getExternals(pkg) // Default external handling for ESM
     };
 }
 
-function getPlugins() {
+// Create the Rollup configuration for IIFE, ESM, and CJS
+export function createRollupConfig(pkg, options = {}) {
+    return [
+        createIifeRollupConfig(pkg, options),
+        createCjsRollupConfig(pkg, options),
+        createEsmRollupConfig(pkg, options)
+    ];
+}
+
+// Shared plugins configuration
+function getPlugins(options = {}) {
     return [
         json(), // Process JSON files early
         alias({
             entries: {
-                crypto: 'crypto-browserify'
+                crypto: 'crypto-browserify' // Aliasing crypto for browser builds
             }
         }),
         typescript({
@@ -102,22 +157,25 @@ function getPlugins() {
             rootDir: "src",
         }),
         nodePolyfills({
-            exclude: ['crypto']
+            exclude: ['crypto'] // Exclude crypto from node polyfills
         }),
         babel({
-            exclude: 'node_modules/**',
+            exclude: 'node_modules/**', // Ignore node_modules
             babelHelpers: 'bundled'
         }),
-        commonjs(),
+        commonjs(), // Convert CommonJS to ES modules
         resolve({
             preferBuiltins: true,
-            browser: true
+            browser: true // Ensures browser compatibility
         }),
-        terser(),
-        filesize()
+        terser({
+            keep_classnames: options.keepClassNames || false // Minify and keep class names based on options
+        }),
+        filesize() // Show file size after build
     ];
 }
 
+// External handling for dependencies based on the package.json
 function getExternals(pkg) {
     return [
         ...Object.keys(pkg.dependencies || {}),

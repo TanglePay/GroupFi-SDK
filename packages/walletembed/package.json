@@ -50,7 +50,7 @@
     "groupfi-sdk-core": "workspace:^",
     "groupfi-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",
-    "tanglepaysdk-client": "^0.1.10",
+    "tanglepaysdk-client": "^0.1.16",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1"
   },

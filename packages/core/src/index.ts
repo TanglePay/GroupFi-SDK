@@ -22,7 +22,11 @@ export * from './address_check';
 const SHA256_LEN = 32
 export type ProfileResponse = {
     address: string;
-    data: string;
+    profile: {
+        chainId: number,
+        name: string,
+        avatar?: string
+    };
     outputId: string;
 };
 const GroupIdIncludedFields:MessageGroupMetaKey[] = ['chainId','qualifyType','contractAddress','tokenThres']
@@ -666,6 +670,17 @@ class IotaCatSDK {
         const res = await fetch(url)
         const json = await res.json()
         return json
+    } 
+    formatProfileName(chainId: number, rawName: string) {
+        if (!rawName) return rawName
+        chainId = typeof chainId === 'string' ? parseInt(chainId) : chainId
+        if (chainId === 185 && !rawName.endsWith('.mint')) {
+          return rawName + '.mint'
+        }
+        if (chainId === 42 && !rawName.endsWith('.up')) {
+          return rawName  + '.up'
+        }
+        return rawName
     }
     async _fetchProfilesByEvmAddresses(addresses: string[]): Promise<ProfileResponse[]> {
         const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/batchprofileunderevmaddress`;
@@ -679,7 +694,23 @@ class IotaCatSDK {
         });
     
         const json = await res.json();
-        return json as ProfileResponse[];
+        const profileRawResponseList = this._ensureList(json).filter(Boolean) as Array<{address: string, data: string, outputId: string}>
+        const profileResponse: ProfileResponse[] = []
+        for(const item of profileRawResponseList) {
+            const profileData = JSON.parse(item.data)
+            const profile: {chainId: number, name: string, avatar?: string} = {
+                chainId: parseInt(profileData.chainId), 
+                name: this.formatProfileName(profileData.chainId, profileData.name)
+            }
+            if (profileData.avatar) {
+                profile.avatar = profileData.avatar
+            }
+            profileResponse.push({
+                ...item,
+                profile
+            })
+        }
+        return profileResponse
     }
     
     _compressMessageText(message:IMMessage){
@@ -1195,29 +1226,20 @@ class IotaCatSDK {
         }
     }
 
-    async batchFetchAddressProfile(addressList: string[]): Promise<{[key: string]: {name: string, avatar?: string}}> {
+    async batchFetchAddressProfile(addressList: string[]): Promise<{[key: string]: {name: string, avatar?: string}}> { 
         console.log('batchFetchAddressProfile addressList', addressList, this)
         try {
-            const [nameMap, profileResponse] = await Promise.all([this.fetchAddressNames(addressList), this._fetchProfilesByEvmAddresses(addressList)])
-            console.log('batchFetchAddressProfile first res', nameMap, profileResponse)
+            const [nameMap, profileResponseList] = await Promise.all([this.fetchAddressNames(addressList), this._fetchProfilesByEvmAddresses(addressList)])
+            console.log('batchFetchAddressProfile first res', nameMap, profileResponseList)
             const profileMap: {[key: string]: {name: string, avatar?: string}} = {}
-            const  profileResponseList = this._ensureList(profileResponse)
             for(const item of profileResponseList) {
-                const profileData = JSON.parse(item.data)
-                const profile: {name: string, avatar?: string} = {
-                    name: profileData.name
-                }
-                if (profileData.avatar) {
-                    profile.avatar = profileData.avatar
-                }
-                profileMap[item.address] = profile
+                profileMap[item.address] = item.profile
             }
             console.log('batchFetchAddressProfile profileMap', profileMap)
-            const res = {
+            console.log('batchFetchAddressProfile final res', {
                 ...nameMap,
                 ...profileMap
-            }
-            console.log('batchFetchAddressProfile final res', res)
+            })
             return {
                 ...nameMap,
                 ...profileMap,
