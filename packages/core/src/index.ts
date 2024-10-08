@@ -185,6 +185,7 @@ class IotaCatSDK {
     _subscribedTopics:Set<string> = new Set()
     // subscribe to a topic
     _subscribeToTopics(topics:string[]){
+        if (!this._mqttClient) return
         const filteredTopics = topics.filter(topic=>!this._subscribedTopics.has(topic))
         filteredTopics.forEach(topic=>this._mqttClient!.subscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.add(topic))
@@ -205,6 +206,7 @@ class IotaCatSDK {
 
     // unsubscribe to a topic
     _unsubscribeToTopics(topics:string[]){
+        if (!this._mqttClient) return
         const filteredTopics = topics.filter(topic=>this._subscribedTopics.has(topic))
         filteredTopics.forEach(topic=>this._mqttClient!.unsubscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.delete(topic))

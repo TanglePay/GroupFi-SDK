@@ -276,7 +276,7 @@ class GroupFiSDKFacade {
     callback: (message: EventItemFromFacade) => void
   ): () => void {
     this._ensureWalletConnected();
-    this._ensureMqttConnected();
+    // this._ensureMqttConnected();
     // if (!this._mqttConnected) {
     //   throw new Error('MQTT not connected');
     // }
@@ -306,6 +306,9 @@ class GroupFiSDKFacade {
   }
 
   async setupMqttConnection(connect: any) {
+    if (!connect) {
+      return
+    }
     IotaCatSDKObj.setupMqttConnection(connect);
     this._mqttConnected = true;
   }
@@ -1093,7 +1096,7 @@ class GroupFiSDKFacade {
 
   async initialAddress() {
     this._ensureWalletConnected();
-    this._ensureMqttConnected();
+    // this._ensureMqttConnected();
 
     this.clearAddress();
 
