@@ -60,10 +60,15 @@ class MappingCache<T> {
   >();
   private _debounceTime: number = 100; // Adjust the debounce time as needed
 
-  async getRes(key: string): Promise<T> {
-    return new Promise((resolve, reject) => {
-      this.getMapping(key, resolve, reject);
-    });
+  async getRes(key: string): Promise<T | null> {
+    try {
+      return await new Promise((resolve, reject) => {
+        this.getMapping(key, resolve, reject);
+      });
+    } catch(error) {
+      console.log('nameMappingCache getRes error', key, error)
+      return null
+    } 
   }
 
   public getMapping(

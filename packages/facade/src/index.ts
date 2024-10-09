@@ -255,12 +255,12 @@ class GroupFiSDKFacade {
     return undefined;
   }
 
-  async getProfileFromNameMappingCache(address: string) {
+  async getProfileFromNameMappingCache(address: string): Promise<{name: string, avatar?: string}|null> {
     try {
       const profileRes = await nameMappingCache.getRes(address)
       return profileRes
     }catch(error) {
-      throw error
+      return null
     }
   }
 
