@@ -8,10 +8,6 @@ decorateIifeExternal(config,{
     '@iota/util.js': 'IotaUtil',
     'big-integer':'bigInt',
 })
-decorateCjsExternal(config,{
-    'tanglepaysdk-client': true,
-    'tanglepaysdk-common': true,
-})
 decoratePlugin(config, replace({
     'process.env.NODE_ID': JSON.stringify(process.env.NODE_ENV == 'staging' ? 101 : 102),
 }),true)

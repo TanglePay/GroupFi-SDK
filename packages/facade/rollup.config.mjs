@@ -9,10 +9,6 @@ decorateIifeExternal(config,{
     '@iota/util.js': 'IotaUtil',
     'big-integer':'bigInt',
 })
-decorateCjsExternal(config,{
-    'tanglepaysdk-client': true,
-    'tanglepaysdk-common': true,
-})
 decoratePlugin(config, replace({
     'process.env.AUXILIARY_SERVICE_DOMAIN': JSON.stringify(process.env.NODE_ENV == 'staging' ? "testapi.groupfi.ai" : "api.groupfi.ai"),
 }),true)
