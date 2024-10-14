@@ -194,12 +194,12 @@ export class DelegationModeRequestAdapter
 
   private _nodeUrlHint: string;
 
-  private _dappClient: any;
+  private _walletClient: any;
 
-  constructor(evmAddress: string, nodeUrlHint: string, dappClient: any) {
+  constructor(evmAddress: string, nodeUrlHint: string, walletClient: any) {
     this._evmAddress = evmAddress;
     this._nodeUrlHint = nodeUrlHint;
-    this._dappClient = dappClient;
+    this._walletClient = walletClient;
     GroupfiWalletEmbedded.setup(this._nodeUrlHint);
   }
 
@@ -208,7 +208,7 @@ export class DelegationModeRequestAdapter
     decryptedResult: string | undefined
   }> {
     const signTextHex = utf8ToHex(signText, true)
-    const password = await this._dappClient.request({
+    const password = await this._walletClient.request({
       method: 'personal_sign',
       params: [signTextHex, this._evmAddress!],
     });
@@ -238,7 +238,7 @@ export class DelegationModeRequestAdapter
 
 
   async ethSign(params: { dataToBeSignedHex: string }): Promise<string> {
-    const res = await this._dappClient.request({
+    const res = await this._walletClient.request({
       method: 'personal_sign',
       params: [params.dataToBeSignedHex, this._evmAddress!],
     });
@@ -252,7 +252,7 @@ export class DelegationModeRequestAdapter
 
   async getEncryptionPublicKey(): Promise<string> {
     const signTextHex = utf8ToHex(signText, true)
-    const res = await this._dappClient.request({
+    const res = await this._walletClient.request({
       method: 'personal_sign',
       params: [signTextHex, this._evmAddress!],
     });
