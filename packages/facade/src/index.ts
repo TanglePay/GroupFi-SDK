@@ -255,12 +255,12 @@ class GroupFiSDKFacade {
     return undefined;
   }
 
-  async getProfileFromNameMappingCache(address: string) {
+  async getProfileFromNameMappingCache(address: string): Promise<{name: string, avatar?: string}|null> {
     try {
       const profileRes = await nameMappingCache.getRes(address)
       return profileRes
     }catch(error) {
-      throw error
+      return null
     }
   }
 
@@ -276,10 +276,9 @@ class GroupFiSDKFacade {
     callback: (message: EventItemFromFacade) => void
   ): () => void {
     this._ensureWalletConnected();
-    this._ensureMqttConnected();
-    // if (!this._mqttConnected) {
-    //   throw new Error('MQTT not connected');
-    // }
+    // 为了兼容 node 端不使用 mqtt 的场景，注释掉这里
+    // this._ensureMqttConnected();
+
     // log listenningNewEventItem
     const listener = async (pushed: PushedValue) => {
       console.log('pushed', pushed);
@@ -306,6 +305,7 @@ class GroupFiSDKFacade {
   }
 
   async setupMqttConnection(connect: any) {
+    if (!connect) return
     IotaCatSDKObj.setupMqttConnection(connect);
     this._mqttConnected = true;
   }
@@ -1093,7 +1093,8 @@ class GroupFiSDKFacade {
 
   async initialAddress() {
     this._ensureWalletConnected();
-    this._ensureMqttConnected();
+    // 为了兼容 node 端不使用 mqtt 的场景，注释掉这里
+    // this._ensureMqttConnected();
 
     this.clearAddress();
 
