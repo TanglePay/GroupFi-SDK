@@ -958,10 +958,10 @@ class GroupFiSDKFacade {
   }
   _client?: GroupfiSdkClient;
 
-  _dappClient: any;
+  _walletClient: any;
 
-  setDappClient(dappClient: any) {
-    this._dappClient = dappClient;
+  setWalletClient(walletClient: any) {
+    this._walletClient = walletClient;
   }
 
   async setupGroupfiSdkClient() {
@@ -1083,7 +1083,7 @@ class GroupFiSDKFacade {
         const adapter = new DelegationModeRequestAdapter(
           this._address!,
           nodeUrlHint,
-          this._dappClient
+          this._walletClient
         );
         this._client!.switchAdapter({ adapter, mode });
         return;
