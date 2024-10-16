@@ -1,5 +1,5 @@
 {
-  "name": "groupfi-sdk-shared",
+  "name": "groupfi-sdk-chat",
   "description": "",
   "version": "0.0.1",
   "main": "dist/cjs/index.cjs",
