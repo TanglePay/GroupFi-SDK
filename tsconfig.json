@@ -13,7 +13,8 @@
     "emitDeclarationOnly": true,
     "resolveJsonModule": true,
     "downlevelIteration" : true,
-
+    "strictPropertyInitialization": false,
+    "experimentalDecorators": true
   },
   "exclude": [
     "node_modules",
