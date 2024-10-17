@@ -545,7 +545,10 @@ export class OutputSendingDomain implements ICycle, IRunnable {
             return false;
         }
 
-        if (!this._context.isWalletConnected) {
+        if (this._context.walletAddress && !this._mode) {
+            console.log('===>test Enter error status', this._context.walletAddress)
+        }
+        if (!this._context.isWalletConnected || !this._mode) {
             return true
         }
 
