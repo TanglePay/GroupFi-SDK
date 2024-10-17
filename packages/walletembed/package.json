@@ -47,6 +47,7 @@
     "@metamask/eth-sig-util": "^7.0.1",
     "big-integer": "^1.6.51",
     "crypto-js": "^4.1.1",
+    "ecies-ed25519-js": "^1.0.1",
     "groupfi-sdk-core": "workspace:^",
     "groupfi-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",

@@ -133,6 +133,52 @@ importers:
         specifier: ^5.2.2
         version: 5.2.2
 
+  packages/chat:
+    dependencies:
+      '@iota/crypto.js':
+        specifier: 2.0.0-rc.2
+        version: 2.0.0-rc.2
+      '@iota/iota.js':
+        specifier: 2.0.0-rc.4
+        version: 2.0.0-rc.4
+      '@iota/util.js':
+        specifier: 2.0.0-rc.2
+        version: 2.0.0-rc.2
+      groupfi-sdk-client:
+        specifier: workspace:^
+        version: link:../client
+      groupfi-sdk-core:
+        specifier: workspace:^
+        version: link:../core
+      groupfi-sdk-facade:
+        specifier: workspace:^
+        version: link:../facade
+      groupfi-sdk-utils:
+        specifier: workspace:^
+        version: link:../util
+      immutable:
+        specifier: ^4.3.6
+        version: 4.3.6
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
+      typescript-ioc:
+        specifier: ^3.2.2
+        version: 3.2.2
+    devDependencies:
+      '@types/react':
+        specifier: ^18.2.15
+        version: 18.2.15
+      '@types/react-dom':
+        specifier: ^18.2.7
+        version: 18.2.7
+      babel-jest:
+        specifier: ^29.6.4
+        version: 29.7.0(@babel/core@7.22.19)
+      ts-jest:
+        specifier: ^29.1.1
+        version: 29.1.1(@babel/core@7.22.19)(babel-jest@29.7.0)(jest@29.7.0)(typescript@5.2.2)
+
   packages/client:
     dependencies:
       '@iota/crypto.js':
@@ -156,6 +202,9 @@ importers:
       crypto-js:
         specifier: ^4.1.1
         version: 4.1.1
+      ecies-ed25519-js:
+        specifier: ^1.0.1
+        version: 1.0.1
       groupfi-sdk-core:
         specifier: workspace:^
         version: link:../core
@@ -180,7 +229,7 @@ importers:
     dependencies:
       '@erc725/erc725.js':
         specifier: ^0.27.1
-        version: 0.27.1(typescript@4.9.5)
+        version: 0.27.1(typescript@5.2.2)
       '@iota/util.js':
         specifier: 2.0.0-rc.2
         version: 2.0.0-rc.2
@@ -193,6 +242,9 @@ importers:
       crypto-js:
         specifier: ^4.1.1
         version: 4.1.1
+      ecies-ed25519-js:
+        specifier: ^1.0.1
+        version: 1.0.1
       ethers:
         specifier: ^6.11.1
         version: 6.11.1
@@ -261,7 +313,7 @@ importers:
         version: 0.1.16
       web3:
         specifier: ^4.7.0
-        version: 4.7.0(typescript@4.9.5)
+        version: 4.7.0(typescript@5.2.2)
 
   packages/shared:
     dependencies:
@@ -372,6 +424,9 @@ importers:
       crypto-js:
         specifier: ^4.1.1
         version: 4.1.1
+      ecies-ed25519-js:
+        specifier: ^1.0.1
+        version: 1.0.1
       groupfi-sdk-core:
         specifier: workspace:^
         version: link:../core
@@ -1264,7 +1319,6 @@ packages:
   /@babel/helper-string-parser@7.24.1:
     resolution: {integrity: sha512-2ofRCjnnA9y+wk8b9IAREroeUP02KHp431N2mhKniy2yKIDKpbrHv9eXwm8cBeWQYcJmzv5qKCu65P47eCF7CQ==}
     engines: {node: '>=6.9.0'}
-    dev: false
 
   /@babel/helper-validator-identifier@7.22.19:
     resolution: {integrity: sha512-Tinq7ybnEPFFXhlYOYFiSjespWQk0dq2dRNAiMdRTOYQzEGqnnNyrTxPYHP5r6wGjlF1rFgABdDV0g8EwD6Qbg==}
@@ -1273,7 +1327,6 @@ packages:
   /@babel/helper-validator-identifier@7.22.20:
     resolution: {integrity: sha512-Y4OZ+ytlatR8AI+8KZfKuL5urKp7qey08ha31L8b3BwewJAoJamTzyvxPR/5D+KkdJCGPq/+8TukHBlY10FX9A==}
     engines: {node: '>=6.9.0'}
-    dev: false
 
   /@babel/helper-validator-option@7.22.15:
     resolution: {integrity: sha512-bMn7RmyFjY/mdECUbgn9eoSY4vqvacUnS9i9vGAGttgFWesO6B4CYWA7XlpbWgBt71iv/hfbPlynohStqnu5hA==}
@@ -2417,7 +2470,6 @@ packages:
       '@babel/helper-string-parser': 7.24.1
       '@babel/helper-validator-identifier': 7.22.20
       to-fast-properties: 2.0.0
-    dev: false
 
   /@bcoe/v8-coverage@0.2.3:
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
@@ -2449,13 +2501,13 @@ packages:
       '@jridgewell/trace-mapping': 0.3.9
     dev: true
 
-  /@erc725/erc725.js@0.27.1(typescript@4.9.5):
+  /@erc725/erc725.js@0.27.1(typescript@5.2.2):
     resolution: {integrity: sha512-RJz++wd5pNACBx5rFuA3WuvTmtKqus362KQ/p3uH+eKU16rVNNIf1onfxkuNq2kZaGuh02qFeFGWWfkmLavLTg==}
     dependencies:
       cross-fetch: 4.0.0
-      msw: 2.4.1(typescript@4.9.5)
-      web3: 4.7.0(typescript@4.9.5)
-      web3-eth-abi: 4.2.0(typescript@4.9.5)
+      msw: 2.4.1(typescript@5.2.2)
+      web3: 4.7.0(typescript@5.2.2)
+      web3-eth-abi: 4.2.0(typescript@5.2.2)
       web3-eth-accounts: 4.1.1
       web3-providers-http: 4.1.0
       web3-utils: 4.2.2
@@ -4653,7 +4705,7 @@ packages:
     resolution: {integrity: sha512-pNpr1T1xLUc2l3xJKuPtsEky3ybxN3m4fJkknfIpTCTfIZCDW57oAg+EfCgIIp2rvCe0Wn++/FfodDS4YXxBwA==}
     dependencies:
       '@babel/parser': 7.22.16
-      '@babel/types': 7.22.19
+      '@babel/types': 7.24.0
       '@types/babel__generator': 7.6.5
       '@types/babel__template': 7.4.2
       '@types/babel__traverse': 7.20.2
@@ -5026,7 +5078,7 @@ packages:
     resolution: {integrity: sha512-nne9/IiQ/hzIhY6pdDnbBtz7DjPTKrY00P/zvPSm5pOFkl6xuGrGnXn/VtTNNfNtAfZ9/1RtehkszU9qcTii0Q==}
     dev: true
 
-  /abitype@0.7.1(typescript@4.9.5):
+  /abitype@0.7.1(typescript@5.2.2):
     resolution: {integrity: sha512-VBkRHTDZf9Myaek/dO3yMmOzB/y2s3Zo6nVU7yaw1G+TvCHAjwaJzNGN9yo4K5D8bU/VZXKP1EJpRhFr862PlQ==}
     peerDependencies:
       typescript: '>=4.9.4'
@@ -5035,7 +5087,7 @@ packages:
       zod:
         optional: true
     dependencies:
-      typescript: 4.9.5
+      typescript: 5.2.2
     dev: false
 
   /abort-controller@3.0.0:
@@ -5373,7 +5425,7 @@ packages:
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
     dependencies:
       '@babel/template': 7.22.15
-      '@babel/types': 7.22.19
+      '@babel/types': 7.24.0
       '@types/babel__core': 7.20.2
       '@types/babel__traverse': 7.20.2
     dev: true
@@ -6600,6 +6652,10 @@ packages:
     dependencies:
       jsbn: 0.1.1
       safer-buffer: 2.1.2
+
+  /ecies-ed25519-js@1.0.1:
+    resolution: {integrity: sha512-WzafMiWPPx+P04KXKc+7ov70urk2kj+93ayQRJgfu2o/9HHzB9VWp1dG3uro31WUJivzNzJiqulBTaSP+tC4Qg==}
+    dev: false
 
   /eciesjs@0.3.18:
     resolution: {integrity: sha512-RQhegEtLSyIiGJmFTZfvCTHER/fymipXFVx6OwSRYD6hOuy+6Kjpk0dGvIfP9kxn/smBpxQy71uxpGO406ITCw==}
@@ -9859,7 +9915,7 @@ packages:
   /ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
-  /msw@2.4.1(typescript@4.9.5):
+  /msw@2.4.1(typescript@5.2.2):
     resolution: {integrity: sha512-HXcoQPzYTwEmVk+BGIcRa0vLabBT+J20SSSeYh/QfajaK5ceA6dlD4ZZjfz2dqGEq4vRNCPLP6eXsB94KllPFg==}
     engines: {node: '>=18'}
     hasBin: true
@@ -9888,7 +9944,7 @@ packages:
       path-to-regexp: 6.2.2
       strict-event-emitter: 0.5.1
       type-fest: 4.26.0
-      typescript: 4.9.5
+      typescript: 5.2.2
       yargs: 17.7.2
     dev: false
 
@@ -12212,12 +12268,12 @@ packages:
     resolution: {integrity: sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g==}
     engines: {node: '>=4.2.0'}
     hasBin: true
+    dev: true
 
   /typescript@5.2.2:
     resolution: {integrity: sha512-mI4WrpHsbCIcwT9cF4FZvr80QUeKvsUsUvKDoR+X/7XHQH98xYD8YHZg7ANtz2GtZt/CBq2QJ0thkGJMHfqc1w==}
     engines: {node: '>=14.17'}
     hasBin: true
-    dev: true
 
   /ultron@1.1.1:
     resolution: {integrity: sha512-UIEXBNeYmKptWH6z8ZnqTeS8fV74zG0/eRU9VGkpzz+LIJNs8W/zM/L+7ctCkRrgbNnnR0xxw4bKOr0cW0N0Og==}
@@ -12545,11 +12601,11 @@ packages:
       web3-utils: 1.10.2
     dev: false
 
-  /web3-eth-abi@4.2.0(typescript@4.9.5):
+  /web3-eth-abi@4.2.0(typescript@5.2.2):
     resolution: {integrity: sha512-x7dUCmk6th+5N63s5kUusoNtsDJKUUQgl9+jECvGTBOTiyHe/V6aOY0120FUjaAGaapOnR7BImQdhqHv6yT2YQ==}
     engines: {node: '>=14', npm: '>=6.12.0'}
     dependencies:
-      abitype: 0.7.1(typescript@4.9.5)
+      abitype: 0.7.1(typescript@5.2.2)
       web3-errors: 1.1.4
       web3-types: 1.5.0
       web3-utils: 4.2.2
@@ -12608,14 +12664,14 @@ packages:
       - supports-color
     dev: false
 
-  /web3-eth-contract@4.3.0(typescript@4.9.5):
+  /web3-eth-contract@4.3.0(typescript@5.2.2):
     resolution: {integrity: sha512-4fzSklA65zUn6SthU3T3tbVJacfP8/wkJmCuvmPaf2ZTFdnhsF96G5IQtCRf0+wASb4yk0A6IBvXZfk1B4R4HA==}
     engines: {node: '>=14', npm: '>=6.12.0'}
     dependencies:
       web3-core: 4.3.2
       web3-errors: 1.1.4
-      web3-eth: 4.5.0(typescript@4.9.5)
-      web3-eth-abi: 4.2.0(typescript@4.9.5)
+      web3-eth: 4.5.0(typescript@5.2.2)
+      web3-eth-abi: 4.2.0(typescript@5.2.2)
       web3-types: 1.5.0
       web3-utils: 4.2.2
       web3-validator: 2.0.5
@@ -12644,15 +12700,15 @@ packages:
       - supports-color
     dev: false
 
-  /web3-eth-ens@4.2.0(typescript@4.9.5):
+  /web3-eth-ens@4.2.0(typescript@5.2.2):
     resolution: {integrity: sha512-qYj34te2UctoObt8rlEIY/t2MuTMiMiiHhO2JAHRGqSLCQ7b8DM3RpvkiiSB0N0ZyEn+CetZqJCTYb8DNKBS/g==}
     engines: {node: '>=14', npm: '>=6.12.0'}
     dependencies:
       '@adraffy/ens-normalize': 1.10.1
       web3-core: 4.3.2
       web3-errors: 1.1.4
-      web3-eth: 4.5.0(typescript@4.9.5)
-      web3-eth-contract: 4.3.0(typescript@4.9.5)
+      web3-eth: 4.5.0(typescript@5.2.2)
+      web3-eth-contract: 4.3.0(typescript@5.2.2)
       web3-net: 4.0.7
       web3-types: 1.5.0
       web3-utils: 4.2.2
@@ -12698,12 +12754,12 @@ packages:
       - supports-color
     dev: false
 
-  /web3-eth-personal@4.0.8(typescript@4.9.5):
+  /web3-eth-personal@4.0.8(typescript@5.2.2):
     resolution: {integrity: sha512-sXeyLKJ7ddQdMxz1BZkAwImjqh7OmKxhXoBNF3isDmD4QDpMIwv/t237S3q4Z0sZQamPa/pHebJRWVuvP8jZdw==}
     engines: {node: '>=14', npm: '>=6.12.0'}
     dependencies:
       web3-core: 4.3.2
-      web3-eth: 4.5.0(typescript@4.9.5)
+      web3-eth: 4.5.0(typescript@5.2.2)
       web3-rpc-methods: 1.2.0
       web3-types: 1.5.0
       web3-utils: 4.2.2
@@ -12737,14 +12793,14 @@ packages:
       - supports-color
     dev: false
 
-  /web3-eth@4.5.0(typescript@4.9.5):
+  /web3-eth@4.5.0(typescript@5.2.2):
     resolution: {integrity: sha512-crisE46o/SHMVm+XHAXEaR8k76NCImq+hi0QQEJ+VaLZbDobI/Gvog1HwTukDUDRgnYSAFGqD0cTRyAwDurwpA==}
     engines: {node: '>=14', npm: '>=6.12.0'}
     dependencies:
       setimmediate: 1.0.5
       web3-core: 4.3.2
       web3-errors: 1.1.4
-      web3-eth-abi: 4.2.0(typescript@4.9.5)
+      web3-eth-abi: 4.2.0(typescript@5.2.2)
       web3-eth-accounts: 4.1.1
       web3-net: 4.0.7
       web3-providers-ws: 4.0.7
@@ -12942,19 +12998,19 @@ packages:
       - utf-8-validate
     dev: false
 
-  /web3@4.7.0(typescript@4.9.5):
+  /web3@4.7.0(typescript@5.2.2):
     resolution: {integrity: sha512-3g+1e7B/IW0Nw9WP1dotrZKWD9o5IBfl27dxEnE1LxBZBax6ZkviiAwf18utIhlNBD07RgI+PPfKDXxfDBlHWA==}
     engines: {node: '>=14.0.0', npm: '>=6.12.0'}
     dependencies:
       web3-core: 4.3.2
       web3-errors: 1.1.4
-      web3-eth: 4.5.0(typescript@4.9.5)
-      web3-eth-abi: 4.2.0(typescript@4.9.5)
+      web3-eth: 4.5.0(typescript@5.2.2)
+      web3-eth-abi: 4.2.0(typescript@5.2.2)
       web3-eth-accounts: 4.1.1
-      web3-eth-contract: 4.3.0(typescript@4.9.5)
-      web3-eth-ens: 4.2.0(typescript@4.9.5)
+      web3-eth-contract: 4.3.0(typescript@5.2.2)
+      web3-eth-ens: 4.2.0(typescript@5.2.2)
       web3-eth-iban: 4.0.7
-      web3-eth-personal: 4.0.8(typescript@4.9.5)
+      web3-eth-personal: 4.0.8(typescript@5.2.2)
       web3-net: 4.0.7
       web3-providers-http: 4.1.0
       web3-providers-ws: 4.0.7
