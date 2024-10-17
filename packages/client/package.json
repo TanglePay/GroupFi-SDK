@@ -43,6 +43,7 @@
     "@iota/util.js": "2.0.0-rc.2",
     "big-integer": "^1.6.51",
     "crypto-js": "^4.1.1",
+    "ecies-ed25519-js": "^1.0.1",
     "groupfi-sdk-core": "workspace:^",
     "groupfi-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",
