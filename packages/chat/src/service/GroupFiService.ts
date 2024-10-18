@@ -45,6 +45,8 @@ export class GroupFiService {
       set: storage.set,
       remove: storage.remove
     }
+    // log GroupFiSDKFacade
+    console.log('setupGroupFiSDKFacadeStorage', GroupFiSDKFacade)
     GroupFiSDKFacade.setupStorage(storageFacade)
   }
   async browseModeSetupClient() {
