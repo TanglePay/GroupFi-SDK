@@ -25,7 +25,7 @@ import {
   StorageAdaptor,
   Profile
 } from '../types'
-import { logAllMethods } from '../util/misc'
+import { logAllMethods } from 'groupfi-sdk-utils'
 
 @Singleton
 export class GroupFiService {

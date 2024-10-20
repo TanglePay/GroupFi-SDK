@@ -38,6 +38,7 @@ import {
   concatBytes,
   getCurrentEpochInSeconds,
   tracer,
+  logAllMethods,
 } from 'groupfi-sdk-utils';
 import {
   GroupfiSdkClient,
@@ -2005,4 +2006,5 @@ class GroupFiSDKFacade {
 const intance = new GroupFiSDKFacade();
 // log intance
 console.log('GroupFiSDKFacade intance', intance);
+logAllMethods(intance)
 export default intance;
