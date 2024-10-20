@@ -97,6 +97,7 @@ export function createCjsRollupConfig(pkg, options = {}) {
                 file: 'dist/cjs/index.cjs',
                 format: 'cjs',
                 sourcemap: true,
+                esModule: false,
                 banner
             }
         ],
