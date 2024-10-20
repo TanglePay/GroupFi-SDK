@@ -98,6 +98,7 @@ export function createCjsRollupConfig(pkg, options = {}) {
                 format: 'cjs',
                 sourcemap: true,
                 exports: 'auto',
+                esModule: false,
                 banner
             }
         ],
