@@ -11,7 +11,7 @@
   "moduleNameIife": "iotacatsdkfacade",
   "exports": {
     ".": {
-      "require": "./cjs/index.cjs",
+      "require": "./dist/cjs/index.cjs",
       "import": "./dist/esm/index.js"
     }
   },
