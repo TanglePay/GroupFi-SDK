@@ -1,10 +1,11 @@
 import { Singleton } from 'typescript-ioc'
 import { IBasicOutput, OutputTypes } from '@iota/iota.js'
-import GroupFiSDKFacade, {
+import {
   ModeDetail,
   SimpleDataExtended,
   TransactionRes
 } from 'groupfi-sdk-facade'
+import GroupFiSDKFacade from 'groupfi-sdk-facade'
 import {
   IMessage,
   EventItemFromFacade,
