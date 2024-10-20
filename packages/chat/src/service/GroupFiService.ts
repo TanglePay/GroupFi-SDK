@@ -5,7 +5,7 @@ import {
   SimpleDataExtended,
   TransactionRes
 } from 'groupfi-sdk-facade'
-import GroupFiSDKFacade from 'groupfi-sdk-facade'
+import { GroupFiSDKFacadeInstance as GroupFiSDKFacade } from 'groupfi-sdk-facade'
 import {
   IMessage,
   EventItemFromFacade,
@@ -50,9 +50,9 @@ export class GroupFiService {
     // log GroupFiSDKFacade
     console.log('setupGroupFiSDKFacadeStorage', GroupFiSDKFacade)
     // @ts-ignore
-    console.log('setupGroupFiSDKFacadeStorage default', GroupFiSDKFacade.default)
+    // console.log('setupGroupFiSDKFacadeStorage default', GroupFiSDKFacade.default)
     // @ts-ignore
-    logAllMethods(GroupFiSDKFacade.default)
+    // logAllMethods(GroupFiSDKFacade.default)
     console.log(typeof GroupFiSDKFacade);
     logAllMethods(GroupFiSDKFacade)
     GroupFiSDKFacade.setupStorage(storageFacade)

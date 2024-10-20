@@ -2003,8 +2003,8 @@ class GroupFiSDKFacade {
   }
 }
 
-const intance = new GroupFiSDKFacade();
-// log intance
-console.log('GroupFiSDKFacade intance', intance);
-logAllMethods(intance)
-export default intance;
+export const GroupFiSDKFacadeInstance = new GroupFiSDKFacade();
+
+// log GroupFiSDKFacadeInstance
+console.log('GroupFiSDKFacade instance', GroupFiSDKFacadeInstance);
+logAllMethods(GroupFiSDKFacadeInstance);
