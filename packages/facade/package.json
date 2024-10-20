@@ -9,6 +9,12 @@
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "moduleNameIife": "iotacatsdkfacade",
+  "exports": {
+    ".": {
+      "require": "./cjs/index.cjs",
+      "import": "./dist/esm/index.js"
+    }
+  },
   "directories": {
     "lib": "lib",
     "test": "__tests__"
