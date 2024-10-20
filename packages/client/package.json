@@ -6,6 +6,12 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "moduleNameIife": "groupfisdkclient",
+  "exports": {
+    ".": {
+      "require": "./dist/cjs/index.cjs",
+      "import": "./dist/esm/index.js"
+    }
+  },
   "scripts": {
     "clean": "rimraf dist",
     "build:type": "tsc",

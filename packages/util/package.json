@@ -6,6 +6,12 @@
   "types": "dist/index.d.ts",
   "type": "module",
   "moduleNameIife": "groupfiutils",
+  "exports": {
+    ".": {
+      "require": "./dist/cjs/index.cjs",
+      "import": "./dist/esm/index.js"
+    }
+  },
   "scripts": {
     "bootstrap": "pnpm install -r",
     "clean": "rimraf dist",
