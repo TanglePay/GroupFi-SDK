@@ -51,6 +51,8 @@ export class GroupFiService {
     console.log('setupGroupFiSDKFacadeStorage', GroupFiSDKFacade)
     // @ts-ignore
     console.log('setupGroupFiSDKFacadeStorage default', GroupFiSDKFacade.default)
+    // @ts-ignore
+    logAllMethods(GroupFiSDKFacade.default)
     console.log(typeof GroupFiSDKFacade);
     logAllMethods(GroupFiSDKFacade)
     GroupFiSDKFacade.setupStorage(storageFacade)
