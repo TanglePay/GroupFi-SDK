@@ -48,6 +48,7 @@ export class GroupFiService {
     }
     // log GroupFiSDKFacade
     console.log('setupGroupFiSDKFacadeStorage', GroupFiSDKFacade)
+    console.log(typeof GroupFiSDKFacade);
     logAllMethods(GroupFiSDKFacade)
     GroupFiSDKFacade.setupStorage(storageFacade)
   }
