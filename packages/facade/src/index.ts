@@ -2004,7 +2004,3 @@ class GroupFiSDKFacade {
 }
 
 export const GroupFiSDKFacadeInstance = new GroupFiSDKFacade();
-
-// log GroupFiSDKFacadeInstance
-console.log('GroupFiSDKFacade instance', GroupFiSDKFacadeInstance);
-logAllMethods(GroupFiSDKFacadeInstance);
