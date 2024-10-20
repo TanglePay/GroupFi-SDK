@@ -23,11 +23,19 @@ export function logAllMethods(obj: any) {
     Object.getOwnPropertyNames(currentObj).forEach((item) => properties.add(item));
   } while ((currentObj = Object.getPrototypeOf(currentObj))); // Traverse the prototype chain
 
-  // Filter only methods
-  const methods = Array.from(properties).filter((prop) => typeof obj[prop] === 'function');
+  // Filter only methods and handle potential undefined values
+  const methods = Array.from(properties).filter((prop) => {
+    try {
+      return typeof obj[prop] === 'function';
+    } catch (error) {
+      console.warn(`Skipping property '${prop}' due to error: ${error}`);
+      return false;
+    }
+  });
 
   console.log('Methods:', methods);
 }
+
 
 export const concatBytes = (...args: Uint8Array[]) => {
   let totalLength = 0;
