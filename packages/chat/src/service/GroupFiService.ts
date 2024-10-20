@@ -25,6 +25,7 @@ import {
   StorageAdaptor,
   Profile
 } from '../types'
+import { logAllMethods } from '../util/misc'
 
 @Singleton
 export class GroupFiService {
@@ -46,7 +47,8 @@ export class GroupFiService {
       remove: storage.remove
     }
     // log GroupFiSDKFacade
-    console.log('setupGroupFiSDKFacadeStorage', GroupFiSDKFacade,GroupFiSDKFacade.setupStorage)
+    console.log('setupGroupFiSDKFacadeStorage', GroupFiSDKFacade)
+    logAllMethods(GroupFiSDKFacade)
     GroupFiSDKFacade.setupStorage(storageFacade)
   }
   async browseModeSetupClient() {
