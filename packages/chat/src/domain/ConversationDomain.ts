@@ -1,7 +1,7 @@
 import { Inject, Singleton } from "typescript-ioc";
 import { IAddPendingMessageToFrontCommand, ICommandBase, ICycle, IRunnable } from "../types";
 import { IMessage } from 'groupfi-sdk-core'
-import { bytesToHex } from 'groupfi-sdk-utils'
+import { bytesToHex, stripHexPrefix } from 'groupfi-sdk-utils'
 import { ThreadHandler } from "../util/thread";
 import { Channel } from "../util/channel";
 import { MessageHubDomain } from "./MessageHubDomain";
@@ -84,6 +84,7 @@ export class ConversationDomain implements ICycle, IRunnable {
         directionMostMessageId?: string,
         chunkKeyForDirectMostMessageId: string
     }> {
+        groupId = stripHexPrefix(groupId);
         const {
             messageIds,
             directionMostMessageId,
@@ -314,6 +315,7 @@ export class ConversationDomain implements ICycle, IRunnable {
         this._events.emit(eventKey);
     }
     onGroupDataUpdated(groupId: string, callback: () => void) {
+        groupId = stripHexPrefix(groupId);
         // log onGroupDataUpdated and groupId
         const eventKey = `${EventConversationGroupDataUpdated}.${groupId}`;
         console.log('ConversationDomain onGroupDataUpdated', groupId, eventKey);

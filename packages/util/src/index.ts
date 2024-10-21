@@ -35,7 +35,10 @@ export function logAllMethods(obj: any) {
 
   console.log('Methods:', methods);
 }
-
+// strip 0x prefix if exist
+export const stripHexPrefix = (hex: string) => {
+  return hex.startsWith('0x') ? hex.slice(2) : hex;
+};
 
 export const concatBytes = (...args: Uint8Array[]) => {
   let totalLength = 0;
