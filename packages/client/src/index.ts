@@ -286,7 +286,7 @@ export class GroupfiSdkClient {
         this._ensureStorageInited()
         if (!this._client) return
         const protocolInfo = await this._client.protocolInfo()
-        console.log('protocolInfo update success', protocolInfo)
+        console.log('protocolInfo update success')
         this._protocolInfo = protocolInfo
         this._storage!.set(this.getNodeProtocolInfoStorageKey(), JSON.stringify(protocolInfo))
     }
@@ -316,7 +316,7 @@ export class GroupfiSdkClient {
             console.log('Actually start prepare remainder hint');
             const outputs = await this._getUnSpentOutputs({numbersWanted:100})
             // log outputs
-            console.log('outputs', outputs);
+            // console.log('outputs', outputs);
             if (outputs.length === 0) return false
             let amount = outputs.reduce((acc,output)=>acc.add(bigInt(output.output.amount)),bigInt(0))
             // log amount
@@ -337,7 +337,7 @@ export class GroupfiSdkClient {
                 return false
             }
             // log outputsToSend and outputs in one line
-            console.log('outputsToSend', outputsToSend, 'outputs', outputs);
+            // console.log('outputsToSend', outputsToSend, 'outputs', outputs);
             const {transactionId} = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs,outputsToSend)
             const newRemainderHints = [] as BasicOutputWrapper[]
             for (let idx =0;idx<outputsToSend.length;idx++) {
@@ -1386,7 +1386,7 @@ export class GroupfiSdkClient {
             cursor
         })]);
         const nextCursor = outputsResponse.cursor
-        console.log('OutputsResponse', outputsResponse);
+        // console.log('OutputsResponse', outputsResponse);
         let outputIds = [...outputsResponse.items,...outputsWithTimelockResponse.items]
         if (idsForFiltering) {
             outputIds = outputIds.filter(outputId=>!idsForFiltering.has(outputId))
@@ -1898,7 +1898,7 @@ export class GroupfiSdkClient {
                 console.log('get cash from unspent outputs on the fly');
                 const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
                 const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
-                console.log('unspent Outputs', outputs);
+                // console.log('unspent Outputs', outputs);
                 if (!outputs || outputs.length === 0) throw IotaCatSDKObj.makeErrorForUserDoesNotHasEnoughToken()
                 
                 consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
@@ -2532,7 +2532,7 @@ export class GroupfiSdkClient {
     //TODO
     async _signAndSendTransactionEssence({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
         // log enter _signAndSendTransactionEssence
-        console.log('===> enter _signAndSendTransactionEssence',transactionEssence);
+        // console.log('===> enter _signAndSendTransactionEssence',transactionEssence);
         const writeStream = new WriteStream();
         serializeTransactionEssence(writeStream, transactionEssence);
         const essenceFinal = writeStream.finalBytes();

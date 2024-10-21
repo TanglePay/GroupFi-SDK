@@ -64,7 +64,7 @@ export class AuxiliaryService {
     result: boolean;
     transactionId: string;
   }> {
-    console.log('send proxy tx body:', body);
+    console.log('send proxy tx body:');
     const res = await fetch(`https://${this._domain}/proxy/send`, {
       method: 'POST',
       headers: {
