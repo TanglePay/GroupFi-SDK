@@ -306,13 +306,17 @@ export class ConversationDomain implements ICycle, IRunnable {
 
         this._storeGroupMessageList(groupId,firstChunk,HeadKey);
         // log method groupId messageId
-        console.log('ConversationDomain handleNewMessageToFirstPartGroupMessageList', groupId, messageId,firstChunk);
+        console.log('ConversationDomain handleNewMessageToFirstPartGroupMessageList', groupId, messageId) //,firstChunk);
         
         const eventKey = `${EventConversationGroupDataUpdated}.${groupId}`;
+        // log eventKey
+        console.log('ConversationDomain handleNewMessageToFirstPartGroupMessageList emit', eventKey);
         this._events.emit(eventKey);
     }
     onGroupDataUpdated(groupId: string, callback: () => void) {
+        // log onGroupDataUpdated and groupId
         const eventKey = `${EventConversationGroupDataUpdated}.${groupId}`;
+        console.log('ConversationDomain onGroupDataUpdated', groupId, eventKey);
         this._events.on(eventKey, callback);
     }
     offGroupDataUpdated(groupId: string, callback: () => void) {
