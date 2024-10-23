@@ -39,7 +39,9 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     // get for me group Configs
     get forMeGroupConfigs() {
         // if isLoggedIn, return all for me group configs, else return only public group configs
-        return this._context.isLoggedIn ? this._forMeGroupConfigs : this._forMeGroupConfigs?.filter(({isPublic}) => isPublic);
+        // return this._context.isLoggedIn ? this._forMeGroupConfigs : this._forMeGroupConfigs?.filter(({isPublic}) => isPublic);
+        // regardless of whether the user is logged in, do not filter public groups.
+        return this._forMeGroupConfigs
     }
     // get marked group configs
     get markedGroupConfigs() {

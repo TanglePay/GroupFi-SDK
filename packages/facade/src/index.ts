@@ -24,7 +24,8 @@ import {
   INX_GROUPFI_DOMAIN,
   isUniversalProfileAddress,
   getEvmOrSolanaAddressType,
-  ImInboxEventTypeProfileChangedEvent
+  ImInboxEventTypeProfileChangedEvent,
+  GroupConfigPlus
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -916,7 +917,7 @@ class GroupFiSDKFacade {
   }
   
   // fetchForMeGroupConfigs
-  async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}) {
+  async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
     const res = await IotaCatSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})
     if (!this._address) {
       return res
@@ -935,19 +936,45 @@ class GroupFiSDKFacade {
       return configs
     }
 
-    const evmQualifiedConfigs = [];
-    for (const config of configs) {
+    const evmGroupConfigsWithIsMember: Array<GroupConfigPlus & {isMember?: boolean}> = []
+
+    const privateGroupConfigs = configs.filter(config => {
       if (config.isPublic) {
-        evmQualifiedConfigs.push(config);
-        continue
+        evmGroupConfigsWithIsMember.push(config)
       }
-      const isOk = await this.filterEvmGroups(config.groupId);
-      if (isOk) {
-        evmQualifiedConfigs.push(config);
-      }
+      return !config.isPublic
+    })
+
+    const isGroupMemberList = await Promise.all(privateGroupConfigs.map(config => this.isGroupMember(config.groupId)))
+
+    for(let i = 0; i< privateGroupConfigs.length;i++) {
+      evmGroupConfigsWithIsMember.push({
+        ...privateGroupConfigs[i],
+        isMember: isGroupMemberList[i]
+      })
     }
 
-    return evmQualifiedConfigs;
+    return evmGroupConfigsWithIsMember
+
+    // for (const config of configs) {
+    //   if (config.isPublic) {
+    //     evmGroupConfigsWithIsMember.push(config);
+    //     continue
+    //   }
+      
+    //   const isMember = await this.isGroupMember(config.groupId)
+      
+    //   evmGroupConfigsWithIsMember.push({
+    //     ...config,
+    //     isMember
+    //   })
+    //   // if (isOk) {
+    //   //   evmQualifiedConfigs.push(config);
+    //   // }
+    // }
+
+    return evmGroupConfigsWithIsMember
+    // return evmQualifiedConfigs;
   }
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
@@ -1549,6 +1576,18 @@ class GroupFiSDKFacade {
   }
   getCurrentMode() {
     return this._mode;
+  }
+  async isGroupMember(groupId: string) {
+    try {
+      if (!this._address) {
+        return false
+      }
+      const groupMemberAddressList = await this.loadGroupMemberAddresses(groupId)
+      const isMember = groupMemberAddressList.find(({ownerAddress}) => ownerAddress === this._address!) 
+      return isMember !== undefined
+    } catch(error) {
+      return false
+    }
   }
   async isQualified(groupId: string) {
     this._ensureWalletConnected();
