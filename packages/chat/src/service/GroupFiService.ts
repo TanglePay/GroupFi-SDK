@@ -321,7 +321,7 @@ export class GroupFiService {
     }
   }
   async getAddressStatusInGroup(groupId: string): Promise<{
-    isGroupPublic: boolean
+    // isGroupPublic: boolean
     muted: boolean
     isQualified: boolean
     marked: boolean
@@ -329,10 +329,10 @@ export class GroupFiService {
     const address = GroupFiSDKFacade.getCurrentAddress()
     const key = `${address}_${groupId}`
     const requestAllList = [
-      {
-        type: 'isGroupPublic',
-        func: () => GroupFiSDKFacade.isGroupPublic(groupId)
-      },
+      // {
+      //   type: 'isGroupPublic',
+      //   func: () => GroupFiSDKFacade.isGroupPublic(groupId)
+      // },
       {
         type: 'muted',
         func: () => GroupFiSDKFacade.isBlackListed(groupId)
