@@ -362,101 +362,102 @@ export class GroupfiSdkClient {
     }
 
 
-    _outputIdToMessagePipe?: ConcurrentPipe<{outputId:string,output?:IBasicOutput,token:string,address:string,type:number},{message?:IMessage,outputId:string,status:number}>;
-    _makeOutputIdToMessagePipe(){
-        const processor = async (
-            {outputId,output,token,address,type}:{outputId:string,output?:IBasicOutput,address:string,type:number,token:string},
-            callback: (error?: Error | null) => void,
-            stream:ConcurrentPipe<{outputId:string,output?:IBasicOutput,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined>
-        )=>{
-            const res = await this.getMessageFromOutputId({outputId,output,address,type})
-            if (!res) {
-                stream.push({outputId,status:-1})
-                callback()
-                return
-            }
-            const message = res
-            ? {
-                type: ImInboxEventTypeNewMessage,
-                sender: res.sender,
-                message: res.message.data,
-                messageId: res.messageId,
-                timestamp: res.message.timestamp,
-                groupId: res.message.groupId,
-                token
-                }
-            : undefined;
-            if (this._mode === ShimmerMode) {
-                const res = {message,outputId}
-                stream.push(res)
-                callback()
-            } else {
-                const fn = (evmAddress:string)=>{
-                    message!.sender = evmAddress
-                    const res = {message,outputId}
-                    stream.push(res)
-                    callback()
-                }
-                AddressMappingStore.getMapping(message!.sender, fn,callback)
-            }
-        }
-        this._outputIdToMessagePipe = new ConcurrentPipe(processor, 12, 64, true)
-    }
-    getOutputIdToMessagePipe(){
-        // if not inited, init
-        if (!this._outputIdToMessagePipe) {
-            this._makeOutputIdToMessagePipe()
-        }
-        return this._outputIdToMessagePipe!
-    }
-    async outputIdstoMessages (
-        params:MessageResponseItemPlus[],
-    ):Promise<{message?:IMessage,outputId:string}[]>
-    {
-        const resp = [] as {message?:IMessage,outputId:string}[]
-        for (const item of params) {
-            const res = await this.getMessageFromOutputId(item)
-            const message = res
-                            ? {
-                                type: ImInboxEventTypeNewMessage,
-                                sender: res.sender,
-                                message: res.message.data,
-                                messageId: res.messageId,
-                                timestamp: res.message.timestamp,
-                                groupId: res.message.groupId,
-                                token: item.token,
-                                name: undefined
-                                } as IMessage
-                            : undefined;
-            resp.push({outputId:item.outputId, message})
-        }
-        // if not shimmer mode, then map sender to evm address
-        if (this._mode !== ShimmerMode) {
-            const smrAddressSet = new Set(resp.map(o=>o.message?.sender).filter(o=>!!o)) as Set<string>
-            const smrAddressList = Array.from(smrAddressSet)
-            const mapping = await addressMappingCache.batchGetEvmAddresses(smrAddressList)
-            for (const item of resp) {
-                // skip if no message
-                if (!item.message) continue
-                const evmAddress = mapping.get(item.message.sender)
-                if (evmAddress) {
-                    item.message.sender = evmAddress
-                }
-            }
-        }
-        // map sender to name
-        const senderAddressSet = new Set(resp.map(o=>o.message?.sender).filter(Boolean)) as Set<string>
-        const senderAddressList = Array.from(senderAddressSet)
-        const nameMappingRes = await nameMappingCache.batchGetRes(senderAddressList)
-        for(const item of resp) {
-            if (!item.message) continue
-            const nameMap = nameMappingRes.get(item.message.sender)
-            if (nameMap) {
-                item.message.name = nameMap.name
-            }
-        }
-        return resp
-    }
+    // TODO: Unused Actually
+    // _outputIdToMessagePipe?: ConcurrentPipe<{outputId:string,output?:IBasicOutput,token:string,address:string,type:number},{message?:IMessage,outputId:string,status:number}>;
+    // _makeOutputIdToMessagePipe(){
+    //     const processor = async (
+    //         {outputId,output,token,address,type}:{outputId:string,output?:IBasicOutput,address:string,type:number,token:string},
+    //         callback: (error?: Error | null) => void,
+    //         stream:ConcurrentPipe<{outputId:string,output?:IBasicOutput,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined>
+    //     )=>{
+    //         const res = await this.getMessageFromOutputId({outputId,output,address,type})
+    //         if (!res) {
+    //             stream.push({outputId,status:-1})
+    //             callback()
+    //             return
+    //         }
+    //         const message = res
+    //         ? {
+    //             type: ImInboxEventTypeNewMessage,
+    //             sender: res.sender,
+    //             message: res.message.data,
+    //             messageId: res.messageId,
+    //             timestamp: res.message.timestamp,
+    //             groupId: res.message.groupId,
+    //             token
+    //             }
+    //         : undefined;
+    //         if (this._mode === ShimmerMode) {
+    //             const res = {message,outputId}
+    //             stream.push(res)
+    //             callback()
+    //         } else {
+    //             const fn = (evmAddress:string)=>{
+    //                 message!.sender = evmAddress
+    //                 const res = {message,outputId}
+    //                 stream.push(res)
+    //                 callback()
+    //             }
+    //             AddressMappingStore.getMapping(message!.sender, fn,callback)
+    //         }
+    //     }
+    //     this._outputIdToMessagePipe = new ConcurrentPipe(processor, 12, 64, true)
+    // }
+    // getOutputIdToMessagePipe(){
+    //     // if not inited, init
+    //     if (!this._outputIdToMessagePipe) {
+    //         this._makeOutputIdToMessagePipe()
+    //     }
+    //     return this._outputIdToMessagePipe!
+    // }
+    // async outputIdstoMessages (
+    //     params:MessageResponseItemPlus[],
+    // ):Promise<{message?:IMessage,outputId:string}[]>
+    // {
+    //     const resp = [] as {message?:IMessage,outputId:string}[]
+    //     for (const item of params) {
+    //         const res = await this.getMessageFromOutputId(item)
+    //         const message = res
+    //                         ? {
+    //                             type: ImInboxEventTypeNewMessage,
+    //                             sender: res.sender,
+    //                             message: res.message.data,
+    //                             messageId: res.messageId,
+    //                             timestamp: res.message.timestamp,
+    //                             groupId: res.message.groupId,
+    //                             token: item.token,
+    //                             name: undefined
+    //                             } as IMessage
+    //                         : undefined;
+    //         resp.push({outputId:item.outputId, message})
+    //     }
+    //     // if not shimmer mode, then map sender to evm address
+    //     if (this._mode !== ShimmerMode) {
+    //         const smrAddressSet = new Set(resp.map(o=>o.message?.sender).filter(o=>!!o)) as Set<string>
+    //         const smrAddressList = Array.from(smrAddressSet)
+    //         const mapping = await addressMappingCache.batchGetEvmAddresses(smrAddressList)
+    //         for (const item of resp) {
+    //             // skip if no message
+    //             if (!item.message) continue
+    //             const evmAddress = mapping.get(item.message.sender)
+    //             if (evmAddress) {
+    //                 item.message.sender = evmAddress
+    //             }
+    //         }
+    //     }
+    //     // map sender to name
+    //     const senderAddressSet = new Set(resp.map(o=>o.message?.sender).filter(Boolean)) as Set<string>
+    //     const senderAddressList = Array.from(senderAddressSet)
+    //     const nameMappingRes = await nameMappingCache.batchGetRes(senderAddressList)
+    //     for(const item of resp) {
+    //         if (!item.message) continue
+    //         const nameMap = nameMappingRes.get(item.message.sender)
+    //         if (nameMap) {
+    //             item.message.name = nameMap.name
+    //         }
+    //     }
+    //     return resp
+    // }
 
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
         //TODO try inx plugin 

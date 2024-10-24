@@ -110,21 +110,22 @@ export class GroupFiService {
   disablePreparedRemainderHint() {
     return GroupFiSDKFacade.disablePreparedRemainderHint()
   }
+  // TODO: Unused Actually
   // processOneMessage
-  processOneMessage(message: MessageResponseItem & {output?:IBasicOutput}) {
-    return GroupFiSDKFacade.processOneMessage(message)
-  }
+  // processOneMessage(message: MessageResponseItem & {output?:IBasicOutput}) {
+  //   return GroupFiSDKFacade.processOneMessage(message)
+  // }
   // registerMessageCallback
-  registerMessageCallback(
-    callback: (args: {
-      message?: IMessage
-      outputId: string
-      status: number
-    }) => void
-  ) {
-    // @ts-ignore
-    return GroupFiSDKFacade.registerMessageCallback(callback)
-  }
+  // registerMessageCallback(
+  //   callback: (args: {
+  //     message?: IMessage
+  //     outputId: string
+  //     status: number
+  //   }) => void
+  // ) {
+  //   // @ts-ignore
+  //   return GroupFiSDKFacade.registerMessageCallback(callback)
+  // }
   _offListenningNewEventItem: (() => void) | undefined
   onNewEventItem(callback: (message: EventItemFromFacade) => void) {
     this._offListenningNewEventItem =
@@ -254,17 +255,18 @@ export class GroupFiService {
     }
   }
 
-  checkIsChainSupported(nodeId: number) {
-    return GroupFiSDKFacade.checkIsChainSupported(nodeId)
-  }
+  // TODO: Deleted
+  // checkIsChainSupported(nodeId: number) {
+  //   return GroupFiSDKFacade.checkIsChainSupported(nodeId)
+  // }
 
   async waitOutput(outputId: string) {
     await GroupFiSDKFacade.waitOutput(outputId)
   }
 
-  async outputIdstoMessages(params:MessageResponseItemPlus[]) {
-    return await GroupFiSDKFacade.outputIdstoMessages(params)
-  }
+  // async outputIdstoMessages(params:MessageResponseItemPlus[]) {
+  //   return await GroupFiSDKFacade.outputIdstoMessages(params)
+  // }
   async setupIotaMqttConnection(mqttClient: any) {
     return await GroupFiSDKFacade.setupIotaMqttConnection(mqttClient)
   }

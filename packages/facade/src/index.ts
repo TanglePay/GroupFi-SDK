@@ -81,9 +81,12 @@ import { IBasicOutput } from '@iota/iota.js';
 export { SimpleDataExtended };
 export * from './types';
 
+
 const TP_SHIMMER_MAINNET_ID = 102;
-const TP_EVM_CHAIN_ID = 5;
-const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
+
+// TODO: Deleted
+// const TP_EVM_CHAIN_ID = 5;
+// const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 
 const PAIRX_SIGN_PREFIX_TEXT = 'Creating account... '
 
@@ -103,31 +106,34 @@ class GroupFiSDKFacade {
 
   private _storage: StorageFacade | null = null
 
-  private _currentGroup:
-    | {
-        groupName: string;
-        groupId: string;
-      }
-    | undefined = undefined;
+  // TODO: Deleted
+  // private _currentGroup:
+  //   | {
+  //       groupName: string;
+  //       groupId: string;
+  //     }
+  //   | undefined = undefined;
 
-  get currentGroupName() {
-    return this._currentGroup?.groupName;
-  }
+  // get currentGroupName() {
+  //   return this._currentGroup?.groupName;
+  // }
 
-  get currentMode() {
-    if (this._mode === undefined) {
-      throw new Error('Mode is undefined.');
-    }
-    return this._mode;
-  }
+  // get currentGroupId() {
+  //   return this._currentGroup?.groupId;
+  // }
 
-  get currentGroupId() {
-    return this._currentGroup?.groupId;
-  }
+  // TODO: Deleted
+  // get currentMode() {
+  //   if (this._mode === undefined) {
+  //     throw new Error('Mode is undefined.');
+  //   }
+  //   return this._mode;
+  // }
 
-  checkIsChainSupported(nodeId: number) {
-    return SUPPORTED_CHAIN_ID_LIST.includes(nodeId);
-  }
+  // TODO: Deleted
+  // checkIsChainSupported(nodeId: number) {
+  //   return SUPPORTED_CHAIN_ID_LIST.includes(nodeId);
+  // }
 
   getObjectId(obj: Record<string, SimpleDataExtended>) {
     return objectId(obj);
@@ -444,38 +450,39 @@ class GroupFiSDKFacade {
     )) as InboxItemResponse;
   }
 
+  // TODO: Unused Actually
   // processOneMessage
-  processOneMessage(item: MessageResponseItem & {output?:IBasicOutput}): boolean {
-    const pipe = this._client!.getOutputIdToMessagePipe();
-    const res = pipe.write({
-      outputId: item.outputId,
-      output: item.output,
-      token: item.token,
-      address: this._address!,
-      type: 1,
-    });
-    return res;
-  }
+  // processOneMessage(item: MessageResponseItem & {output?:IBasicOutput}): boolean {
+  //   const pipe = this._client!.getOutputIdToMessagePipe();
+  //   const res = pipe.write({
+  //     outputId: item.outputId,
+  //     output: item.output,
+  //     token: item.token,
+  //     address: this._address!,
+  //     type: 1,
+  //   });
+  //   return res;
+  // }
   // registerMessageCallback
-  registerMessageCallback(
-    callback: (param: {
-      message?: IMessage;
-      outputId: string;
-      status: number;
-    }) => void
-  ) {
-    const listener = (param: {
-      message?: IMessage;
-      outputId: string;
-      status: number;
-    }) => {
-      if (param) {
-        callback(param);
-      }
-    };
-    const pipe = this._client!.getOutputIdToMessagePipe();
-    pipe.on('data', listener);
-  }
+  // registerMessageCallback(
+  //   callback: (param: {
+  //     message?: IMessage;
+  //     outputId: string;
+  //     status: number;
+  //   }) => void
+  // ) {
+  //   const listener = (param: {
+  //     message?: IMessage;
+  //     outputId: string;
+  //     status: number;
+  //   }) => {
+  //     if (param) {
+  //       callback(param);
+  //     }
+  //   };
+  //   const pipe = this._client!.getOutputIdToMessagePipe();
+  //   pipe.on('data', listener);
+  // }
 
   // fullfillOneMessageLite
   async fullfillOneMessageLite(item: MessageResponseItem): Promise<IMessage> {
@@ -1880,14 +1887,15 @@ class GroupFiSDKFacade {
     return true
   }
 
-  async outputIdstoMessages(
-    params:MessageResponseItemPlus[]) {
-      // set address
-      params.forEach((item) => {
-        item.address = this._address!
-      })
-    return await this._client!.outputIdstoMessages(params);
-  }
+  // TODO: Unused Actually
+  // async outputIdstoMessages(
+  //   params:MessageResponseItemPlus[]) {
+  //     // set address
+  //     params.forEach((item) => {
+  //       item.address = this._address!
+  //     })
+  //   return await this._client!.outputIdstoMessages(params);
+  // }
 
   
   _chainList?:ChainList = undefined
