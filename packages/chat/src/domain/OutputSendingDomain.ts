@@ -545,7 +545,7 @@ export class OutputSendingDomain implements ICycle, IRunnable {
             return false;
         }
 
-        if (!this._context.isWalletConnected) {
+        if (!this._context.isWalletConnected || !this._mode) {
             return true
         }
 
