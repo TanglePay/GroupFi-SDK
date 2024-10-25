@@ -682,6 +682,10 @@ class IotaCatSDK {
         if (chainId === 42 && !rawName.endsWith('.up')) {
           return rawName  + '.up'
         }
+        // Due to a bug on the chain, a capitalized name was introduced, so we specifically convert it here.
+        if (chainId === 148) {
+            return rawName.toLocaleLowerCase()
+        }
         return rawName
     }
     async _fetchProfilesByEvmAddresses(addresses: string[]): Promise<ProfileResponse[]> {
@@ -1068,9 +1072,9 @@ class IotaCatSDK {
         const url = `https://${process.env.AUXILIARY_SERVICE_DOMAIN}/group/filter/v2`
         const res = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            // headers: {
+            //     'Content-Type': 'application/json'
+            // },
             body: JSON.stringify(param)
         })
         // log res

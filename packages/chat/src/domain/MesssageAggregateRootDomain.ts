@@ -538,8 +538,8 @@ export class MessageAggregateRootDomain implements ICycle {
     offWalletAddressChanged(callback: () => void) {
         this._context.offWalletAddressChanged(callback)
     }
-    setWalletAddress(walletAddress: string) {
-        this._context.setWalletAddress(walletAddress, 'MessageAggregateRootDomain setWalletAddress', 'from pc')
+    setWalletAddress(walletAddress: string, why: string) {
+        this._context.setWalletAddress(walletAddress, 'MessageAggregateRootDomain setWalletAddress', why)
     }
     getIsPairXSet() {
         return this._context.isPairXSet

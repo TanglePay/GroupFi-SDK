@@ -1,10 +1,11 @@
 import { Singleton } from 'typescript-ioc'
 import { IBasicOutput, OutputTypes } from '@iota/iota.js'
-import GroupFiSDKFacade, {
+import {
   ModeDetail,
   SimpleDataExtended,
   TransactionRes
 } from 'groupfi-sdk-facade'
+import { GroupFiSDKFacadeInstance as GroupFiSDKFacade } from 'groupfi-sdk-facade'
 import {
   IMessage,
   EventItemFromFacade,
@@ -25,6 +26,7 @@ import {
   StorageAdaptor,
   Profile
 } from '../types'
+import { logAllMethods } from 'groupfi-sdk-utils'
 
 @Singleton
 export class GroupFiService {
@@ -45,6 +47,7 @@ export class GroupFiService {
       set: storage.set,
       remove: storage.remove
     }
+    
     GroupFiSDKFacade.setupStorage(storageFacade)
   }
   async browseModeSetupClient() {
@@ -318,7 +321,7 @@ export class GroupFiService {
     }
   }
   async getAddressStatusInGroup(groupId: string): Promise<{
-    isGroupPublic: boolean
+    // isGroupPublic: boolean
     muted: boolean
     isQualified: boolean
     marked: boolean
@@ -326,10 +329,10 @@ export class GroupFiService {
     const address = GroupFiSDKFacade.getCurrentAddress()
     const key = `${address}_${groupId}`
     const requestAllList = [
-      {
-        type: 'isGroupPublic',
-        func: () => GroupFiSDKFacade.isGroupPublic(groupId)
-      },
+      // {
+      //   type: 'isGroupPublic',
+      //   func: () => GroupFiSDKFacade.isGroupPublic(groupId)
+      // },
       {
         type: 'muted',
         func: () => GroupFiSDKFacade.isBlackListed(groupId)
