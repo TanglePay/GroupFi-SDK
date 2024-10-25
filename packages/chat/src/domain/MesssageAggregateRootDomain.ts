@@ -348,29 +348,29 @@ export class MessageAggregateRootDomain implements ICycle {
         }
     }
 
-    async getGroupfiServiceRecommendGroups({
-        includes,
-        excludes,
-    }: {
-        includes?: IIncludesAndExcludes[];
-        excludes?: IIncludesAndExcludes[];
-    }) {
-        const res = await this.groupFiService.getRecommendGroups({
-            includes,
-            excludes
-        });
+    // async getGroupfiServiceRecommendGroups({
+    //     includes,
+    //     excludes,
+    // }: {
+    //     includes?: IIncludesAndExcludes[];
+    //     excludes?: IIncludesAndExcludes[];
+    // }) {
+    //     const res = await this.groupFiService.getRecommendGroups({
+    //         includes,
+    //         excludes
+    //     });
 
-        const forMeGroupIds = res.map((group) => group.groupId).map(this.groupFiService.addHexPrefixIfAbsent.bind(this.groupFiService));
-        const cmd:IFetchPublicGroupMessageCommand = {
-            type: 'publicGroupOnBoot',
-            groupIds: forMeGroupIds
-        }
-        // log
-        console.log('onFetchPublicGroupMessageCommand',cmd)
-        this.groupMemberDomain.groupMemberDomainCmdChannel.push(cmd)
+    //     const forMeGroupIds = res.map((group) => group.groupId).map(this.groupFiService.addHexPrefixIfAbsent.bind(this.groupFiService));
+    //     const cmd:IFetchPublicGroupMessageCommand = {
+    //         type: 'publicGroupOnBoot',
+    //         groupIds: forMeGroupIds
+    //     }
+    //     // log
+    //     console.log('onFetchPublicGroupMessageCommand',cmd)
+    //     this.groupMemberDomain.groupMemberDomainCmdChannel.push(cmd)
 
-        return res
-    }
+    //     return res
+    // }
    
     // async handleGroupScrollToDirectionEnd({groupId, direction} : {groupId: string, direction: MessageFetchDirection}) {
     async handleConversationGroupScrollToDirectionEnd({groupId, direction} : {groupId: string, direction: MessageFetchDirection}) {

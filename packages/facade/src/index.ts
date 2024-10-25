@@ -485,34 +485,64 @@ class GroupFiSDKFacade {
   // }
 
   // fullfillOneMessageLite
-  async fullfillOneMessageLite(item: MessageResponseItem): Promise<IMessage> {
-    // call client getMessageFromOutputId({ outputId, address: addr, type: 1 })
-    const res = (await this._client!.getMessageFromOutputId({
-      outputId: item.outputId,
-      address: this._address!,
-      type: 1,
-    })) as
-      | {
-          type: typeof ImInboxEventTypeNewMessage;
-          sender: string;
-          message: IMMessage;
-          messageId: string;
-        }
-      | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    const message = res
-      ? {
-          type: ImInboxEventTypeNewMessage,
-          sender: res.sender,
-          token: item.token,
-          message: res.message.data,
-          messageId: res.messageId,
-          timestamp: res.message.timestamp,
-          groupId: res.message.groupId,
-        }
-      : undefined;
-    return message! as IMessage;
-  }
+  // async fullfillOneMessageLite(item: MessageResponseItem): Promise<IMessage> {
+  //   // call client getMessageFromOutputId({ outputId, address: addr, type: 1 })
+  //   const res = (await this._client!.getMessageFromOutputId({
+  //     outputId: item.outputId,
+  //     address: this._address!,
+  //     type: 1,
+  //   })) as
+  //     | {
+  //         type: typeof ImInboxEventTypeNewMessage;
+  //         sender: string;
+  //         message: IMMessage;
+  //         messageId: string;
+  //       }
+  //     | undefined;
+  //   this._lastTimeSdkRequestResultReceived = Date.now();
+  //   const message = res
+  //     ? {
+  //         type: ImInboxEventTypeNewMessage,
+  //         sender: res.sender,
+  //         token: item.token,
+  //         message: res.message.data,
+  //         messageId: res.messageId,
+  //         timestamp: res.message.timestamp,
+  //         groupId: res.message.groupId,
+  //       }
+  //     : undefined;
+  //   return message! as IMessage;
+  // }
+  // async fullfillMessageLiteList(
+  //   list: MessageResponseItem[]
+  // ): Promise<IMessage[]> {
+  //   const outputIds = list.map((o) => o.outputId);
+
+  //   // call client .getMessagesFromOutputIds({ outputIds, address: addr, type: 1 })
+  //   const res = (await this._client!.getMessagesFromOutputIds({
+  //     outputIds,
+  //     address: this._address!,
+  //     type: 1,
+  //   })) as
+  //     | {
+  //         type: typeof ImInboxEventTypeNewMessage;
+  //         sender: string;
+  //         message: IMMessage;
+  //         messageId: string;
+  //       }[]
+  //     | undefined;
+  //   this._lastTimeSdkRequestResultReceived = Date.now();
+  //   const messageList = (res ?? []).map((o) => ({
+  //     type: ImInboxEventTypeNewMessage,
+  //     sender: o.sender,
+  //     message: o.message.data,
+  //     messageId: o.messageId,
+  //     timestamp: o.message.timestamp,
+  //     groupId: o.message.groupId,
+  //   })) as IMessage[];
+  //   return messageList;
+  // }
+
   // prepareRemainderHint
   async prepareRemainderHint() {
     this._ensureWalletConnected();
@@ -546,98 +576,71 @@ class GroupFiSDKFacade {
     });
     return res;
   }
-  async fullfillMessageLiteList(
-    list: MessageResponseItem[]
-  ): Promise<IMessage[]> {
-    const outputIds = list.map((o) => o.outputId);
-
-    // call client .getMessagesFromOutputIds({ outputIds, address: addr, type: 1 })
-    const res = (await this._client!.getMessagesFromOutputIds({
-      outputIds,
-      address: this._address!,
-      type: 1,
-    })) as
-      | {
-          type: typeof ImInboxEventTypeNewMessage;
-          sender: string;
-          message: IMMessage;
-          messageId: string;
-        }[]
-      | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    const messageList = (res ?? []).map((o) => ({
-      type: ImInboxEventTypeNewMessage,
-      sender: o.sender,
-      message: o.message.data,
-      messageId: o.messageId,
-      timestamp: o.message.timestamp,
-      groupId: o.message.groupId,
-    })) as IMessage[];
-    return messageList;
-  }
+  
+  // TODO: Unused Actually
   // getInboxMessage
-  async getInboxItems(
-    continuationToken?: string,
-    limit = 3
-  ): Promise<{ itemList: EventItemFromFacade[]; nextToken?: string }> {
-    this._ensureWalletConnected();
+  // async getInboxItems(
+  //   continuationToken?: string,
+  //   limit = 3
+  // ): Promise<{ itemList: EventItemFromFacade[]; nextToken?: string }> {
+  //   this._ensureWalletConnected();
 
-    // call client fetchInboxItemList(addr, continuationToken, limit)
-    const resstr = (await this._client!.fetchInboxItemList(
-      this._address!,
-      continuationToken,
-      limit
-    )) as string | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    if (!resstr) {
-      return { itemList: [] };
-    }
-    console.log('***iota_im_groupinboxmessagelist success', resstr);
-    const res = JSON.parse(resstr) as {
-      itemList: (MessageBody | EventGroupMemberChanged)[];
-      token?: string;
-    };
-    console.log('***iota_im_groupinboxmessagelist success', res);
-    const itemList = res.itemList;
-    const token = res.token;
-    // log
-    console.log('itemList', itemList);
-    const fulfilledMessageList: EventItemFromFacade[] =
-      itemList != undefined
-        ? itemList.map((item) => {
-            if (item.type === ImInboxEventTypeNewMessage) {
-              const msg: IMessage = item;
-              return msg;
-            } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
-              const msg: EventGroupMemberChanged = item;
-              return msg;
-            } else {
-              throw new Error('unknown message type');
-            }
-          })
-        : [];
-    // log fulfilledMessageList
-    console.log('fulfilledMessageList', fulfilledMessageList);
+  //   // call client fetchInboxItemList(addr, continuationToken, limit)
+  //   const resstr = (await this._client!.fetchInboxItemList(
+  //     this._address!,
+  //     continuationToken,
+  //     limit
+  //   )) as string | undefined;
+  //   this._lastTimeSdkRequestResultReceived = Date.now();
+  //   if (!resstr) {
+  //     return { itemList: [] };
+  //   }
+  //   console.log('***iota_im_groupinboxmessagelist success', resstr);
+  //   const res = JSON.parse(resstr) as {
+  //     itemList: (MessageBody | EventGroupMemberChanged)[];
+  //     token?: string;
+  //   };
+  //   console.log('***iota_im_groupinboxmessagelist success', res);
+  //   const itemList = res.itemList;
+  //   const token = res.token;
+  //   // log
+  //   console.log('itemList', itemList);
+  //   const fulfilledMessageList: EventItemFromFacade[] =
+  //     itemList != undefined
+  //       ? itemList.map((item) => {
+  //           if (item.type === ImInboxEventTypeNewMessage) {
+  //             const msg: IMessage = item;
+  //             return msg;
+  //           } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
+  //             const msg: EventGroupMemberChanged = item;
+  //             return msg;
+  //           } else {
+  //             throw new Error('unknown message type');
+  //           }
+  //         })
+  //       : [];
+  //   // log fulfilledMessageList
+  //   console.log('fulfilledMessageList', fulfilledMessageList);
 
-    // log filteredMessage
-    // const filteredRes = await Promise.all(
-    //   fulfilledMessageList.map((item) => {
-    //     if (item.type === ImInboxEventTypeNewMessage) {
-    //       const msg = item as IMessage;
-    //       return this.filterMutedMessage(msg.groupId, msg.sender)
-    //     } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
-    //       const fn = async () => false;
-    //       return fn();
-    //     }
-    //   })
-    // );
-    // const filteredMessageList = fulfilledMessageList.filter(
-    //   (_, index) => !filteredRes[index]
-    // );
-    // console.log('filteredMessageList', filteredMessageList, filteredRes);
+  //   // log filteredMessage
+  //   // const filteredRes = await Promise.all(
+  //   //   fulfilledMessageList.map((item) => {
+  //   //     if (item.type === ImInboxEventTypeNewMessage) {
+  //   //       const msg = item as IMessage;
+  //   //       return this.filterMutedMessage(msg.groupId, msg.sender)
+  //   //     } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
+  //   //       const fn = async () => false;
+  //   //       return fn();
+  //   //     }
+  //   //   })
+  //   // );
+  //   // const filteredMessageList = fulfilledMessageList.filter(
+  //   //   (_, index) => !filteredRes[index]
+  //   // );
+  //   // console.log('filteredMessageList', filteredMessageList, filteredRes);
 
-    return { itemList: fulfilledMessageList, nextToken: token };
-  }
+  //   return { itemList: fulfilledMessageList, nextToken: token };
+  // }
 
   getTpNodeInfo(nodeId: number) {
     return config.find(({ tpNodeId }) => tpNodeId === nodeId);
@@ -722,20 +725,21 @@ class GroupFiSDKFacade {
     return await this._client!.hasUnclaimedNameNFT(this._proxyAddress!);
   }
 
+  // TODO: Unused Actually
   // get smr balance
-  async getSMRBalance() {
-    this._ensureWalletConnected();
+  // async getSMRBalance() {
+  //   this._ensureWalletConnected();
 
-    const res = await IotaSDK.request({
-      method: 'iota_getBalance',
-      params: {
-        addressList: [this._address!],
-        assetsList: ['smr'],
-      },
-    });
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    return res as { amount: number };
-  }
+  //   const res = await IotaSDK.request({
+  //     method: 'iota_getBalance',
+  //     params: {
+  //       addressList: [this._address!],
+  //       assetsList: ['smr'],
+  //     },
+  //   });
+  //   this._lastTimeSdkRequestResultReceived = Date.now();
+  //   return res as { amount: number };
+  // }
 
   async enteringGroupByGroupId(groupId: string) {}
   async sendMessage(
@@ -827,91 +831,92 @@ class GroupFiSDKFacade {
     return false;
   }
 
-  async getRecommendGroups({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    this._ensureWalletConnected();
-    const isEvm = this._isEvm();
-    const res = (await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
-      address: this._address!,
-      includes,
-      excludes,
-      ifSaveGroupConfigMap: false,
-    })) as MessageGroupMeta[];
-    let groups = res;
-    if (isEvm) {
-      groups = groups.filter(({ chainId }) => chainId != 0);
-    } else {
-      // Actually, there is no need to write the logic.
-      // To fix test bug
-      groups = groups.filter(({ chainId }) => chainId == 0);
-    }
-    const recommendGroups = groups
-      .map((meta) => ({
-        groupName: meta.groupName,
-        groupId: IotaCatSDKObj._groupMetaToGroupId(meta),
-        qualifyType: meta.qualifyType,
-      }))
-      .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
+  // async getRecommendGroups({
+  //   includes,
+  //   excludes,
+  // }: {
+  //   includes?: IIncludesAndExcludes[];
+  //   excludes?: IIncludesAndExcludes[];
+  // }) {
+  //   this._ensureWalletConnected();
+  //   const isEvm = this._isEvm();
+  //   const res = (await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
+  //     address: this._address!,
+  //     includes,
+  //     excludes,
+  //     ifSaveGroupConfigMap: false,
+  //   })) as MessageGroupMeta[];
+  //   let groups = res;
+  //   if (isEvm) {
+  //     groups = groups.filter(({ chainId }) => chainId != 0);
+  //   } else {
+  //     // Actually, there is no need to write the logic.
+  //     // To fix test bug
+  //     groups = groups.filter(({ chainId }) => chainId == 0);
+  //   }
+  //   const recommendGroups = groups
+  //     .map((meta) => ({
+  //       groupName: meta.groupName,
+  //       groupId: IotaCatSDKObj._groupMetaToGroupId(meta),
+  //       qualifyType: meta.qualifyType,
+  //     }))
+  //     .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
 
-    if (!this._isEvm) {
-      return recommendGroups;
-    }
+  //   if (!this._isEvm) {
+  //     return recommendGroups;
+  //   }
 
-    const evmQualifiedGroups = [];
-    for (const group of recommendGroups) {
-      const isOk = await this.filterEvmGroups(group.groupId);
-      if (isOk) {
-        evmQualifiedGroups.push(group);
-      }
-    }
+  //   const evmQualifiedGroups = [];
+  //   for (const group of recommendGroups) {
+  //     const isOk = await this.filterEvmGroups(group.groupId);
+  //     if (isOk) {
+  //       evmQualifiedGroups.push(group);
+  //     }
+  //   }
 
-    return evmQualifiedGroups;
-  }
+  //   return evmQualifiedGroups;
+  // }
 
-  async initialAddressQualifiedGroupConfigs({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    this._ensureWalletConnected();
+  // async initialAddressQualifiedGroupConfigs({
+  //   includes,
+  //   excludes,
+  // }: {
+  //   includes?: IIncludesAndExcludes[];
+  //   excludes?: IIncludesAndExcludes[];
+  // }) {
+  //   this._ensureWalletConnected();
 
-    const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
-      address: this._address!,
-      includes,
-      excludes,
-      ifSaveGroupConfigMap: true,
-    });
-    console.log('initial Address Qualified Group Configs success');
-    return res
-      .map((meta) => ({
-        groupName: meta.groupName,
-        groupId: IotaCatSDKObj._groupMetaToGroupId(meta),
-        qualifyType: meta.qualifyType,
-      }))
-      .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
-  }
+  //   const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
+  //     address: this._address!,
+  //     includes,
+  //     excludes,
+  //     ifSaveGroupConfigMap: true,
+  //   });
+  //   console.log('initial Address Qualified Group Configs success');
+  //   return res
+  //     .map((meta) => ({
+  //       groupName: meta.groupName,
+  //       groupId: IotaCatSDKObj._groupMetaToGroupId(meta),
+  //       qualifyType: meta.qualifyType,
+  //     }))
+  //     .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
+  // }
 
   // fetchPublicGroupConfigs
-  async fetchPublicGroupConfigs({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    const res = await IotaCatSDKObj.fetchPublicGroupConfigs({
-      includes,
-      excludes,
-    });
-    return res;
-  }
+  // async fetchPublicGroupConfigs({
+  //   includes,
+  //   excludes,
+  // }: {
+  //   includes?: IIncludesAndExcludes[];
+  //   excludes?: IIncludesAndExcludes[];
+  // }) {
+  //   const res = await IotaCatSDKObj.fetchPublicGroupConfigs({
+  //     includes,
+  //     excludes,
+  //   });
+  //   return res;
+  // }
+
   // batchFetchGroupIsPublic
   async batchFetchGroupIsPublic(groupIds: string[]): Promise<{ [key: string]: boolean }> {
     const res = await IotaCatSDKObj.batchFetchGroupIsPublic(groupIds);
@@ -980,7 +985,7 @@ class GroupFiSDKFacade {
     //   // }
     // }
 
-    return evmGroupConfigsWithIsMember
+    // return evmGroupConfigsWithIsMember
     // return evmQualifiedConfigs;
   }
   // fetchAddressMarkedGroupConfigs
@@ -1336,48 +1341,49 @@ class GroupFiSDKFacade {
     return { mode: this._mode, address: this._address };
   }
 
-  async connectMetaMaskWallet(): Promise<{ address: string; mode: Mode }> {
-    return new Promise((resolve, reject) => {
-      if (typeof window.ethereum === undefined) {
-        reject({
-          name: 'MetaMaskUnintalled',
-        });
-      }
-      const connect = async () => {
-        try {
-          const accounts = (await window.ethereum
-            .request({ method: 'eth_requestAccounts' })
-            .catch(() => {
-              reject({
-                name: 'MetaMaskConnectFailed',
-              });
-            })) as string[];
-          console.log('trollbox connect metamask wallet accounts', accounts);
-          const rawAccount = accounts[0];
+  // TODO: Deleted
+  // async connectMetaMaskWallet(): Promise<{ address: string; mode: Mode }> {
+  //   return new Promise((resolve, reject) => {
+  //     if (typeof window.ethereum === undefined) {
+  //       reject({
+  //         name: 'MetaMaskUnintalled',
+  //       });
+  //     }
+  //     const connect = async () => {
+  //       try {
+  //         const accounts = (await window.ethereum
+  //           .request({ method: 'eth_requestAccounts' })
+  //           .catch(() => {
+  //             reject({
+  //               name: 'MetaMaskConnectFailed',
+  //             });
+  //           })) as string[];
+  //         console.log('trollbox connect metamask wallet accounts', accounts);
+  //         const rawAccount = accounts[0];
 
-          if (!rawAccount) {
-            throw new Error();
-          }
+  //         if (!rawAccount) {
+  //           throw new Error();
+  //         }
 
-          // Uniformly convert EVM addresses to lowercase
-          const account = rawAccount.toLowerCase();
+  //         // Uniformly convert EVM addresses to lowercase
+  //         const account = rawAccount.toLowerCase();
 
-          this._mode = DelegationMode;
-          this._address = account;
-          this._nodeId = undefined;
-          resolve({
-            mode: this._mode,
-            address: this._address,
-          });
-        } catch (err) {
-          reject({
-            name: 'MetaMaskConnectFailed',
-          });
-        }
-      };
-      connect();
-    });
-  }
+  //         this._mode = DelegationMode;
+  //         this._address = account;
+  //         this._nodeId = undefined;
+  //         resolve({
+  //           mode: this._mode,
+  //           address: this._address,
+  //         });
+  //       } catch (err) {
+  //         reject({
+  //           name: 'MetaMaskConnectFailed',
+  //         });
+  //       }
+  //     };
+  //     connect();
+  //   });
+  // }
 
   async waitWalletReadyAndConnectTanglePayWallet(): Promise<{
     address: string;

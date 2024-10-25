@@ -94,9 +94,9 @@ export interface ISendMessageCommand extends IOutputCommandBase<4> {
     message: string;
 }
 // fullfillOneMessageLite
-export interface IFullfillOneMessageLiteCommand extends IOutputCommandBase<5> {
-    message: MessageResponseItem
-}
+// export interface IFullfillOneMessageLiteCommand extends IOutputCommandBase<5> {
+//     message: MessageResponseItem
+// }
 // leave a group
 export interface ILeaveGroupCommand extends IOutputCommandBase<6> {
     groupId: string,

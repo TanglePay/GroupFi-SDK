@@ -62,16 +62,16 @@ export class GroupFiService {
   getObjectId(obj: Record<string, SimpleDataExtended>) {
     return GroupFiSDKFacade.getObjectId(obj)
   }
-  async getInboxItems(continuationToken?: string): Promise<{
-    itemList: EventItemFromFacade[]
-    nextToken?: string | undefined
-  }> {
-    const res = await GroupFiSDKFacade.getInboxItems(continuationToken, 10)
+  // async getInboxItems(continuationToken?: string): Promise<{
+  //   itemList: EventItemFromFacade[]
+  //   nextToken?: string | undefined
+  // }> {
+  //   const res = await GroupFiSDKFacade.getInboxItems(continuationToken, 10)
 
-    // log
-    console.log('getInboxMessages', res)
-    return res
-  }
+  //   // log
+  //   console.log('getInboxMessages', res)
+  //   return res
+  // }
   async fetchInboxItemsLite(
     continuationToken?: string,
     limit = 1000
@@ -91,17 +91,17 @@ export class GroupFiService {
   }
   // async fullfillMessageLiteList(list:MessageResponseItem[]):Promise<IMessage[]> {
   // proxy call to GroupFiSDKFacade fullfillMessageLiteList
-  async fullfillMessageLiteList(
-    list: MessageResponseItem[]
-  ): Promise<IMessage[]> {
-    return await GroupFiSDKFacade.fullfillMessageLiteList(list)
-  }
+  // async fullfillMessageLiteList(
+  //   list: MessageResponseItem[]
+  // ): Promise<IMessage[]> {
+  //   return await GroupFiSDKFacade.fullfillMessageLiteList(list)
+  // }
   // proxy call to GroupFiSDKFacade fullfillOneMessageLite
-  async fullfillOneMessageLite(
-    message: MessageResponseItem
-  ): Promise<IMessage> {
-    return await GroupFiSDKFacade.fullfillOneMessageLite(message)
-  }
+  // async fullfillOneMessageLite(
+  //   message: MessageResponseItem
+  // ): Promise<IMessage> {
+  //   return await GroupFiSDKFacade.fullfillOneMessageLite(message)
+  // }
   // call enablePreparedRemainderHint
   enablePreparedRemainderHint() {
     return GroupFiSDKFacade.enablePreparedRemainderHint()
@@ -443,9 +443,9 @@ export class GroupFiService {
   async sendAnyOneToSelf() {
     await GroupFiSDKFacade.sendAnyOneToSelf()
   }
-  async getSMRBalance(): Promise<{ amount: number }> {
-    return await GroupFiSDKFacade.getSMRBalance()
-  }
+  // async getSMRBalance(): Promise<{ amount: number }> {
+  //   return await GroupFiSDKFacade.getSMRBalance()
+  // }
   // fetchAddressBalance
   async fetchAddressBalance(): Promise<number> {
     return await GroupFiSDKFacade.fetchAddressBalance()
@@ -512,22 +512,22 @@ export class GroupFiService {
     await GroupFiSDKFacade.onMetaMaskAccountChanged(account)
   }
 
-  async getRecommendGroups({
-    includes,
-    excludes
-  }: {
-    includes?: IIncludesAndExcludes[]
-    excludes?: IIncludesAndExcludes[]
-  }) {
-    return await GroupFiSDKFacade.getRecommendGroups({
-      includes,
-      excludes
-    })
-  }
+  // async getRecommendGroups({
+  //   includes,
+  //   excludes
+  // }: {
+  //   includes?: IIncludesAndExcludes[]
+  //   excludes?: IIncludesAndExcludes[]
+  // }) {
+  //   return await GroupFiSDKFacade.getRecommendGroups({
+  //     includes,
+  //     excludes
+  //   })
+  // }
 
-  async initialAddressQualifiedGroupConfigs() {
-    await GroupFiSDKFacade.initialAddressQualifiedGroupConfigs({})
-  }
+  // async initialAddressQualifiedGroupConfigs() {
+  //   await GroupFiSDKFacade.initialAddressQualifiedGroupConfigs({})
+  // }
 
   async getMyGroups() {
     return await GroupFiSDKFacade.getAddressMarkedGroupsWithGroupName()
@@ -605,18 +605,18 @@ export class GroupFiService {
   }
 
   // fetchPublicGroupConfigs
-  async fetchPublicGroupConfigs({
-    includes,
-    excludes
-  }: {
-    includes?: IIncludesAndExcludes[]
-    excludes?: IIncludesAndExcludes[]
-  }) {
-    return await GroupFiSDKFacade.fetchPublicGroupConfigs({
-      includes,
-      excludes
-    })
-  }
+  // async fetchPublicGroupConfigs({
+  //   includes,
+  //   excludes
+  // }: {
+  //   includes?: IIncludesAndExcludes[]
+  //   excludes?: IIncludesAndExcludes[]
+  // }) {
+  //   return await GroupFiSDKFacade.fetchPublicGroupConfigs({
+  //     includes,
+  //     excludes
+  //   })
+  // }
 
   // fetchForMeGroupConfigs
   async fetchForMeGroupConfigs({
