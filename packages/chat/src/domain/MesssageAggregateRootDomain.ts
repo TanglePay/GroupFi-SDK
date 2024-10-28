@@ -9,9 +9,9 @@ import { ProxyModeDomain } from "./ProxyModeDomain";
 import { ICycle, IFetchPublicGroupMessageCommand, StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
-import { EventGroupMemberChanged, IMMessage, IMessage, IotaCatSDKObj } from "groupfi-sdk-core";
+import { EventGroupMemberChanged, IMessage } from "groupfi-sdk-core";
 import { EventItemFromFacade } from "groupfi-sdk-core";
-import { EventGroupMemberChangedKey, EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey } from "./GroupMemberDomain";
+import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey } from "./GroupMemberDomain";
 import { AquiringPublicKeyEventKey, DelegationModeNameNftChangedEventKey, NotEnoughCashTokenEventKey, OutputSendingDomain, PairXChangedEventKey, PublicKeyChangedEventKey, VoteOrUnVoteGroupLiteEventKey } from "./OutputSendingDomain";
 
 import { Mode, IIncludesAndExcludes, Profile } from '../types'

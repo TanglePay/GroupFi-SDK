@@ -7,7 +7,6 @@ import {
   IProxyModeRequest,
 } from 'groupfi-sdk-client';
 import { Ed25519 } from '@iota/crypto.js';
-import { IotaCatSDKObj, IOTACATTAG } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 import {
   strToBytes,

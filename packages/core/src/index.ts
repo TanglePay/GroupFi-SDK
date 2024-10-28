@@ -30,7 +30,7 @@ export type ProfileResponse = {
     outputId: string;
 };
 const GroupIdIncludedFields:MessageGroupMetaKey[] = ['chainId','qualifyType','contractAddress','tokenThres']
-class IotaCatSDK {
+class GroupFiSDK {
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
     
     _groupIdCache:Record<string,string[]> = {}
@@ -864,12 +864,12 @@ class IotaCatSDK {
     }
     _compileRecipient(recipient:IMRecipient):IMRecipientIntermediate{
         return {
-            addr: addressHash(recipient.addr,IOTACATTAG),
+            addr: addressHash(recipient.addr,GROUPFITAG),
             mkey: hexToBytes(recipient.mkey),
         }
     }
     getAddressHashStr(addr:string):string{
-        return bytesToHex(addressHash(addr,IOTACATTAG))
+        return bytesToHex(addressHash(addr,GROUPFITAG))
     }
     _compileMessage(message:IMMessage):IMMessageIntermediate{
         const {schemaVersion,groupId,messageType,authScheme, timestamp, data} = message
@@ -1146,7 +1146,7 @@ class IotaCatSDK {
     }
     _prepareEvmFilterPayload(addresses:string[], groupId:string) {
         try {
-            const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
+            const groupConfig = this._groupIdToGroupMeta(groupId) as MessageGroupMeta
             const actualAddresses = this._getActualAddresses(addresses, groupConfig.chainId)
             let filterParam = {
                 addresses: actualAddresses,
@@ -1273,10 +1273,10 @@ class IotaCatSDK {
     }
 }
 
-const instance = new IotaCatSDK
+const instance = new GroupFiSDK
 
-export const IOTACATTAG = 'GROUPFIV4'
-export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
+export const GROUPFITAG = 'GROUPFIV4'
+export const GROUPFISHAREDTAG = 'GROUPFISHAREDV2'
 export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
@@ -1294,6 +1294,6 @@ export const GROUPFIReservedTags = [
     GROUPFIPROFILETAG,
     'PARTICIPANTION',
 ]
-export const IotaCatSDKObj = instance
+export const GroupFiSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

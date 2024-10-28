@@ -1,4 +1,4 @@
-import { IotaCatSDKObj } from "groupfi-sdk-core";
+import { GroupFiSDKObj } from "groupfi-sdk-core";
 
 class AddressMappingCache {
     private _mappingCache: Map<string, string> = new Map<string, string>();
@@ -9,7 +9,7 @@ class AddressMappingCache {
 
     private async _fetchAddressesFromApi(addresses: string[]): Promise<Map<string, string>> {
         console.log(`fetching addresses: ${addresses}`);
-        const mapping = await IotaCatSDKObj.batchSmrAddressToEvmAddress(addresses);
+        const mapping = await GroupFiSDKObj.batchSmrAddressToEvmAddress(addresses);
         const result = new Map<string, string>();
         for (const [address, evmAddress] of Object.entries(mapping)) {
             result.set(address, evmAddress);

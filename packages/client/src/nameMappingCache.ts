@@ -1,4 +1,4 @@
-import { IotaCatSDKObj } from 'groupfi-sdk-core';
+import { GroupFiSDKObj } from 'groupfi-sdk-core';
 
 class MappingCache<T> {
   private _mappingCache: Map<string, T> = new Map<string, T>();
@@ -152,7 +152,7 @@ class MappingCache<T> {
 }
 
 const nameMappingCache = new MappingCache<{ name: string, avatar?: string }>(
-  IotaCatSDKObj.batchFetchAddressProfile.bind(IotaCatSDKObj)
+  GroupFiSDKObj.batchFetchAddressProfile.bind(GroupFiSDKObj)
 );
 
 export default nameMappingCache;

@@ -1,4 +1,4 @@
-import { IotaCatSDKObj, ProfileResponse } from "groupfi-sdk-core";
+import { GroupFiSDKObj, ProfileResponse } from "groupfi-sdk-core";
 
 class ProfileCache {
     private _profileCache: Map<string, ProfileResponse> = new Map<string, ProfileResponse>();
@@ -9,7 +9,7 @@ class ProfileCache {
 
     private async _fetchProfilesFromApi(addresses: string[]): Promise<Map<string, ProfileResponse>> {
         console.log(`Fetching profiles for addresses: ${addresses}`);
-        const profiles = await IotaCatSDKObj._fetchProfilesByEvmAddresses(addresses);
+        const profiles = await GroupFiSDKObj._fetchProfilesByEvmAddresses(addresses);
         const result = new Map<string, ProfileResponse>();
 
         for (const profile of profiles) {
