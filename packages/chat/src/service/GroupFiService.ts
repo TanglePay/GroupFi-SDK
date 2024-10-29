@@ -1,7 +1,6 @@
 import { Singleton } from 'typescript-ioc'
 import { IBasicOutput, OutputTypes } from '@iota/iota.js'
 import {
-  ModeDetail,
   SimpleDataExtended,
   TransactionRes
 } from 'groupfi-sdk-facade'
@@ -109,21 +108,6 @@ export class GroupFiService {
   // call disablePreparedRemainderHint
   disablePreparedRemainderHint() {
     return GroupFiSDKFacade.disablePreparedRemainderHint()
-  }
-  // processOneMessage
-  processOneMessage(message: MessageResponseItem & {output?:IBasicOutput}) {
-    return GroupFiSDKFacade.processOneMessage(message)
-  }
-  // registerMessageCallback
-  registerMessageCallback(
-    callback: (args: {
-      message?: IMessage
-      outputId: string
-      status: number
-    }) => void
-  ) {
-    // @ts-ignore
-    return GroupFiSDKFacade.registerMessageCallback(callback)
   }
   _offListenningNewEventItem: (() => void) | undefined
   onNewEventItem(callback: (message: EventItemFromFacade) => void) {
@@ -254,16 +238,8 @@ export class GroupFiService {
     }
   }
 
-  checkIsChainSupported(nodeId: number) {
-    return GroupFiSDKFacade.checkIsChainSupported(nodeId)
-  }
-
   async waitOutput(outputId: string) {
     await GroupFiSDKFacade.waitOutput(outputId)
-  }
-
-  async outputIdstoMessages(params:MessageResponseItemPlus[]) {
-    return await GroupFiSDKFacade.outputIdstoMessages(params)
   }
   async setupIotaMqttConnection(mqttClient: any) {
     return await GroupFiSDKFacade.setupIotaMqttConnection(mqttClient)
