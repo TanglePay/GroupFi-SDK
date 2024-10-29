@@ -301,25 +301,6 @@ class GroupFiSDKFacade {
     });
   }
 
-  // listenningMetaMaskAccountsChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
-  //   const listenner = async () => {
-  //     const {mode, address} = await this.connectMetaMaskWallet()
-  //     console.log('trollbox metamask account changed', mode, address)
-  //     const res = {
-  //       mode,
-  //       address,
-  //       nodeId: undefined,
-  //       isAddressChanged: true,
-  //     }
-  //     await this._onAccountChanged(res);
-  //     callback(res)
-  //   }
-
-  //   window.ethereum.on("accountsChanged", listenner);
-
-  //   return () => window.ethereum.removeListener("accountsChanged", listenner)
-  // }
-
   listenningTPAccountChanged(
     callback: (params: {
       address: string;
@@ -373,26 +354,6 @@ class GroupFiSDKFacade {
 
       await this._onAccountChanged(res);
       callback(res);
-      // this._nodeId = nodeId
-      // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
-      // const newMode= this.getTPMode(nodeId);
-      // if (this._address === address && this._mode === newMode) {
-      //   return;
-      // }
-      // this._address = address;
-      // this._mode = newMode;
-      // console.log('accountsChanged', { address, nodeId, mode: this._mode });
-      // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
-      // await IotaSDK.request({
-      //   method: 'iota_connect',
-      //   params: {
-      //     // expires: 3000000
-      //   },
-      // });
-      // console.log(
-      //   'accountsChanged and connect wallet using new address successfully',
-      //   address
-      // );
     };
     IotaSDK.on('accountsChanged', listener);
     return () => IotaSDK.removeListener('accountsChanged', listener);
@@ -422,36 +383,6 @@ class GroupFiSDKFacade {
       continuationToken,
       limit
     )) as InboxItemResponse;
-  }
-
-  // fullfillOneMessageLite
-  async fullfillOneMessageLite(item: MessageResponseItem): Promise<IMessage> {
-    // call client getMessageFromOutputId({ outputId, address: addr, type: 1 })
-    const res = (await this._client!.getMessageFromOutputId({
-      outputId: item.outputId,
-      address: this._address!,
-      type: 1,
-    })) as
-      | {
-          type: typeof ImInboxEventTypeNewMessage;
-          sender: string;
-          message: IMMessage;
-          messageId: string;
-        }
-      | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    const message = res
-      ? {
-          type: ImInboxEventTypeNewMessage,
-          sender: res.sender,
-          token: item.token,
-          message: res.message.data,
-          messageId: res.messageId,
-          timestamp: res.message.timestamp,
-          groupId: res.message.groupId,
-        }
-      : undefined;
-    return message! as IMessage;
   }
   // prepareRemainderHint
   async prepareRemainderHint() {
@@ -486,99 +417,7 @@ class GroupFiSDKFacade {
     });
     return res;
   }
-  async fullfillMessageLiteList(
-    list: MessageResponseItem[]
-  ): Promise<IMessage[]> {
-    const outputIds = list.map((o) => o.outputId);
-
-    // call client .getMessagesFromOutputIds({ outputIds, address: addr, type: 1 })
-    const res = (await this._client!.getMessagesFromOutputIds({
-      outputIds,
-      address: this._address!,
-      type: 1,
-    })) as
-      | {
-          type: typeof ImInboxEventTypeNewMessage;
-          sender: string;
-          message: IMMessage;
-          messageId: string;
-        }[]
-      | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    const messageList = (res ?? []).map((o) => ({
-      type: ImInboxEventTypeNewMessage,
-      sender: o.sender,
-      message: o.message.data,
-      messageId: o.messageId,
-      timestamp: o.message.timestamp,
-      groupId: o.message.groupId,
-    })) as IMessage[];
-    return messageList;
-  }
-  // getInboxMessage
-  async getInboxItems(
-    continuationToken?: string,
-    limit = 3
-  ): Promise<{ itemList: EventItemFromFacade[]; nextToken?: string }> {
-    this._ensureWalletConnected();
-
-    // call client fetchInboxItemList(addr, continuationToken, limit)
-    const resstr = (await this._client!.fetchInboxItemList(
-      this._address!,
-      continuationToken,
-      limit
-    )) as string | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    if (!resstr) {
-      return { itemList: [] };
-    }
-    console.log('***iota_im_groupinboxmessagelist success', resstr);
-    const res = JSON.parse(resstr) as {
-      itemList: (MessageBody | EventGroupMemberChanged)[];
-      token?: string;
-    };
-    console.log('***iota_im_groupinboxmessagelist success', res);
-    const itemList = res.itemList;
-    const token = res.token;
-    // log
-    console.log('itemList', itemList);
-    const fulfilledMessageList: EventItemFromFacade[] =
-      itemList != undefined
-        ? itemList.map((item) => {
-            if (item.type === ImInboxEventTypeNewMessage) {
-              const msg: IMessage = item;
-              return msg;
-            } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
-              const msg: EventGroupMemberChanged = item;
-              return msg;
-            } else {
-              throw new Error('unknown message type');
-            }
-          })
-        : [];
-    // log fulfilledMessageList
-    console.log('fulfilledMessageList', fulfilledMessageList);
-
-    // log filteredMessage
-    // const filteredRes = await Promise.all(
-    //   fulfilledMessageList.map((item) => {
-    //     if (item.type === ImInboxEventTypeNewMessage) {
-    //       const msg = item as IMessage;
-    //       return this.filterMutedMessage(msg.groupId, msg.sender)
-    //     } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
-    //       const fn = async () => false;
-    //       return fn();
-    //     }
-    //   })
-    // );
-    // const filteredMessageList = fulfilledMessageList.filter(
-    //   (_, index) => !filteredRes[index]
-    // );
-    // console.log('filteredMessageList', filteredMessageList, filteredRes);
-
-    return { itemList: fulfilledMessageList, nextToken: token };
-  }
-
+  
   getTpNodeInfo(nodeId: number) {
     return config.find(({ tpNodeId }) => tpNodeId === nodeId);
   }

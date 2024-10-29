@@ -93,10 +93,6 @@ export interface ISendMessageCommand extends IOutputCommandBase<4> {
     groupId: string;
     message: string;
 }
-// fullfillOneMessageLite
-export interface IFullfillOneMessageLiteCommand extends IOutputCommandBase<5> {
-    message: MessageResponseItem
-}
 // leave a group
 export interface ILeaveGroupCommand extends IOutputCommandBase<6> {
     groupId: string,
