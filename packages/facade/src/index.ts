@@ -501,21 +501,6 @@ class GroupFiSDKFacade {
     return await this._client!.hasUnclaimedNameNFT(this._proxyAddress!);
   }
 
-  // get smr balance
-  async getSMRBalance() {
-    this._ensureWalletConnected();
-
-    const res = await IotaSDK.request({
-      method: 'iota_getBalance',
-      params: {
-        addressList: [this._address!],
-        assetsList: ['smr'],
-      },
-    });
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    return res as { amount: number };
-  }
-
   async enteringGroupByGroupId(groupId: string) {}
   async sendMessage(
     groupId: string,
