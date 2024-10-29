@@ -83,7 +83,6 @@ export * from './types';
 
 const TP_SHIMMER_MAINNET_ID = 102;
 const TP_EVM_CHAIN_ID = 5;
-const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 
 const PAIRX_SIGN_PREFIX_TEXT = 'Creating account... '
 
@@ -103,30 +102,11 @@ class GroupFiSDKFacade {
 
   private _storage: StorageFacade | null = null
 
-  private _currentGroup:
-    | {
-        groupName: string;
-        groupId: string;
-      }
-    | undefined = undefined;
-
-  get currentGroupName() {
-    return this._currentGroup?.groupName;
-  }
-
   get currentMode() {
     if (this._mode === undefined) {
       throw new Error('Mode is undefined.');
     }
     return this._mode;
-  }
-
-  get currentGroupId() {
-    return this._currentGroup?.groupId;
-  }
-
-  checkIsChainSupported(nodeId: number) {
-    return SUPPORTED_CHAIN_ID_LIST.includes(nodeId);
   }
 
   getObjectId(obj: Record<string, SimpleDataExtended>) {
@@ -442,39 +422,6 @@ class GroupFiSDKFacade {
       continuationToken,
       limit
     )) as InboxItemResponse;
-  }
-
-  // processOneMessage
-  processOneMessage(item: MessageResponseItem & {output?:IBasicOutput}): boolean {
-    const pipe = this._client!.getOutputIdToMessagePipe();
-    const res = pipe.write({
-      outputId: item.outputId,
-      output: item.output,
-      token: item.token,
-      address: this._address!,
-      type: 1,
-    });
-    return res;
-  }
-  // registerMessageCallback
-  registerMessageCallback(
-    callback: (param: {
-      message?: IMessage;
-      outputId: string;
-      status: number;
-    }) => void
-  ) {
-    const listener = (param: {
-      message?: IMessage;
-      outputId: string;
-      status: number;
-    }) => {
-      if (param) {
-        callback(param);
-      }
-    };
-    const pipe = this._client!.getOutputIdToMessagePipe();
-    pipe.on('data', listener);
   }
 
   // fullfillOneMessageLite
@@ -1879,17 +1826,6 @@ class GroupFiSDKFacade {
     }
     return true
   }
-
-  async outputIdstoMessages(
-    params:MessageResponseItemPlus[]) {
-      // set address
-      params.forEach((item) => {
-        item.address = this._address!
-      })
-    return await this._client!.outputIdstoMessages(params);
-  }
-
-  
   _chainList?:ChainList = undefined
   async fetchChainList() {
     if (this._chainList === undefined) {
