@@ -1,6 +1,6 @@
 import { Inject, Singleton } from "typescript-ioc";
 import { CombinedStorageService } from "../service/CombinedStorageService";
-import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageCommand, IRunnable, IIncludesAndExcludes } from "../types";
+import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageCommand, IRunnable, IIncludesAndExcludes, IAddListenGroups } from "../types";
 import { ThreadHandler } from "../util/thread";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
@@ -32,6 +32,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     private _inChannel: Channel<PushedEvent|EventGroupUpdateMinMaxToken>;
     private _groupMemberDomainCmdChannel: Channel<IClearCommandBase<any>> = new Channel<IClearCommandBase<any>>();
     private _forMeGroupConfigs: undefined | GroupConfigPlus[] = undefined
+    private _addedGroupConfigs: undefined | GroupConfigPlus[] = undefined
 
     @Inject
     private _context:SharedContext;
@@ -198,8 +199,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
 
     _getAllGroupIds() {
-        // merge for me group ids and marked group ids
-        return [...this._getForMeGroupIds(),...this._getMarkedGroupIds()];
+        // merge for me group ids and marked group ids, and added group ids
+        const groupIds = [...this._getForMeGroupIds(),...this._getMarkedGroupIds(), ...this._addedGroupIds()];
+        const uniqueGroupIds = [...new Set(groupIds)]
+        return uniqueGroupIds
     }
 
     _getForMeGroupIds() {
@@ -217,6 +220,9 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         } else {
             return [];
         }
+    }
+    _addedGroupIds() {
+        return (this._addedGroupConfigs ?? []).map(({groupId}) => groupId)
     }
     async tryRefreshMarkedGroupConfigs() {
         if (!this._isCanRefreshMarkedGroupConfigs()) {
@@ -318,6 +324,9 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         // clear marked group configs
         this._markedGroupConfigs = []
 
+        // clear added group configs
+        this._addedGroupConfigs = undefined
+
         if (this._markedGroupIds) {
             this._markedGroupIds.clear();
         }
@@ -359,6 +368,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
 
         this._forMeGroupConfigs = undefined
         this._markedGroupConfigs = undefined
+        this._addedGroupConfigs = undefined
         
         // initial address qualified group configs
         // await this.groupFiService.initialAddressQualifiedGroupConfigs()
@@ -423,6 +433,21 @@ export class GroupMemberDomain implements ICycle, IRunnable {
                 for (const groupId of groupIds) {
                     this._forMeGroupIdsLastUpdateTimestamp[groupId] = 0;
                 }
+            } else if (cmd.type === 'addListenGroups') {
+                const dappGroupIds = (cmd as IAddListenGroups).dappGroupIds
+                const addedConfigs = await this.groupFiService.fetchForMeGroupConfigs({includes: dappGroupIds.map(dappGroupId => ({
+                    groupId: dappGroupId
+                }))});
+                this._addedGroupConfigs = [...this._addedGroupConfigs ?? [], ...addedConfigs]
+                this._context.setAllGroupIds(this._getAllGroupIds(), 'GroupMemberDomain cmd', 'addListenGroups')
+
+                // 还得处理下 public group
+                const publicGroupIds = addedConfigs.filter(({isPublic}) => isPublic).map(({groupId}) => groupId);
+                const cmd:IFetchPublicGroupMessageCommand = {
+                    type: 'publicGroupOnBoot',
+                    groupIds: publicGroupIds
+                }
+                this._groupMemberDomainCmdChannel.push(cmd);
             }
             return false;
         }
@@ -497,6 +522,11 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         await this._checkForMeGroupIdsLastUpdateTimestamp();
         return true;
     }
+
+    clearAddedGroupConfigs() {
+        this._addedGroupConfigs = undefined
+    }
+
     // persist dirty group max min token
     persistDirtyGroupMaxMinToken() {
         if (this._isGroupMaxMinTokenCacheDirtyGroupIds.size === 0) {

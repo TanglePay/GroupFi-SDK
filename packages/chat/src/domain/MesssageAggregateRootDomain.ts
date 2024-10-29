@@ -6,7 +6,7 @@ import { EventSourceDomain } from "./EventSourceDomain";
 import { UserProfileDomain } from "./UserProfileDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
 
-import { ICycle, IFetchPublicGroupMessageCommand, StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
+import { ICycle, IFetchPublicGroupMessageCommand, StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo, IAddListenGroups } from "../types";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
 import { EventGroupMemberChanged, IMMessage, IMessage, IotaCatSDKObj } from "groupfi-sdk-core";
@@ -514,6 +514,8 @@ export class MessageAggregateRootDomain implements ICycle {
             const isChanged = this._context.setIncludesAndExcludes(includes,'MessageAggregateRootDomain setDappInlcuding', 'from dapp')
             if (isChanged) {
                 this._context.setIsForMeGroupsLoading(true, 'MessageAggregateRootDomain setDappInlcuding', 'includes changed')
+                // 如果重新设置了 includes, 那么需要清空 addedGroupConfigs
+                this.groupMemberDomain.clearAddedGroupConfigs()
             }
         }
         if (announcement) {
@@ -579,5 +581,13 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     setProfile(profile: Profile, shouldMint: boolean) {
         this.outputSendingDomain.setProfile(profile, shouldMint)
+    }
+
+    // 独立地监听某些群组，把这个当成一个 groupMemberDomain cmd 处理
+    listenGroupsAdd(dappGroupIds: string[]) {
+        this.groupMemberDomain.groupMemberDomainCmdChannel.push({
+            type: 'addListenGroups',
+            dappGroupIds
+        } as IAddListenGroups)
     }
 }

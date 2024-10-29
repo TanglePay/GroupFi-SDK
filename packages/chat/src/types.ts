@@ -62,6 +62,9 @@ export interface ICommandBase<T extends number> {
 export interface IClearCommandBase<T extends string> {
     type: T;
 }
+export interface IAddListenGroups extends IClearCommandBase<string> {
+    dappGroupIds: string[]
+}
 export interface IAddPendingMessageToFrontCommand extends IClearCommandBase<'addPendingMessageToFront'> {
     oldToNew: MessageResponseItem[]
 } 
