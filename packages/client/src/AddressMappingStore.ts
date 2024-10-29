@@ -1,5 +1,5 @@
 import EventEmitter from "events";
-import { IotaCatSDKObj } from "groupfi-sdk-core";
+import { GroupFiSDKObj } from "groupfi-sdk-core";
 
 class AddressMappingStore {
     private _event: EventEmitter = new EventEmitter();
@@ -30,7 +30,7 @@ class AddressMappingStore {
             this._pendingSet.clear();
             // Fetch the addresses
             console.log(`fetching addresses: ${addresses}`);
-            const mapping = await IotaCatSDKObj.batchSmrAddressToEvmAddress(addresses);
+            const mapping = await GroupFiSDKObj.batchSmrAddressToEvmAddress(addresses);
             // Store the mapping and emit the event
             for (const [address, evmAddress] of Object.entries(mapping)) {
                 const key = this._getKey(address);

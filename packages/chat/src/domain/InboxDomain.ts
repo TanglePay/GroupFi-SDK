@@ -1,5 +1,5 @@
 import { Inject, Singleton } from "typescript-ioc";
-import { IMessage, IotaCatSDKObj } from 'groupfi-sdk-core'
+import { IMessage, GroupFiSDKObj } from 'groupfi-sdk-core'
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { MessageHubDomain } from "./MessageHubDomain";
 import { ICycle, IInboxMessage, IRunnable } from "../types";
@@ -69,7 +69,7 @@ export class InboxDomain implements ICycle, IRunnable {
     }
 
     _getDefaultGroup(groupId: string): IInboxGroup {
-        const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) 
+        const groupConfig = GroupFiSDKObj._groupIdToGroupMeta(groupId) 
         return {
             groupId,
             dappGroupId: groupConfig?.dappGroupId,
