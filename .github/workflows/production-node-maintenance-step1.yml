@@ -22,6 +22,6 @@ jobs:
         ssh -i ~/.ssh/id_rsa ubuntu@$HOST << 'ENDSSH'
           sudo su
           cd /mnt/data
-          bash cleanhornet.sh
+          bash cleanhornetdata.sh
           reboot
         ENDSSH
