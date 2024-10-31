@@ -244,6 +244,8 @@ export class ThreadHandlerOld {
                     await ps;
                 }
             } catch (error) {
+                console.log('==>thread catch error and wait')
+                await sleep(1000)
                 console.error(error);
             }
         }
