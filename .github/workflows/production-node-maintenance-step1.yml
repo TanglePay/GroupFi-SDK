@@ -1,4 +1,4 @@
-name: Prerelease flow using prerelease inx plugin
+name: Production node maintenance step1
 
 on:
   workflow_dispatch:
