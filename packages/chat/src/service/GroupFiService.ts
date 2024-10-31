@@ -394,9 +394,6 @@ export class GroupFiService {
   async sendAnyOneToSelf() {
     await GroupFiSDKFacade.sendAnyOneToSelf()
   }
-  async getSMRBalance(): Promise<{ amount: number }> {
-    return await GroupFiSDKFacade.getSMRBalance()
-  }
   // fetchAddressBalance
   async fetchAddressBalance(): Promise<number> {
     return await GroupFiSDKFacade.fetchAddressBalance()
