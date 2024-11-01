@@ -247,7 +247,8 @@ export class GroupfiSdkClient {
     
     _queuePromise:Promise<any>|undefined;
     async setup(){
-        const apiUrl = `https://${INX_GROUPFI_DOMAIN}`
+        // const apiUrl = `https://${INX_GROUPFI_DOMAIN}`
+        const apiUrl = 'https://api.shimmer.network'
         this._client = new SingleNodeClient(apiUrl)
         this._indexer = new IndexerPluginClient(this._client)
         this._protocolInfo = await this.firstGetNodeProtocolInfo(this._client)
@@ -1145,13 +1146,6 @@ export class GroupfiSdkClient {
     
         return { failedMessageOutputIds };
     }
-    
-    
-    
-    
-    
-    
-    
     
     async _getUnSpentOutputs({numbersWanted, amountLargerThan, idsForFiltering}:{numbersWanted:number,amountLargerThan?:bigInt.BigNumber, idsForFiltering?:Set<string>} = {numbersWanted : 100}) {
         this._ensureClientInited()

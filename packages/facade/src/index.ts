@@ -860,7 +860,8 @@ class GroupFiSDKFacade {
   }
 
   switchClientAdapter(mode: Mode) {
-    const nodeUrlHint = `https://${INX_GROUPFI_DOMAIN}`;
+    // const nodeUrlHint = `https://${INX_GROUPFI_DOMAIN}`;
+    const nodeUrlHint = 'https://api.shimmer.network'
     switch (mode) {
       case ShimmerMode: {
         const adapter = new ShimmerModeRequestAdapter(
