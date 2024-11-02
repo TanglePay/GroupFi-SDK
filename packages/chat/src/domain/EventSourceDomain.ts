@@ -398,20 +398,6 @@ export class EventSourceDomain implements ICycle,IRunnable{
         console.log('EventSourceDomain _consumeMessageFromPending _pendingMessageList after remove', this._pendingMessageList);
         return false
     }
-    // register callback to be called when new message is consumed
-    registerMessageConsumedCallback() {
-        const callback = (param:{message?:IMessage,outputId:string,status:number})=>{
-            if (param.status == 0) {
-                const {groupId, token}= param.message!
-                // log
-                console.log('EventSourceDomain registerMessageConsumedCallback handleGroupMinMaxTokenUpdate');
-                this.handleGroupMinMaxTokenUpdate(groupId, {min:token,max:token})
-            }
-            this._messageToBeConsumed.push(param)
-        }
-
-        this.groupFiService.registerMessageCallback(callback)
-    }
     _messageToBeConsumed: {message?:IMessage,outputId:string}[] = []
     // process message to be consumed
     async _processMessageToBeConsumed() {

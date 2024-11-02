@@ -36,7 +36,7 @@ import {
 import { Converter, ReadStream, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
-import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
+import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
     EncryptedHexPayload
 
 } from "groupfi-sdk-core";
@@ -65,7 +65,7 @@ setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     return res.key;
 })
 setCryptoJS(CryptoJS)
-const tag = Converter.utf8ToBytes(IOTACATTAG)
+const tag = Converter.utf8ToBytes(GROUPFITAG)
 
 interface StorageFacade {
     prefix: string;
@@ -321,7 +321,7 @@ class GroupfiWalletEmbedded {
         if(decrypted) {
             salt = decrypted.payload
         }
-        if (!salt) throw IotaCatSDKObj.makeErrorForSaltNotFound()
+        if (!salt) throw GroupFiSDKObj.makeErrorForSaltNotFound()
         return salt
     }
     getEd25519PublicKey(){
@@ -339,7 +339,7 @@ class GroupfiWalletEmbedded {
         const address = addressUnlockCondition.address;
         if (!address || address.type !== ED25519_ADDRESS_TYPE) return false
         const ed25519Address = address as IEd25519Address;
-        if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._SMRAccount._accountHexAddress) return true
+        if (GroupFiSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._SMRAccount._accountHexAddress) return true
         // log not self unlock condition
         console.log('Not self unlock condition',addressUnlockCondition,this._SMRAccount._accountHexAddress)
         return false

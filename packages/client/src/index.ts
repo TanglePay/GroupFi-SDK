@@ -45,7 +45,7 @@ import {
 import { Converter, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
-import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
+import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
     IMUserMarkedGroupId, serializeUserMarkedGroupIds, deserializeUserMarkedGroupIds,
     IMUserMuteGroupMember,serializeUserMuteGroupMembers, deserializeUserMuteGroupMembers,
     IMUserVoteGroup, serializeUserVoteGroups, deserializeUserVoteGroups,
@@ -110,7 +110,7 @@ setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     return res.key;
 })
 setCryptoJS(CryptoJS)
-const tag = Converter.utf8ToBytes(IOTACATTAG)
+const tag = Converter.utf8ToBytes(GROUPFITAG)
 
 export interface StorageFacade {
     prefix: string;
@@ -360,108 +360,10 @@ export class GroupfiSdkClient {
         const domain = domains[Math.floor(Math.random() * domains.length)];
         return domain
     }
-
-
-    _outputIdToMessagePipe?: ConcurrentPipe<{outputId:string,output?:IBasicOutput,token:string,address:string,type:number},{message?:IMessage,outputId:string,status:number}>;
-    _makeOutputIdToMessagePipe(){
-        const processor = async (
-            {outputId,output,token,address,type}:{outputId:string,output?:IBasicOutput,address:string,type:number,token:string},
-            callback: (error?: Error | null) => void,
-            stream:ConcurrentPipe<{outputId:string,output?:IBasicOutput,token:string,address:string,type:number},{message:IMessage,outputId:string}|undefined>
-        )=>{
-            const res = await this.getMessageFromOutputId({outputId,output,address,type})
-            if (!res) {
-                stream.push({outputId,status:-1})
-                callback()
-                return
-            }
-            const message = res
-            ? {
-                type: ImInboxEventTypeNewMessage,
-                sender: res.sender,
-                message: res.message.data,
-                messageId: res.messageId,
-                timestamp: res.message.timestamp,
-                groupId: res.message.groupId,
-                token
-                }
-            : undefined;
-            if (this._mode === ShimmerMode) {
-                const res = {message,outputId}
-                stream.push(res)
-                callback()
-            } else {
-                const fn = (evmAddress:string)=>{
-                    message!.sender = evmAddress
-                    const res = {message,outputId}
-                    stream.push(res)
-                    callback()
-                }
-                AddressMappingStore.getMapping(message!.sender, fn,callback)
-            }
-        }
-        this._outputIdToMessagePipe = new ConcurrentPipe(processor, 12, 64, true)
-    }
-    getOutputIdToMessagePipe(){
-        // if not inited, init
-        if (!this._outputIdToMessagePipe) {
-            this._makeOutputIdToMessagePipe()
-        }
-        return this._outputIdToMessagePipe!
-    }
-    async outputIdstoMessages (
-        params:MessageResponseItemPlus[],
-    ):Promise<{message?:IMessage,outputId:string}[]>
-    {
-        const resp = [] as {message?:IMessage,outputId:string}[]
-        for (const item of params) {
-            const res = await this.getMessageFromOutputId(item)
-            const message = res
-                            ? {
-                                type: ImInboxEventTypeNewMessage,
-                                sender: res.sender,
-                                message: res.message.data,
-                                messageId: res.messageId,
-                                timestamp: res.message.timestamp,
-                                groupId: res.message.groupId,
-                                token: item.token,
-                                name: undefined
-                                } as IMessage
-                            : undefined;
-            resp.push({outputId:item.outputId, message})
-        }
-        // if not shimmer mode, then map sender to evm address
-        if (this._mode !== ShimmerMode) {
-            const smrAddressSet = new Set(resp.map(o=>o.message?.sender).filter(o=>!!o)) as Set<string>
-            const smrAddressList = Array.from(smrAddressSet)
-            const mapping = await addressMappingCache.batchGetEvmAddresses(smrAddressList)
-            for (const item of resp) {
-                // skip if no message
-                if (!item.message) continue
-                const evmAddress = mapping.get(item.message.sender)
-                if (evmAddress) {
-                    item.message.sender = evmAddress
-                }
-            }
-        }
-        // map sender to name
-        const senderAddressSet = new Set(resp.map(o=>o.message?.sender).filter(Boolean)) as Set<string>
-        const senderAddressList = Array.from(senderAddressSet)
-        const nameMappingRes = await nameMappingCache.batchGetRes(senderAddressList)
-        for(const item of resp) {
-            if (!item.message) continue
-            const nameMap = nameMappingRes.get(item.message.sender)
-            if (nameMap) {
-                item.message.name = nameMap.name
-            }
-        }
-        return resp
-    }
-
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
         //TODO try inx plugin 
         try {
-            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nftswithpublickey?groupId=${prefixedGroupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
@@ -478,11 +380,11 @@ export class GroupfiSdkClient {
             const data = await res.json() as NftItemReponse[]
             const memberList = data.filter(o=>o.publicKey)
             // if length is more than GroupMemberTooManyThreshold, throw GroupMemberTooManyError
-            if (memberList.length > GroupMemberTooManyToPublicThreshold) throw IotaCatSDKObj.makeErrorForGroupMemberTooMany()
+            if (memberList.length > GroupMemberTooManyToPublicThreshold) throw GroupFiSDKObj.makeErrorForGroupMemberTooMany()
             return memberList
         } catch (error) {
             console.log('_getAddressListForGroupFromInxApi error',error)
-            if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+            if (GroupFiSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                 console.log('re throwing', error);
                 throw error
             }
@@ -491,7 +393,7 @@ export class GroupfiSdkClient {
     }
     async _getSharedOutputIdForGroupFromInxApi(groupId: string): Promise<{ outputId: string } | undefined> {
         try {
-            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+            const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
             try {
                 // @ts-ignore
@@ -507,12 +409,12 @@ export class GroupfiSdkClient {
                 }
                 const data = await res.json() as {code:number; outputId: string };
                 if (data.code === 901) {
-                    throw IotaCatSDKObj.makeErrorForGroupMemberTooMany();
+                    throw GroupFiSDKObj.makeErrorForGroupMemberTooMany();
                 } 
                 return data;
             } catch (error) {
                 /*
-                if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+                if (GroupFiSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                     throw error;
                 }
                 */
@@ -520,7 +422,7 @@ export class GroupfiSdkClient {
             }
         } catch (error) {
             /*
-            if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+            if (GroupFiSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                 throw error;
             }
             */
@@ -606,12 +508,12 @@ export class GroupfiSdkClient {
         const metaFeature = sharedOutput.features?.find((feature)=>feature.type == 2) as IMetadataFeature
         if (!metaFeature) throw new Error('Metadata feature not found')
         const bytes = Converter.hexToBytes(metaFeature.data)
-        const recipients = IotaCatSDKObj.deserializeRecipientList(bytes)
+        const recipients = GroupFiSDKObj.deserializeRecipientList(bytes)
         return recipients
     }
     // check if address is in recipient
     _checkIfAddressInRecipient(address:string,recipients:IMRecipient[]){
-        const addressHashValue = IotaCatSDKObj.getAddressHashStr(address)
+        const addressHashValue = GroupFiSDKObj.getAddressHashStr(address)
         const idx = recipients.findIndex((recipient)=>recipient.addr === addressHashValue)
         return idx
     }
@@ -774,7 +676,7 @@ export class GroupfiSdkClient {
         } catch (error) {
             if (error instanceof ClientError) {
                 if (error.httpStatus === 404) {
-                    throw IotaCatSDKObj.makeErrorForSharedOutputNotFound(outputId)
+                    throw GroupFiSDKObj.makeErrorForSharedOutputNotFound(outputId)
                 }
             }
             
@@ -802,7 +704,7 @@ export class GroupfiSdkClient {
     }
     // get evm qualify list
     async getEvmQualifyList(groupId:string, memberSelf?:{addr:string,publicKey:string}):Promise<{addressKeyList:{addr:string,publicKey:string}[],signature:string,isSelfInList:boolean}>{
-        let previouslyQualified =  (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? []
+        let previouslyQualified =  (await GroupFiSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? []
         const memberList = previouslyQualified.map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))
         // add memberSelf to memberList, if memberSelf exist and memberSelf is not in memberList
         if (memberSelf) {
@@ -813,7 +715,7 @@ export class GroupfiSdkClient {
         }
         const addressToBeFiltered = memberList ? memberList.map(member=>member.addr) : []
         
-        const {addressList:addressListFiltered,signature} = await IotaCatSDKObj.filterEvmGroupQualify(addressToBeFiltered,groupId)
+        const {addressList:addressListFiltered,signature} = await GroupFiSDKObj.filterEvmGroupQualify(addressToBeFiltered,groupId)
         const memberListFiltered = memberList?.filter((pair)=>{
             const {addr} = pair
             return addressListFiltered.includes(addr)
@@ -825,7 +727,7 @@ export class GroupfiSdkClient {
     }
     // get plugin evm qualify list
     async getPluginEvmQualifyList(groupId:string):Promise<{addr:string,publicKey:string}[]>{
-        const list =  (await IotaCatSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? [] 
+        const list =  (await GroupFiSDKObj.fetchGroupQualifiedAddressPublicKeyPairs(groupId)) ?? [] 
         return list.map((pair:{ownerAddress:string,publicKey:string})=>({addr:pair.ownerAddress,publicKey:pair.publicKey}))     
     }
     // _makeSharedOutputForEvmGroup
@@ -866,22 +768,22 @@ export class GroupfiSdkClient {
         if (memberList) {
             recipients = memberList.map((member)=>({addr:member.addr,mkey:member.publicKey}))
         } else {
-            const memberRes = await IotaCatSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
+            const memberRes = await GroupFiSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
             recipients = memberRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
         }
 
         console.log('_makeSharedOutputForGroup recipients', recipients);
         recipients = recipients.filter((recipient)=>!!recipient.mkey)
-        const salt = IotaCatSDKObj._generateRandomStr(32)
+        const salt = GroupFiSDKObj._generateRandomStr(32)
         const payloadList:EncryptingPayload[] = recipients.map((pair)=>({addr:pair.addr,publicKey:Converter.hexToBytes(pair.mkey), content:salt}))
 
         const encryptedPayloadList:EncryptedPayload[] = await encryptPayloadList({payloadList,tag})
         const preparedRecipients:IMRecipient[] = encryptedPayloadList.map((payload)=>({addr:payload.addr,mkey:Converter.bytesToHex(payload.payload)}))
-        console.log('preparedRecipients', preparedRecipients,preparedRecipients.map(r => ({addr:IotaCatSDKObj.getAddressHashStr(r.addr),mkey:r.mkey})));
-        const pl = IotaCatSDKObj.serializeRecipientList(preparedRecipients,groupId)
+        console.log('preparedRecipients', preparedRecipients,preparedRecipients.map(r => ({addr:GroupFiSDKObj.getAddressHashStr(r.addr),mkey:r.mkey})));
+        const pl = GroupFiSDKObj.serializeRecipientList(preparedRecipients,groupId)
         const tagFeature: ITagFeature = {
             type: 3,
-            tag: `0x${Converter.utf8ToHex(IOTACATSHAREDTAG)}`
+            tag: `0x${Converter.utf8ToHex(GROUPFISHAREDTAG)}`
         };
         const metadataFeature: IMetadataFeature = {
             type: 2,
@@ -984,12 +886,12 @@ export class GroupfiSdkClient {
     async getMessageFromMetafeaturepayloadAndSender({data,senderAddressBytes,address}:{data:Uint8Array|string,senderAddressBytes:Uint8Array|string,address:string}):Promise<{sender:string,message:IMMessage,messageId:string}>{
         const data_ = typeof data === 'string' ? Converter.hexToBytes(data) : data
         const senderAddressBytes_ = typeof senderAddressBytes === 'string' ? Converter.hexToBytes(senderAddressBytes) : senderAddressBytes
-        const messageId = IotaCatSDKObj.getMessageId(data_, senderAddressBytes_)
+        const messageId = GroupFiSDKObj.getMessageId(data_, senderAddressBytes_)
         // const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._nodeInfo!.protocol.bech32Hrp);
         const sender = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, senderAddressBytes_, this._protocolInfo!.bech32Hrp);
 
         try {
-            const message = await IotaCatSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
+            const message = await GroupFiSDKObj.deserializeMessage(data_, address, {decryptUsingPrivateKey:async (data:Uint8Array)=>{
                 //const decrypted = await decrypt(this._walletKeyPair!.privateKey, data, tag)
                 //return decrypted.payload
                 throw new Error('decryptUsingPrivateKey not supported')
@@ -999,7 +901,7 @@ export class GroupfiSdkClient {
             }})
             return {sender,message,messageId}
         } catch (error) {
-            if (IotaCatSDKObj.verifyErrorForSharedOutputNotFound(error)) {
+            if (GroupFiSDKObj.verifyErrorForSharedOutputNotFound(error)) {
                 // log error
                 console.log('Shared output not found', error);
                 const sharedNotFoundError = error as SharedNotFoundError
@@ -1135,10 +1037,10 @@ export class GroupfiSdkClient {
             for (const { outputIdHex, senderAddressBytes, name, avatar, data, senderAddress: sender } of intermediateResults) {
                 try {
                     // Get the messageId
-                    const messageId = IotaCatSDKObj.getMessageId(data, senderAddressBytes);
+                    const messageId = GroupFiSDKObj.getMessageId(data, senderAddressBytes);
             
                     // Attempt to deserialize the message without extra
-                    const { sharedOutputId, msg: imMessage } = await IotaCatSDKObj.deserializeMessageWithoutExtra(data, address);
+                    const { sharedOutputId, msg: imMessage } = await GroupFiSDKObj.deserializeMessageWithoutExtra(data, address);
                     // const sender = ''; // You'll need to determine the sender value based on your context
             
                     if (sharedOutputId) {
@@ -1173,7 +1075,7 @@ export class GroupfiSdkClient {
                     const messageList = sharedOutputIdToMsgMap[outputId];
                     for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, avatar, sender} of messageList) {
                         try {
-                            const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
+                            const completedIMMessage = GroupFiSDKObj.completeMessageWithSalt(imMessage, salt);
                             // const sender = ''; // You'll need to determine the sender value based on your context
                             const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender,name, avatar);
                             onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
@@ -1212,7 +1114,7 @@ export class GroupfiSdkClient {
                         const messageList = sharedOutputIdToMsgMap[outputIdHex];
                         for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, avatar, sender } of messageList) {
                             try {
-                                const completedIMMessage = IotaCatSDKObj.completeMessageWithSalt(imMessage, salt);
+                                const completedIMMessage = GroupFiSDKObj.completeMessageWithSalt(imMessage, salt);
                                 // const sender = ''; // You'll need to determine the sender value based on your context
                                 const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender, name, avatar);
                                 onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
@@ -1521,12 +1423,12 @@ export class GroupfiSdkClient {
 
     // set shared id and salt to cache
     _setSharedIdAndSaltToCache(rawSharedId:string,salt:string){
-        const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
+        const sharedId = GroupFiSDKObj._addHexPrefixIfAbsent(rawSharedId)
         this._sharedSaltCache[sharedId!] = salt
     }
     // get shared id and salt from cache
     _getSharedIdAndSaltFromCache(rawSharedId:string){
-        const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId)
+        const sharedId = GroupFiSDKObj._addHexPrefixIfAbsent(rawSharedId)
         const cachedValue = this._sharedSaltCache[sharedId!]
         // log cache hit or miss
         if (cachedValue) {
@@ -1546,7 +1448,7 @@ export class GroupfiSdkClient {
         const cacheMissedIds: string[] = [];
     
         for (const rawSharedId of sharedOutputIds) {
-            const sharedId = IotaCatSDKObj._addHexPrefixIfAbsent(rawSharedId);
+            const sharedId = GroupFiSDKObj._addHexPrefixIfAbsent(rawSharedId);
             const cachedValue = this._sharedSaltCache[sharedId!];
     
             if (cachedValue) {
@@ -1632,7 +1534,7 @@ export class GroupfiSdkClient {
                 try {
                     
                     if (message.authScheme == MessageAuthSchemeRecipeintInMessage) {
-                        const memberRes = await IotaCatSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
+                        const memberRes = await GroupFiSDKObj.fetchGroupMemberAddresses(groupId) as {ownerAddress:string,publicKey:string, timestamp: number}[]  
                         const recipients = memberRes.map((nftRes)=>({addr:nftRes.ownerAddress,mkey:nftRes.publicKey}))
             
                         message.recipients = recipients
@@ -1652,7 +1554,7 @@ export class GroupfiSdkClient {
                         
                     }
                 } catch (error) {
-                    if (IotaCatSDKObj.verifyErrorForGroupMemberTooMany(error)) {
+                    if (GroupFiSDKObj.verifyErrorForGroupMemberTooMany(error)) {
                         message.messageType = MessageTypePublic
                     } else {
                         throw error
@@ -1661,7 +1563,7 @@ export class GroupfiSdkClient {
             }
             console.log('MessageWithPublicKeys', message);
             tracer.startStep('sendMessageToGroup','client start serialize message')
-            const pl = await IotaCatSDKObj.serializeMessage(message,{encryptUsingPublicKey:async (key,data)=>{
+            const pl = await GroupFiSDKObj.serializeMessage(message,{encryptUsingPublicKey:async (key,data)=>{
                 const publicKey = Converter.hexToBytes(key)
                 const encrypted = await encrypt(publicKey, data, tag)
                 return encrypted.payload
@@ -1670,13 +1572,13 @@ export class GroupfiSdkClient {
             tracer.startStep('sendMessageToGroup','client create message output')
             const tagFeature: ITagFeature = {
                 type: 3,
-                tag: `0x${Converter.utf8ToHex(IOTACATTAG)}`
+                tag: `0x${Converter.utf8ToHex(GROUPFITAG)}`
             };
             const metadataFeature: IMetadataFeature = {
                 type: 2,
                 data: Converter.bytesToHex(pl, true)
             };
-            const messageId = IotaCatSDKObj.getMessageId(pl, Converter.hexToBytes(this._accountHexAddress!))
+            const messageId = GroupFiSDKObj.getMessageId(pl, Converter.hexToBytes(this._accountHexAddress!))
             const nameRes = await nameMappingCache.getRes(senderAddr)
             // IMessage = {messageId:string, groupId:string, sender:string, message:string, timestamp:number}
             const messageSent: IMessage = {
@@ -1899,7 +1801,7 @@ export class GroupfiSdkClient {
                 const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
                 const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
                 // console.log('unspent Outputs', outputs);
-                if (!outputs || outputs.length === 0) throw IotaCatSDKObj.makeErrorForUserDoesNotHasEnoughToken()
+                if (!outputs || outputs.length === 0) throw GroupFiSDKObj.makeErrorForUserDoesNotHasEnoughToken()
                 
                 consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
             }
@@ -2106,7 +2008,7 @@ export class GroupfiSdkClient {
     }
     async fetchMessageListFrom(groupId:string, address:string, coninuationToken?:string, limit:number=10) {
         try {
-            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
             const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
             const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages${paramStr}`
@@ -2137,7 +2039,7 @@ export class GroupfiSdkClient {
     // fetchMessageListUntil
     async fetchMessageListUntil(groupId:string, address:string, coninuationToken:string, limit:number=10) {
         try {
-            const prefixedGroupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+            const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
             
             const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
@@ -2336,7 +2238,7 @@ export class GroupfiSdkClient {
         console.log('enter _getMarkedGroupIds');
         try {
             const existing = await this._getOneOutputWithTag(GROUPFIMARKTAG)
-            const markedGroups = await IotaCatSDKObj.fetchAddressMarkGroupDetails(userAddress)
+            const markedGroups = await GroupFiSDKObj.fetchAddressMarkGroupDetails(userAddress)
             return {outputWrapper:existing,list:markedGroups}
         } catch (error) {
             console.log('getMarkedGroupIds error', error);
@@ -2401,7 +2303,7 @@ export class GroupfiSdkClient {
 
     async _getUserMuteGroupMembers(userAddress: string):Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserMuteGroupMember[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIMUTETAG)
-        const muteGroups = await IotaCatSDKObj.fetchAddressMutes(userAddress)
+        const muteGroups = await GroupFiSDKObj.fetchAddressMutes(userAddress)
         // if (!existing) return {list:[]}
         // const {output} = existing
         // const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature
@@ -2446,7 +2348,7 @@ export class GroupfiSdkClient {
 
     async _getUserLikeGroupMembers(userAddress: string):Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserLikeGroupMember[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFILIKETAG)
-        const likeGroups = await IotaCatSDKObj.fetchAddressLikes(userAddress)
+        const likeGroups = await GroupFiSDKObj.fetchAddressLikes(userAddress)
         return {outputWrapper:existing,list:likeGroups}
     }
 
@@ -2510,7 +2412,7 @@ export class GroupfiSdkClient {
     // }
     async _getUserVoteGroups(userAddress: string):Promise<{outputWrapper?:BasicOutputWrapper, list:IMUserVoteGroup[]}>{
         const existing = await this._getOneOutputWithTag(GROUPFIVOTETAG)
-        const voteGroups = await IotaCatSDKObj.fetchAddressVotes(userAddress)
+        const voteGroups = await GroupFiSDKObj.fetchAddressVotes(userAddress)
         // if (!existing) return {list:[]}
         // const {output} = existing
         // const meta = output.features?.find(feature=>feature.type === 2) as IMetadataFeature

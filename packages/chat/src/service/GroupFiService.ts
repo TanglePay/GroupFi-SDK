@@ -1,7 +1,6 @@
 import { Singleton } from 'typescript-ioc'
 import { IBasicOutput, OutputTypes } from '@iota/iota.js'
 import {
-  ModeDetail,
   SimpleDataExtended,
   TransactionRes
 } from 'groupfi-sdk-facade'
@@ -62,16 +61,6 @@ export class GroupFiService {
   getObjectId(obj: Record<string, SimpleDataExtended>) {
     return GroupFiSDKFacade.getObjectId(obj)
   }
-  async getInboxItems(continuationToken?: string): Promise<{
-    itemList: EventItemFromFacade[]
-    nextToken?: string | undefined
-  }> {
-    const res = await GroupFiSDKFacade.getInboxItems(continuationToken, 10)
-
-    // log
-    console.log('getInboxMessages', res)
-    return res
-  }
   async fetchInboxItemsLite(
     continuationToken?: string,
     limit = 1000
@@ -89,19 +78,6 @@ export class GroupFiService {
       nextToken: token
     }
   }
-  // async fullfillMessageLiteList(list:MessageResponseItem[]):Promise<IMessage[]> {
-  // proxy call to GroupFiSDKFacade fullfillMessageLiteList
-  async fullfillMessageLiteList(
-    list: MessageResponseItem[]
-  ): Promise<IMessage[]> {
-    return await GroupFiSDKFacade.fullfillMessageLiteList(list)
-  }
-  // proxy call to GroupFiSDKFacade fullfillOneMessageLite
-  async fullfillOneMessageLite(
-    message: MessageResponseItem
-  ): Promise<IMessage> {
-    return await GroupFiSDKFacade.fullfillOneMessageLite(message)
-  }
   // call enablePreparedRemainderHint
   enablePreparedRemainderHint() {
     return GroupFiSDKFacade.enablePreparedRemainderHint()
@@ -109,21 +85,6 @@ export class GroupFiService {
   // call disablePreparedRemainderHint
   disablePreparedRemainderHint() {
     return GroupFiSDKFacade.disablePreparedRemainderHint()
-  }
-  // processOneMessage
-  processOneMessage(message: MessageResponseItem & {output?:IBasicOutput}) {
-    return GroupFiSDKFacade.processOneMessage(message)
-  }
-  // registerMessageCallback
-  registerMessageCallback(
-    callback: (args: {
-      message?: IMessage
-      outputId: string
-      status: number
-    }) => void
-  ) {
-    // @ts-ignore
-    return GroupFiSDKFacade.registerMessageCallback(callback)
   }
   _offListenningNewEventItem: (() => void) | undefined
   onNewEventItem(callback: (message: EventItemFromFacade) => void) {
@@ -254,16 +215,8 @@ export class GroupFiService {
     }
   }
 
-  checkIsChainSupported(nodeId: number) {
-    return GroupFiSDKFacade.checkIsChainSupported(nodeId)
-  }
-
   async waitOutput(outputId: string) {
     await GroupFiSDKFacade.waitOutput(outputId)
-  }
-
-  async outputIdstoMessages(params:MessageResponseItemPlus[]) {
-    return await GroupFiSDKFacade.outputIdstoMessages(params)
   }
   async setupIotaMqttConnection(mqttClient: any) {
     return await GroupFiSDKFacade.setupIotaMqttConnection(mqttClient)
@@ -440,9 +393,6 @@ export class GroupFiService {
   // sendAnyOneToSelf
   async sendAnyOneToSelf() {
     await GroupFiSDKFacade.sendAnyOneToSelf()
-  }
-  async getSMRBalance(): Promise<{ amount: number }> {
-    return await GroupFiSDKFacade.getSMRBalance()
   }
   // fetchAddressBalance
   async fetchAddressBalance(): Promise<number> {

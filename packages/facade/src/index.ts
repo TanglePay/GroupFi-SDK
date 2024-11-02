@@ -1,6 +1,6 @@
 import IotaSDK from 'tanglepaysdk-client';
 import {
-  IotaCatSDKObj,
+  GroupFiSDKObj,
   ShimmerBech32Addr,
   Address,
   IMessage,
@@ -83,7 +83,6 @@ export * from './types';
 
 const TP_SHIMMER_MAINNET_ID = 102;
 const TP_EVM_CHAIN_ID = 5;
-const SUPPORTED_CHAIN_ID_LIST = [TP_SHIMMER_MAINNET_ID, TP_EVM_CHAIN_ID];
 
 const PAIRX_SIGN_PREFIX_TEXT = 'Creating account... '
 
@@ -103,30 +102,11 @@ class GroupFiSDKFacade {
 
   private _storage: StorageFacade | null = null
 
-  private _currentGroup:
-    | {
-        groupName: string;
-        groupId: string;
-      }
-    | undefined = undefined;
-
-  get currentGroupName() {
-    return this._currentGroup?.groupName;
-  }
-
   get currentMode() {
     if (this._mode === undefined) {
       throw new Error('Mode is undefined.');
     }
     return this._mode;
-  }
-
-  get currentGroupId() {
-    return this._currentGroup?.groupId;
-  }
-
-  checkIsChainSupported(nodeId: number) {
-    return SUPPORTED_CHAIN_ID_LIST.includes(nodeId);
   }
 
   getObjectId(obj: Record<string, SimpleDataExtended>) {
@@ -158,7 +138,7 @@ class GroupFiSDKFacade {
   }
 
   async getIsMutedFromMuteMap(groupId: string, address: string) {
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
     if (this._muteMap === undefined) {
       const allUserMuteGroupMembers = await this.getAllUserMuteGroupMembers();
       this._muteMap = allUserMuteGroupMembers.reduce(
@@ -169,8 +149,8 @@ class GroupFiSDKFacade {
         {}
       );
     }
-    const addressHash = IotaCatSDKObj._addHexPrefixIfAbsent(
-      IotaCatSDKObj._sha256Hash(address)
+    const addressHash = GroupFiSDKObj._addHexPrefixIfAbsent(
+      GroupFiSDKObj._sha256Hash(address)
     );
     const mutedAddressHash = this._muteMap[groupId] ?? [];
     return mutedAddressHash.includes(addressHash);
@@ -302,13 +282,13 @@ class GroupFiSDKFacade {
         callback(item);
       }
     };
-    IotaCatSDKObj.on('inbox', listener);
-    return () => IotaCatSDKObj.off('inbox', listener);
+    GroupFiSDKObj.on('inbox', listener);
+    return () => GroupFiSDKObj.off('inbox', listener);
   }
 
   async setupMqttConnection(connect: any) {
     if (!connect) return
-    IotaCatSDKObj.setupMqttConnection(connect);
+    GroupFiSDKObj.setupMqttConnection(connect);
     this._mqttConnected = true;
   }
 
@@ -320,25 +300,6 @@ class GroupFiSDKFacade {
       isAddressChanged: true,
     });
   }
-
-  // listenningMetaMaskAccountsChanged(callback: (params: { address: string; nodeId?: number; mode: Mode, isAddressChanged: boolean }) => void) {
-  //   const listenner = async () => {
-  //     const {mode, address} = await this.connectMetaMaskWallet()
-  //     console.log('trollbox metamask account changed', mode, address)
-  //     const res = {
-  //       mode,
-  //       address,
-  //       nodeId: undefined,
-  //       isAddressChanged: true,
-  //     }
-  //     await this._onAccountChanged(res);
-  //     callback(res)
-  //   }
-
-  //   window.ethereum.on("accountsChanged", listenner);
-
-  //   return () => window.ethereum.removeListener("accountsChanged", listenner)
-  // }
 
   listenningTPAccountChanged(
     callback: (params: {
@@ -393,26 +354,6 @@ class GroupFiSDKFacade {
 
       await this._onAccountChanged(res);
       callback(res);
-      // this._nodeId = nodeId
-      // 第一次选择地址，也会触发这个函数，如果地址一样，就不用触发吧
-      // const newMode= this.getTPMode(nodeId);
-      // if (this._address === address && this._mode === newMode) {
-      //   return;
-      // }
-      // this._address = address;
-      // this._mode = newMode;
-      // console.log('accountsChanged', { address, nodeId, mode: this._mode });
-      // TP 的问题：每次切换新地址之后，都需要重新执行一下 connectWallet request，不然会报错，not authorized
-      // await IotaSDK.request({
-      //   method: 'iota_connect',
-      //   params: {
-      //     // expires: 3000000
-      //   },
-      // });
-      // console.log(
-      //   'accountsChanged and connect wallet using new address successfully',
-      //   address
-      // );
     };
     IotaSDK.on('accountsChanged', listener);
     return () => IotaSDK.removeListener('accountsChanged', listener);
@@ -437,74 +378,11 @@ class GroupFiSDKFacade {
     continuationToken?: string,
     limit = 3
   ): Promise<InboxItemResponse> {
-    return (await IotaCatSDKObj.fetchMessageOutputList(
+    return (await GroupFiSDKObj.fetchMessageOutputList(
       this._address!,
       continuationToken,
       limit
     )) as InboxItemResponse;
-  }
-
-  // processOneMessage
-  processOneMessage(item: MessageResponseItem & {output?:IBasicOutput}): boolean {
-    const pipe = this._client!.getOutputIdToMessagePipe();
-    const res = pipe.write({
-      outputId: item.outputId,
-      output: item.output,
-      token: item.token,
-      address: this._address!,
-      type: 1,
-    });
-    return res;
-  }
-  // registerMessageCallback
-  registerMessageCallback(
-    callback: (param: {
-      message?: IMessage;
-      outputId: string;
-      status: number;
-    }) => void
-  ) {
-    const listener = (param: {
-      message?: IMessage;
-      outputId: string;
-      status: number;
-    }) => {
-      if (param) {
-        callback(param);
-      }
-    };
-    const pipe = this._client!.getOutputIdToMessagePipe();
-    pipe.on('data', listener);
-  }
-
-  // fullfillOneMessageLite
-  async fullfillOneMessageLite(item: MessageResponseItem): Promise<IMessage> {
-    // call client getMessageFromOutputId({ outputId, address: addr, type: 1 })
-    const res = (await this._client!.getMessageFromOutputId({
-      outputId: item.outputId,
-      address: this._address!,
-      type: 1,
-    })) as
-      | {
-          type: typeof ImInboxEventTypeNewMessage;
-          sender: string;
-          message: IMMessage;
-          messageId: string;
-        }
-      | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    const message = res
-      ? {
-          type: ImInboxEventTypeNewMessage,
-          sender: res.sender,
-          token: item.token,
-          message: res.message.data,
-          messageId: res.messageId,
-          timestamp: res.message.timestamp,
-          groupId: res.message.groupId,
-        }
-      : undefined;
-    return message! as IMessage;
   }
   // prepareRemainderHint
   async prepareRemainderHint() {
@@ -539,99 +417,7 @@ class GroupFiSDKFacade {
     });
     return res;
   }
-  async fullfillMessageLiteList(
-    list: MessageResponseItem[]
-  ): Promise<IMessage[]> {
-    const outputIds = list.map((o) => o.outputId);
-
-    // call client .getMessagesFromOutputIds({ outputIds, address: addr, type: 1 })
-    const res = (await this._client!.getMessagesFromOutputIds({
-      outputIds,
-      address: this._address!,
-      type: 1,
-    })) as
-      | {
-          type: typeof ImInboxEventTypeNewMessage;
-          sender: string;
-          message: IMMessage;
-          messageId: string;
-        }[]
-      | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    const messageList = (res ?? []).map((o) => ({
-      type: ImInboxEventTypeNewMessage,
-      sender: o.sender,
-      message: o.message.data,
-      messageId: o.messageId,
-      timestamp: o.message.timestamp,
-      groupId: o.message.groupId,
-    })) as IMessage[];
-    return messageList;
-  }
-  // getInboxMessage
-  async getInboxItems(
-    continuationToken?: string,
-    limit = 3
-  ): Promise<{ itemList: EventItemFromFacade[]; nextToken?: string }> {
-    this._ensureWalletConnected();
-
-    // call client fetchInboxItemList(addr, continuationToken, limit)
-    const resstr = (await this._client!.fetchInboxItemList(
-      this._address!,
-      continuationToken,
-      limit
-    )) as string | undefined;
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    if (!resstr) {
-      return { itemList: [] };
-    }
-    console.log('***iota_im_groupinboxmessagelist success', resstr);
-    const res = JSON.parse(resstr) as {
-      itemList: (MessageBody | EventGroupMemberChanged)[];
-      token?: string;
-    };
-    console.log('***iota_im_groupinboxmessagelist success', res);
-    const itemList = res.itemList;
-    const token = res.token;
-    // log
-    console.log('itemList', itemList);
-    const fulfilledMessageList: EventItemFromFacade[] =
-      itemList != undefined
-        ? itemList.map((item) => {
-            if (item.type === ImInboxEventTypeNewMessage) {
-              const msg: IMessage = item;
-              return msg;
-            } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
-              const msg: EventGroupMemberChanged = item;
-              return msg;
-            } else {
-              throw new Error('unknown message type');
-            }
-          })
-        : [];
-    // log fulfilledMessageList
-    console.log('fulfilledMessageList', fulfilledMessageList);
-
-    // log filteredMessage
-    // const filteredRes = await Promise.all(
-    //   fulfilledMessageList.map((item) => {
-    //     if (item.type === ImInboxEventTypeNewMessage) {
-    //       const msg = item as IMessage;
-    //       return this.filterMutedMessage(msg.groupId, msg.sender)
-    //     } else if (item.type === ImInboxEventTypeGroupMemberChanged) {
-    //       const fn = async () => false;
-    //       return fn();
-    //     }
-    //   })
-    // );
-    // const filteredMessageList = fulfilledMessageList.filter(
-    //   (_, index) => !filteredRes[index]
-    // );
-    // console.log('filteredMessageList', filteredMessageList, filteredRes);
-
-    return { itemList: fulfilledMessageList, nextToken: token };
-  }
-
+  
   getTpNodeInfo(nodeId: number) {
     return config.find(({ tpNodeId }) => tpNodeId === nodeId);
   }
@@ -708,26 +494,11 @@ class GroupFiSDKFacade {
   }
 
   async fetchAddressNames(addressList: string[]) {
-    return await IotaCatSDKObj.fetchAddressNames(addressList);
+    return await GroupFiSDKObj.fetchAddressNames(addressList);
   }
 
   async hasUnclaimedNameNFT() {
     return await this._client!.hasUnclaimedNameNFT(this._proxyAddress!);
-  }
-
-  // get smr balance
-  async getSMRBalance() {
-    this._ensureWalletConnected();
-
-    const res = await IotaSDK.request({
-      method: 'iota_getBalance',
-      params: {
-        addressList: [this._address!],
-        assetsList: ['smr'],
-      },
-    });
-    this._lastTimeSdkRequestResultReceived = Date.now();
-    return res as { amount: number };
   }
 
   async enteringGroupByGroupId(groupId: string) {}
@@ -743,7 +514,7 @@ class GroupFiSDKFacade {
       type: ShimmerBech32Addr,
       addr: this._address!,
     };
-    const message = await IotaCatSDKObj.prepareSendMessage(
+    const message = await GroupFiSDKObj.prepareSendMessage(
       address,
       groupId,
       messageText,
@@ -779,11 +550,11 @@ class GroupFiSDKFacade {
   async fetchAddressBalance() {
     this._ensureWalletConnected();
     const addr = this._proxyAddress ?? this._address!;
-    const balance = await IotaCatSDKObj.fetchAddressBalance(addr);
+    const balance = await GroupFiSDKObj.fetchAddressBalance(addr);
     return balance ?? 0;
   }
   async fetchTokenTotalBalance(token: string, chainId: number) {
-    const totalBalance = await IotaCatSDKObj.fetchTokenTotalBalance(token, chainId)
+    const totalBalance = await GroupFiSDKObj.fetchTokenTotalBalance(token, chainId)
     return totalBalance
   }
   _ensureWalletConnected() {
@@ -829,7 +600,7 @@ class GroupFiSDKFacade {
   }) {
     this._ensureWalletConnected();
     const isEvm = this._isEvm();
-    const res = (await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
+    const res = (await GroupFiSDKObj.fetchAddressQualifiedGroupConfigs({
       address: this._address!,
       includes,
       excludes,
@@ -846,7 +617,7 @@ class GroupFiSDKFacade {
     const recommendGroups = groups
       .map((meta) => ({
         groupName: meta.groupName,
-        groupId: IotaCatSDKObj._groupMetaToGroupId(meta),
+        groupId: GroupFiSDKObj._groupMetaToGroupId(meta),
         qualifyType: meta.qualifyType,
       }))
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
@@ -875,7 +646,7 @@ class GroupFiSDKFacade {
   }) {
     this._ensureWalletConnected();
 
-    const res = await IotaCatSDKObj.fetchAddressQualifiedGroupConfigs({
+    const res = await GroupFiSDKObj.fetchAddressQualifiedGroupConfigs({
       address: this._address!,
       includes,
       excludes,
@@ -885,7 +656,7 @@ class GroupFiSDKFacade {
     return res
       .map((meta) => ({
         groupName: meta.groupName,
-        groupId: IotaCatSDKObj._groupMetaToGroupId(meta),
+        groupId: GroupFiSDKObj._groupMetaToGroupId(meta),
         qualifyType: meta.qualifyType,
       }))
       .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
@@ -899,7 +670,7 @@ class GroupFiSDKFacade {
     includes?: IIncludesAndExcludes[];
     excludes?: IIncludesAndExcludes[];
   }) {
-    const res = await IotaCatSDKObj.fetchPublicGroupConfigs({
+    const res = await GroupFiSDKObj.fetchPublicGroupConfigs({
       includes,
       excludes,
     });
@@ -907,7 +678,7 @@ class GroupFiSDKFacade {
   }
   // batchFetchGroupIsPublic
   async batchFetchGroupIsPublic(groupIds: string[]): Promise<{ [key: string]: boolean }> {
-    const res = await IotaCatSDKObj.batchFetchGroupIsPublic(groupIds);
+    const res = await GroupFiSDKObj.batchFetchGroupIsPublic(groupIds);
     return res;
   }
   // upload image to s3    
@@ -918,7 +689,7 @@ class GroupFiSDKFacade {
   
   // fetchForMeGroupConfigs
   async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
-    const res = await IotaCatSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})
+    const res = await GroupFiSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})
     if (!this._address) {
       return res
     }
@@ -979,7 +750,7 @@ class GroupFiSDKFacade {
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
     this._ensureWalletConnected();
-    const res = await IotaCatSDKObj.fetchAddressMarkedGroupConfigs(
+    const res = await GroupFiSDKObj.fetchAddressMarkedGroupConfigs(
       this._address!
     );
     return res;
@@ -1066,7 +837,7 @@ class GroupFiSDKFacade {
       }
     | undefined
   > {
-    const res = await IotaCatSDKObj.fetchAddressPairX(this._address!);
+    const res = await GroupFiSDKObj.fetchAddressPairX(this._address!);
     if (!res) {
       return undefined;
     }
@@ -1136,20 +907,20 @@ class GroupFiSDKFacade {
         this._proxyAddress = proxy.bech32Address;
       }
     }
-    // IotaCatSDKObj.switchMqttAddress(this._address!);
+    // GroupFiSDKObj.switchMqttAddress(this._address!);
     // await this.initialAddressQualifiedGroupConfigs({});
   }
 
   subscribeToAllTopics() {
-    IotaCatSDKObj.switchMqttAddress(this._address!);
+    GroupFiSDKObj.switchMqttAddress(this._address!);
   }
 
   unsubscribeToAllTopics() {
-    IotaCatSDKObj.unsubscribeToAllTopics();
+    GroupFiSDKObj.unsubscribeToAllTopics();
   }
 
   syncAllTopics(newAllTopics: string[]) {
-    IotaCatSDKObj.syncAllTopics(newAllTopics);
+    GroupFiSDKObj.syncAllTopics(newAllTopics);
   }
 
   setProxyModeInfo(modeInfo: ModeInfo) {
@@ -1431,12 +1202,12 @@ class GroupFiSDKFacade {
     memberCount: number;
   }> {
     this._ensureWalletConnected();
-    return await IotaCatSDKObj.fetchGroupVotesCount(groupId);
+    return await GroupFiSDKObj.fetchGroupVotesCount(groupId);
   }
 
   async voteGroup(groupId: string, vote: number) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
     const res = (await this._client!.voteGroup(
       groupId,
       vote,
@@ -1451,7 +1222,7 @@ class GroupFiSDKFacade {
 
   async unvoteGroup(groupId: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
     const res = (await this._client!.unvoteGroup(groupId, this._address!)) as
       | TransactionRes
       | undefined;
@@ -1463,11 +1234,11 @@ class GroupFiSDKFacade {
   }
 
   async waitOutput(outputId: string) {
-    await IotaCatSDKObj.waitOutput(outputId);
+    await GroupFiSDKObj.waitOutput(outputId);
   }
   // get user group
   async getUserGroupReputation(groupId: string): Promise<IGroupUserReputation> {
-    const allUserGroup = await IotaCatSDKObj.fetchUserGroupReputation(
+    const allUserGroup = await GroupFiSDKObj.fetchUserGroupReputation(
       groupId,
       this._address!
     );
@@ -1475,7 +1246,7 @@ class GroupFiSDKFacade {
   }
   async getGroupVoteRes(groupId: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
     const allGroupVotes = (await this._client!.getAllGroupVotes(
       this._address!
     )) as Array<{
@@ -1487,7 +1258,7 @@ class GroupFiSDKFacade {
   }
 
   async markGroup(groupId: string) {
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
     this._ensureWalletConnected();
     const res = (await this._client!.markGroup({
       groupId,
@@ -1507,7 +1278,7 @@ class GroupFiSDKFacade {
     memberList: { addr: string; publicKey: string }[];
     qualifyList?: { addr: string; publicKey: string }[];
   }) {
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
     this._ensureWalletConnected();
     const isAlreadyInMemberList = memberList.find(
       (o) => o.addr === this._address!
@@ -1559,7 +1330,7 @@ class GroupFiSDKFacade {
     return await this._client!._getEvmQualify(groupId, addressList, signature, addressType,timestamp);
   }
   async leaveOrUnMarkGroup(groupId: string) {
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
     this._ensureWalletConnected();
     const res = (await this._client!.unmarkGroup(groupId, this._address!)) as
       | TransactionRes
@@ -1595,28 +1366,28 @@ class GroupFiSDKFacade {
     if (isEvm) {
       return await this._isEvmQualified(groupId);
     }
-    const ipfsOrigins = await IotaCatSDKObj.fetchIpfsOrigins(this._address!);
-    const qualifiedGroups = await IotaCatSDKObj.fetchAddressQualifiedGroups(
+    const ipfsOrigins = await GroupFiSDKObj.fetchIpfsOrigins(this._address!);
+    const qualifiedGroups = await GroupFiSDKObj.fetchAddressQualifiedGroups(
       this._address!,
       ipfsOrigins
     );
     return !!qualifiedGroups.find(
       (qualifiedGroup) =>
-        qualifiedGroup.groupId === IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+        qualifiedGroup.groupId === GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
     );
   }
   async _isEvmQualified(groupId: string) {
     const address = this._address!;
-    return await IotaCatSDKObj.isEvmAddressQualifiedForGroup(address, groupId);
+    return await GroupFiSDKObj.isEvmAddressQualifiedForGroup(address, groupId);
   }
 
   // _addHexPrefixIfAbsent
   addHexPrefixIfAbsent(str: string) {
-    return IotaCatSDKObj._addHexPrefixIfAbsent(str);
+    return GroupFiSDKObj._addHexPrefixIfAbsent(str);
   }
   async fetchAddressMarkedGroups() {
     // call sdkobj fetchAddressMarkGroups
-    const markedGroups = await IotaCatSDKObj.fetchAddressMarkGroups(
+    const markedGroups = await GroupFiSDKObj.fetchAddressMarkGroups(
       this._address!
     );
     return markedGroups;
@@ -1627,7 +1398,7 @@ class GroupFiSDKFacade {
     return markedGroups
       .map((groupId) => {
         groupId = groupId.startsWith('0x') ? groupId.slice(2) : groupId;
-        const groupMeta = IotaCatSDKObj._groupIdToGroupMeta(groupId);
+        const groupMeta = GroupFiSDKObj._groupIdToGroupMeta(groupId);
         if (groupMeta === undefined) {
           return;
         }
@@ -1651,8 +1422,8 @@ class GroupFiSDKFacade {
     console.log('markedGroupIds', markedGroupIds, groupId);
     for (const markedGroupId of markedGroupIds) {
       if (
-        IotaCatSDKObj._addHexPrefixIfAbsent(markedGroupId) ==
-        IotaCatSDKObj._addHexPrefixIfAbsent(groupId)
+        GroupFiSDKObj._addHexPrefixIfAbsent(markedGroupId) ==
+        GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
       ) {
         return true;
       }
@@ -1661,15 +1432,15 @@ class GroupFiSDKFacade {
   }
 
   getGroupMetaByGroupId(groupId: string) {
-    return IotaCatSDKObj._groupIdToGroupMeta(groupId);
+    return GroupFiSDKObj._groupIdToGroupMeta(groupId);
   }
 
   async isGroupPublic(groupId: string) {
-    return await IotaCatSDKObj.checkIsGroupPublicFromSharedApiCall(groupId!);
+    return await GroupFiSDKObj.checkIsGroupPublicFromSharedApiCall(groupId!);
   }
 
   async loadAddressMemberGroups(address: string) {
-    let groupIds = await IotaCatSDKObj.fetchAddressMemberGroups(
+    let groupIds = await GroupFiSDKObj.fetchAddressMemberGroups(
       address
     );
     groupIds = groupIds.filter(groupId => {
@@ -1681,12 +1452,12 @@ class GroupFiSDKFacade {
   
   async loadGroupMemberAddresses(groupId: string) {
     // this._ensureWalletConnected();
-    return await IotaCatSDKObj.fetchGroupMemberAddresses(groupId);
+    return await GroupFiSDKObj.fetchGroupMemberAddresses(groupId);
   }
 
   async loadAddressPublicKey() {
     this._ensureWalletConnected();
-    return await IotaCatSDKObj.fetchAddressPublicKey(this._proxyAddress!);
+    return await GroupFiSDKObj.fetchAddressPublicKey(this._proxyAddress!);
   }
   async sendAnyOneToSelf() {
     // log
@@ -1704,20 +1475,20 @@ class GroupFiSDKFacade {
   }
   async isBlackListed(groupId: string) {
     this._ensureWalletConnected();
-    const blackListedAddresseHashs = await IotaCatSDKObj.fetchGroupBlacklist(
+    const blackListedAddresseHashs = await GroupFiSDKObj.fetchGroupBlacklist(
       groupId
     );
     return !!blackListedAddresseHashs.find((blackListedAddressHash) => {
-      const addressHash = IotaCatSDKObj._sha256Hash(this._address!);
+      const addressHash = GroupFiSDKObj._sha256Hash(this._address!);
       return blackListedAddressHash === addressHash;
     });
   }
 
   async muteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
-    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
-      IotaCatSDKObj._sha256Hash(memberAddress)
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
+      GroupFiSDKObj._sha256Hash(memberAddress)
     );
     // call client muteGroupMember(groupId, addrHash)
     const muteGroupMemberRes = (await this._client!.muteGroupMember(
@@ -1727,7 +1498,7 @@ class GroupFiSDKFacade {
     )) as TransactionRes | undefined;
     this._updateMuteMap(groupId, memberAddrHash);
     // if (muteGroupMemberRes !== undefined) {
-    //   await IotaCatSDKObj.waitOutput(muteGroupMemberRes.outputId);
+    //   await GroupFiSDKObj.waitOutput(muteGroupMemberRes.outputId);
     //   this._updateMuteMap(groupId, memberAddrHash);
     // }
   }
@@ -1735,9 +1506,9 @@ class GroupFiSDKFacade {
   // likeGroupMember
   async likeGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
-    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
-      IotaCatSDKObj._sha256Hash(memberAddress)
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
+      GroupFiSDKObj._sha256Hash(memberAddress)
     );
     // call client likeGroupMember(groupId, addrHash)
     const likeGroupMemberRes = (await this._client!.likeGroupMember(
@@ -1746,16 +1517,16 @@ class GroupFiSDKFacade {
       this._address!
     )) as TransactionRes | undefined;
     // if (likeGroupMemberRes !== undefined) {
-    //   await IotaCatSDKObj.waitOutput(likeGroupMemberRes.outputId);
+    //   await GroupFiSDKObj.waitOutput(likeGroupMemberRes.outputId);
     // }
   }
 
   // unlikeGroupMember
   async unlikeGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
-    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
-      IotaCatSDKObj._sha256Hash(memberAddress)
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
+      GroupFiSDKObj._sha256Hash(memberAddress)
     );
     // call client unlikeGroupMember(groupId, addrHash)
     const unlikeGroupMemberRes = (await this._client!.unlikeGroupMember(
@@ -1764,15 +1535,15 @@ class GroupFiSDKFacade {
       this._address!
     )) as TransactionRes | undefined;
     // if (unlikeGroupMemberRes !== undefined) {
-    //   await IotaCatSDKObj.waitOutput(unlikeGroupMemberRes.outputId);
+    //   await GroupFiSDKObj.waitOutput(unlikeGroupMemberRes.outputId);
     // }
   }
   
   async unMuteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = IotaCatSDKObj._addHexPrefixIfAbsent(groupId);
-    const memberAddrHash = IotaCatSDKObj._addHexPrefixIfAbsent(
-      IotaCatSDKObj._sha256HashAddress(memberAddress)
+    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
+      GroupFiSDKObj._sha256HashAddress(memberAddress)
     );
 
     // call client unmuteGroupMember(groupId, addrHash)
@@ -1784,13 +1555,13 @@ class GroupFiSDKFacade {
     this._lastTimeSdkRequestResultReceived = Date.now();
     this._updateMuteMap(groupId, memberAddrHash);
     // if (unmuteGroupMemberRes !== undefined) {
-    //   await IotaCatSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
+    //   await GroupFiSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
     //   this._updateMuteMap(groupId, memberAddrHash);
     // }
   }
 
   setupIotaMqttConnection(mqttClient: any) {
-    return IotaCatSDKObj.setupIotaMqttConnection(mqttClient);
+    return GroupFiSDKObj.setupIotaMqttConnection(mqttClient);
   }
 
   async getAddressStatusInGroup(groupId: string): Promise<{
@@ -1827,11 +1598,11 @@ class GroupFiSDKFacade {
   }
 
   groupIdToGroupName(groupId: string) {
-    return IotaCatSDKObj.groupIdToGroupName(groupId);
+    return GroupFiSDKObj.groupIdToGroupName(groupId);
   }
 
   sha256Hash(address: string) {
-    return IotaCatSDKObj._sha256Hash(address);
+    return GroupFiSDKObj._sha256Hash(address);
   }
 
   async getAllUserMuteGroupMembers() {
@@ -1853,7 +1624,7 @@ class GroupFiSDKFacade {
     endToken?: string,
     size = 10
   ) {
-    const res = await IotaCatSDKObj.fetchPublicMessageOutputList(
+    const res = await GroupFiSDKObj.fetchPublicMessageOutputList(
       groupId,
       direction,
       startToken,
@@ -1879,17 +1650,6 @@ class GroupFiSDKFacade {
     }
     return true
   }
-
-  async outputIdstoMessages(
-    params:MessageResponseItemPlus[]) {
-      // set address
-      params.forEach((item) => {
-        item.address = this._address!
-      })
-    return await this._client!.outputIdstoMessages(params);
-  }
-
-  
   _chainList?:ChainList = undefined
   async fetchChainList() {
     if (this._chainList === undefined) {
@@ -1927,7 +1687,7 @@ class GroupFiSDKFacade {
   async getActiveProfile(): Promise<{profile: Profile, outputId: string} | null> {
     try {
       this._ensureWalletConnected()
-      const res = await IotaCatSDKObj.fetchAddressProfile(this._address!)
+      const res = await GroupFiSDKObj.fetchAddressProfile(this._address!)
       if (res === null) return res
       const profile = JSON.parse(res.data)
       return {profile, outputId: res.outputId}
@@ -2036,7 +1796,7 @@ class GroupFiSDKFacade {
     }
     const formatedProfileList = profileList.map(profile => ({
       ...profile,
-      name: IotaCatSDKObj.formatProfileName(profile.chainId, profile.name)
+      name: GroupFiSDKObj.formatProfileName(profile.chainId, profile.name)
     }))
     return {profileList: formatedProfileList, profileToBeUpdateOnChain }
   }
