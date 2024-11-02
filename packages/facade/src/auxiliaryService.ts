@@ -1,5 +1,6 @@
 import { IBasicOutput } from '@iota/iota.js';
 import { Profile } from './types';
+import { INX_GROUPFI_DOMAIN } from 'groupfi-sdk-core';
 
 export const config = [
   {
@@ -64,8 +65,12 @@ export class AuxiliaryService {
     result: boolean;
     transactionId: string;
   }> {
+    const domain = INX_GROUPFI_DOMAIN!; 
+    // split domain to get first part
+    const domainParts = domain.split('.')
+    const domainFirstPart = domainParts[0]
     console.log('send proxy tx body:');
-    const res = await fetch(`https://${this._domain}/proxy/send`, {
+    const res = await fetch(`https://${this._domain}/proxy/send?hornet=${domainFirstPart}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
