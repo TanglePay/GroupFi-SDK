@@ -1,5 +1,5 @@
 import { Channel } from "../util/channel";
-import { ICycle, IFullfillOneMessageLiteCommand, IJoinGroupCommand, IMessage, IOutputCommandBase, IRunnable, ISendMessageCommand, ILeaveGroupCommand, IEnterGroupCommand, IMarkGroupCommend, IVoteGroupCommend, IMuteGroupMemberCommend, ProxyMode, DelegationMode, ImpersonationMode, ShimmerMode, RegisteredInfo, ILikeGroupMemberCommend, ISelectProfileCommand, IRegisterPairXCommand} from "../types";
+import { ICycle, IJoinGroupCommand, IMessage, IOutputCommandBase, IRunnable, ISendMessageCommand, ILeaveGroupCommand, IEnterGroupCommand, IMarkGroupCommend, IVoteGroupCommend, IMuteGroupMemberCommend, ProxyMode, DelegationMode, ImpersonationMode, ShimmerMode, RegisteredInfo, ILikeGroupMemberCommend, ISelectProfileCommand, IRegisterPairXCommand} from "../types";
 import { ThreadHandler } from "../util/thread";
 import { GroupFiService } from "../service/GroupFiService";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
@@ -291,24 +291,6 @@ export class OutputSendingDomain implements ICycle, IRunnable {
             })
         })
     }
-    async fullfillOneMessageLite(message: MessageResponseItem) : Promise<IMessage>
-     {
-        return new Promise((resolve,reject)=>{
-            const cmd:IFullfillOneMessageLiteCommand = {
-                type:5,
-                sleepAfterFinishInMs:0,
-                message
-            }
-            this._inChannel.push(cmd)
-            this._events.once(FullfilledOneMessageLiteEventKey,(event:any)=>{
-                if (event.status === 0) {
-                    resolve(event.obj)
-                } else {
-                    reject(event.message)
-                }
-            })
-        })
-    }
 
     setProfile(profile: Profile, shouldMint: boolean) {
         const cmd: ISelectProfileCommand = {
@@ -429,22 +411,6 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                     const {blockId,outputId} = await sendBasicOutputPromise;
                     console.log('OutputSendingDomain poll, sendMessageToGroup, blockId:', blockId);
                 }
-                await sleep(sleepAfterFinishInMs);
-            } else if (cmd.type === 5) {
-                /*
-                if (!this._isHasPublicKey) {
-                    this._events.emit(FullfilledOneMessageLiteEventKey,{status:-1, message:'no public key'})
-                    return false;
-                }*/
-                const {message,sleepAfterFinishInMs} = cmd as IFullfillOneMessageLiteCommand;
-                
-                try {
-                    const res = await this.groupFiService.fullfillOneMessageLite(message);
-                    this._events.emit(FullfilledOneMessageLiteEventKey,{status:0, obj:res})
-                }catch(error) {
-                    this._events.emit(FullfilledOneMessageLiteEventKey, { status: 99999, message: `Parse message from ouptput: ${message.outputId} error` })
-                }
-
                 await sleep(sleepAfterFinishInMs);
             } else if (cmd.type === 6) {
                 //if (!this._isHasPublicKey) return false;
