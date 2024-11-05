@@ -591,31 +591,6 @@ class GroupFiSDKFacade {
     return false;
   }
 
-  async initialAddressQualifiedGroupConfigs({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    this._ensureWalletConnected();
-
-    const res = await GroupFiSDKObj.fetchAddressQualifiedGroupConfigs({
-      address: this._address!,
-      includes,
-      excludes,
-      ifSaveGroupConfigMap: true,
-    });
-    console.log('initial Address Qualified Group Configs success');
-    return res
-      .map((meta) => ({
-        groupName: meta.groupName,
-        groupId: GroupFiSDKObj._groupMetaToGroupId(meta),
-        qualifyType: meta.qualifyType,
-      }))
-      .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
-  }
-
   // fetchPublicGroupConfigs
   async fetchPublicGroupConfigs({
     includes,
@@ -840,8 +815,6 @@ class GroupFiSDKFacade {
         this._proxyAddress = proxy.bech32Address;
       }
     }
-    // GroupFiSDKObj.switchMqttAddress(this._address!);
-    // await this.initialAddressQualifiedGroupConfigs({});
   }
 
   subscribeToAllTopics() {

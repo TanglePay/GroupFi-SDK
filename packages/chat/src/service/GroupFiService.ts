@@ -457,10 +457,6 @@ export class GroupFiService {
     await GroupFiSDKFacade.onMetaMaskAccountChanged(account)
   }
 
-  async initialAddressQualifiedGroupConfigs() {
-    await GroupFiSDKFacade.initialAddressQualifiedGroupConfigs({})
-  }
-
   async getMyGroups() {
     return await GroupFiSDKFacade.getAddressMarkedGroupsWithGroupName()
   }
