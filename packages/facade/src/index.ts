@@ -553,10 +553,7 @@ class GroupFiSDKFacade {
     const balance = await GroupFiSDKObj.fetchAddressBalance(addr);
     return balance ?? 0;
   }
-  async fetchTokenTotalBalance(token: string, chainId: number) {
-    const totalBalance = await GroupFiSDKObj.fetchTokenTotalBalance(token, chainId)
-    return totalBalance
-  }
+  
   _ensureWalletConnected() {
     if (!this._address) {
       throw new Error('Wallet not connected.');
@@ -591,91 +588,6 @@ class GroupFiSDKFacade {
     return false;
   }
 
-  async getRecommendGroups({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    this._ensureWalletConnected();
-    const isEvm = this._isEvm();
-    const res = (await GroupFiSDKObj.fetchAddressQualifiedGroupConfigs({
-      address: this._address!,
-      includes,
-      excludes,
-      ifSaveGroupConfigMap: false,
-    })) as MessageGroupMeta[];
-    let groups = res;
-    if (isEvm) {
-      groups = groups.filter(({ chainId }) => chainId != 0);
-    } else {
-      // Actually, there is no need to write the logic.
-      // To fix test bug
-      groups = groups.filter(({ chainId }) => chainId == 0);
-    }
-    const recommendGroups = groups
-      .map((meta) => ({
-        groupName: meta.groupName,
-        groupId: GroupFiSDKObj._groupMetaToGroupId(meta),
-        qualifyType: meta.qualifyType,
-      }))
-      .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
-
-    if (!this._isEvm) {
-      return recommendGroups;
-    }
-
-    const evmQualifiedGroups = [];
-    for (const group of recommendGroups) {
-      const isOk = await this.filterEvmGroups(group.groupId);
-      if (isOk) {
-        evmQualifiedGroups.push(group);
-      }
-    }
-
-    return evmQualifiedGroups;
-  }
-
-  async initialAddressQualifiedGroupConfigs({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    this._ensureWalletConnected();
-
-    const res = await GroupFiSDKObj.fetchAddressQualifiedGroupConfigs({
-      address: this._address!,
-      includes,
-      excludes,
-      ifSaveGroupConfigMap: true,
-    });
-    console.log('initial Address Qualified Group Configs success');
-    return res
-      .map((meta) => ({
-        groupName: meta.groupName,
-        groupId: GroupFiSDKObj._groupMetaToGroupId(meta),
-        qualifyType: meta.qualifyType,
-      }))
-      .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
-  }
-
-  // fetchPublicGroupConfigs
-  async fetchPublicGroupConfigs({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    const res = await GroupFiSDKObj.fetchPublicGroupConfigs({
-      includes,
-      excludes,
-    });
-    return res;
-  }
   // batchFetchGroupIsPublic
   async batchFetchGroupIsPublic(groupIds: string[]): Promise<{ [key: string]: boolean }> {
     const res = await GroupFiSDKObj.batchFetchGroupIsPublic(groupIds);
@@ -726,26 +638,6 @@ class GroupFiSDKFacade {
     }
 
     return evmGroupConfigsWithIsMember
-
-    // for (const config of configs) {
-    //   if (config.isPublic) {
-    //     evmGroupConfigsWithIsMember.push(config);
-    //     continue
-    //   }
-      
-    //   const isMember = await this.isGroupMember(config.groupId)
-      
-    //   evmGroupConfigsWithIsMember.push({
-    //     ...config,
-    //     isMember
-    //   })
-    //   // if (isOk) {
-    //   //   evmQualifiedConfigs.push(config);
-    //   // }
-    // }
-
-    return evmGroupConfigsWithIsMember
-    // return evmQualifiedConfigs;
   }
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
@@ -815,7 +707,6 @@ class GroupFiSDKFacade {
       metaMaskAccountFromDapp !== undefined
     ) {
       res = this.connectMetaMaskAccount(metaMaskAccountFromDapp);
-      // res = await this.connectMetaMaskWallet()
     }
 
     if (!res?.mode) {
@@ -907,8 +798,6 @@ class GroupFiSDKFacade {
         this._proxyAddress = proxy.bech32Address;
       }
     }
-    // GroupFiSDKObj.switchMqttAddress(this._address!);
-    // await this.initialAddressQualifiedGroupConfigs({});
   }
 
   subscribeToAllTopics() {
@@ -1098,49 +987,6 @@ class GroupFiSDKFacade {
     this._nodeId = undefined;
 
     return { mode: this._mode, address: this._address };
-  }
-
-  async connectMetaMaskWallet(): Promise<{ address: string; mode: Mode }> {
-    return new Promise((resolve, reject) => {
-      if (typeof window.ethereum === undefined) {
-        reject({
-          name: 'MetaMaskUnintalled',
-        });
-      }
-      const connect = async () => {
-        try {
-          const accounts = (await window.ethereum
-            .request({ method: 'eth_requestAccounts' })
-            .catch(() => {
-              reject({
-                name: 'MetaMaskConnectFailed',
-              });
-            })) as string[];
-          console.log('trollbox connect metamask wallet accounts', accounts);
-          const rawAccount = accounts[0];
-
-          if (!rawAccount) {
-            throw new Error();
-          }
-
-          // Uniformly convert EVM addresses to lowercase
-          const account = rawAccount.toLowerCase();
-
-          this._mode = DelegationMode;
-          this._address = account;
-          this._nodeId = undefined;
-          resolve({
-            mode: this._mode,
-            address: this._address,
-          });
-        } catch (err) {
-          reject({
-            name: 'MetaMaskConnectFailed',
-          });
-        }
-      };
-      connect();
-    });
   }
 
   async waitWalletReadyAndConnectTanglePayWallet(): Promise<{
