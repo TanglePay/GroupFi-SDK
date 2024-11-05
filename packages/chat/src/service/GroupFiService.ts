@@ -532,20 +532,6 @@ export class GroupFiService {
     GroupFiSDKFacade.setWalletClient(dappClient)
   }
 
-  // fetchPublicGroupConfigs
-  async fetchPublicGroupConfigs({
-    includes,
-    excludes
-  }: {
-    includes?: IIncludesAndExcludes[]
-    excludes?: IIncludesAndExcludes[]
-  }) {
-    return await GroupFiSDKFacade.fetchPublicGroupConfigs({
-      includes,
-      excludes
-    })
-  }
-
   // fetchForMeGroupConfigs
   async fetchForMeGroupConfigs({
     includes,

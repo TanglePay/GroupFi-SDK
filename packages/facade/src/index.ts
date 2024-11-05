@@ -591,20 +591,6 @@ class GroupFiSDKFacade {
     return false;
   }
 
-  // fetchPublicGroupConfigs
-  async fetchPublicGroupConfigs({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    const res = await GroupFiSDKObj.fetchPublicGroupConfigs({
-      includes,
-      excludes,
-    });
-    return res;
-  }
   // batchFetchGroupIsPublic
   async batchFetchGroupIsPublic(groupIds: string[]): Promise<{ [key: string]: boolean }> {
     const res = await GroupFiSDKObj.batchFetchGroupIsPublic(groupIds);
