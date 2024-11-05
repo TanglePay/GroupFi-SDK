@@ -591,52 +591,6 @@ class GroupFiSDKFacade {
     return false;
   }
 
-  async getRecommendGroups({
-    includes,
-    excludes,
-  }: {
-    includes?: IIncludesAndExcludes[];
-    excludes?: IIncludesAndExcludes[];
-  }) {
-    this._ensureWalletConnected();
-    const isEvm = this._isEvm();
-    const res = (await GroupFiSDKObj.fetchAddressQualifiedGroupConfigs({
-      address: this._address!,
-      includes,
-      excludes,
-      ifSaveGroupConfigMap: false,
-    })) as MessageGroupMeta[];
-    let groups = res;
-    if (isEvm) {
-      groups = groups.filter(({ chainId }) => chainId != 0);
-    } else {
-      // Actually, there is no need to write the logic.
-      // To fix test bug
-      groups = groups.filter(({ chainId }) => chainId == 0);
-    }
-    const recommendGroups = groups
-      .map((meta) => ({
-        groupName: meta.groupName,
-        groupId: GroupFiSDKObj._groupMetaToGroupId(meta),
-        qualifyType: meta.qualifyType,
-      }))
-      .filter(({ groupId }) => groupId !== undefined) as RecommendGroup[];
-
-    if (!this._isEvm) {
-      return recommendGroups;
-    }
-
-    const evmQualifiedGroups = [];
-    for (const group of recommendGroups) {
-      const isOk = await this.filterEvmGroups(group.groupId);
-      if (isOk) {
-        evmQualifiedGroups.push(group);
-      }
-    }
-
-    return evmQualifiedGroups;
-  }
-
   async initialAddressQualifiedGroupConfigs({
     includes,
     excludes,
@@ -726,26 +680,6 @@ class GroupFiSDKFacade {
     }
 
     return evmGroupConfigsWithIsMember
-
-    // for (const config of configs) {
-    //   if (config.isPublic) {
-    //     evmGroupConfigsWithIsMember.push(config);
-    //     continue
-    //   }
-      
-    //   const isMember = await this.isGroupMember(config.groupId)
-      
-    //   evmGroupConfigsWithIsMember.push({
-    //     ...config,
-    //     isMember
-    //   })
-    //   // if (isOk) {
-    //   //   evmQualifiedConfigs.push(config);
-    //   // }
-    // }
-
-    return evmGroupConfigsWithIsMember
-    // return evmQualifiedConfigs;
   }
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {

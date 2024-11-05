@@ -453,24 +453,8 @@ export class GroupFiService {
   ) {
     return GroupFiSDKFacade.listenningTPAccountChanged(callback)
   }
-  // listenningMetaMaskAccountsChanged(callback: (params: {address: string, mode: Mode, isAddressChanged: boolean}) => void) {
-  //   return GroupFiSDKFacade.listenningMetaMaskAccountsChanged(callback)
-  // }
   async onMetaMaskAccountChange(account: string) {
     await GroupFiSDKFacade.onMetaMaskAccountChanged(account)
-  }
-
-  async getRecommendGroups({
-    includes,
-    excludes
-  }: {
-    includes?: IIncludesAndExcludes[]
-    excludes?: IIncludesAndExcludes[]
-  }) {
-    return await GroupFiSDKFacade.getRecommendGroups({
-      includes,
-      excludes
-    })
   }
 
   async initialAddressQualifiedGroupConfigs() {
