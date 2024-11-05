@@ -815,7 +815,6 @@ class GroupFiSDKFacade {
       metaMaskAccountFromDapp !== undefined
     ) {
       res = this.connectMetaMaskAccount(metaMaskAccountFromDapp);
-      // res = await this.connectMetaMaskWallet()
     }
 
     if (!res?.mode) {
@@ -1098,49 +1097,6 @@ class GroupFiSDKFacade {
     this._nodeId = undefined;
 
     return { mode: this._mode, address: this._address };
-  }
-
-  async connectMetaMaskWallet(): Promise<{ address: string; mode: Mode }> {
-    return new Promise((resolve, reject) => {
-      if (typeof window.ethereum === undefined) {
-        reject({
-          name: 'MetaMaskUnintalled',
-        });
-      }
-      const connect = async () => {
-        try {
-          const accounts = (await window.ethereum
-            .request({ method: 'eth_requestAccounts' })
-            .catch(() => {
-              reject({
-                name: 'MetaMaskConnectFailed',
-              });
-            })) as string[];
-          console.log('trollbox connect metamask wallet accounts', accounts);
-          const rawAccount = accounts[0];
-
-          if (!rawAccount) {
-            throw new Error();
-          }
-
-          // Uniformly convert EVM addresses to lowercase
-          const account = rawAccount.toLowerCase();
-
-          this._mode = DelegationMode;
-          this._address = account;
-          this._nodeId = undefined;
-          resolve({
-            mode: this._mode,
-            address: this._address,
-          });
-        } catch (err) {
-          reject({
-            name: 'MetaMaskConnectFailed',
-          });
-        }
-      };
-      connect();
-    });
   }
 
   async waitWalletReadyAndConnectTanglePayWallet(): Promise<{
