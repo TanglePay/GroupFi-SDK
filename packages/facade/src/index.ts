@@ -994,6 +994,7 @@ class GroupFiSDKFacade {
 
   clearAddress() {
     this._muteMap = undefined;
+    this._muteMapPromise = null
     this._pairX = undefined;
     this._proxyAddress = undefined;
   }
