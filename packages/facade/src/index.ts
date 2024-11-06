@@ -119,40 +119,64 @@ class GroupFiSDKFacade {
       }
     | undefined = undefined;
 
-  _updateMuteMap(groupId: string, addressHash: string) {
-    if (this._muteMap === undefined) {
-      return;
-    }
-    const groupMutedMembers = this._muteMap[groupId];
+  private _muteMapPromise: Promise<{
+    [groupId: string]: string[];
+  }> | null = null
+
+  async _updateMuteMap(groupId: string, addressHash: string) {
+    await this._ensureMuteMap()
+    const groupMutedMembers = this._muteMap![groupId];
     if (groupMutedMembers === undefined) {
-      this._muteMap[groupId] = [addressHash];
+      this._muteMap![groupId] = [addressHash];
       return;
     }
     if (groupMutedMembers.includes(addressHash)) {
-      this._muteMap[groupId] = groupMutedMembers.filter(
+      this._muteMap![groupId] = groupMutedMembers.filter(
         (member) => member !== addressHash
       );
     } else {
-      this._muteMap[groupId].push(addressHash);
+      this._muteMap![groupId].push(addressHash);
     }
+  }
+
+  async _getMuteMapPromise() {
+    return this.getAllUserMuteGroupMembers().then(allUserMuteGroupMembers => allUserMuteGroupMembers.reduce(
+      (acc: { [groupId: string]: string[] }, { groupId, addrSha256Hash }) => {
+        acc[groupId] = [...(acc[groupId] ?? []), addrSha256Hash];
+        return acc;
+      },
+      {}
+    ))
+  }
+
+  async _ensureMuteMap() {
+    if (this._muteMap !== undefined) {
+      return
+    }
+    if (this._muteMapPromise === null) {
+      this._muteMapPromise = this._getMuteMapPromise()
+    }
+    this._muteMap = await this._muteMapPromise
+    this._muteMapPromise = null
   }
 
   async getIsMutedFromMuteMap(groupId: string, address: string) {
     groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
-    if (this._muteMap === undefined) {
-      const allUserMuteGroupMembers = await this.getAllUserMuteGroupMembers();
-      this._muteMap = allUserMuteGroupMembers.reduce(
-        (acc: { [groupId: string]: string[] }, { groupId, addrSha256Hash }) => {
-          acc[groupId] = [...(acc[groupId] ?? []), addrSha256Hash];
-          return acc;
-        },
-        {}
-      );
-    }
+    await this._ensureMuteMap()
+    // if (this._muteMap === undefined) {
+    //   const allUserMuteGroupMembers = await this.getAllUserMuteGroupMembers();
+    //   this._muteMap = allUserMuteGroupMembers.reduce(
+    //     (acc: { [groupId: string]: string[] }, { groupId, addrSha256Hash }) => {
+    //       acc[groupId] = [...(acc[groupId] ?? []), addrSha256Hash];
+    //       return acc;
+    //     },
+    //     {}
+    //   );
+    // }
     const addressHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(address)
     );
-    const mutedAddressHash = this._muteMap[groupId] ?? [];
+    const mutedAddressHash = this._muteMap![groupId] ?? [];
     return mutedAddressHash.includes(addressHash);
   }
   
@@ -970,6 +994,7 @@ class GroupFiSDKFacade {
 
   clearAddress() {
     this._muteMap = undefined;
+    this._muteMapPromise = null
     this._pairX = undefined;
     this._proxyAddress = undefined;
   }
@@ -1342,7 +1367,7 @@ class GroupFiSDKFacade {
       memberAddrHash,
       this._address!
     )) as TransactionRes | undefined;
-    this._updateMuteMap(groupId, memberAddrHash);
+    await this._updateMuteMap(groupId, memberAddrHash);
     // if (muteGroupMemberRes !== undefined) {
     //   await GroupFiSDKObj.waitOutput(muteGroupMemberRes.outputId);
     //   this._updateMuteMap(groupId, memberAddrHash);
@@ -1399,7 +1424,7 @@ class GroupFiSDKFacade {
       this._address!
     )) as TransactionRes | undefined;
     this._lastTimeSdkRequestResultReceived = Date.now();
-    this._updateMuteMap(groupId, memberAddrHash);
+    await this._updateMuteMap(groupId, memberAddrHash);
     // if (unmuteGroupMemberRes !== undefined) {
     //   await GroupFiSDKObj.waitOutput(unmuteGroupMemberRes.outputId);
     //   this._updateMuteMap(groupId, memberAddrHash);
