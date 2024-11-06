@@ -399,18 +399,6 @@ export class GroupFiService {
     return await GroupFiSDKFacade.fetchAddressBalance()
   }
 
-  async fetchTokenTotalBalance(
-    token: string,
-    chainId: number
-  ): Promise<{
-    TotalSupply: string
-    Decimals: number
-    Name: string
-    Symbol: string
-  }> {
-    return await GroupFiSDKFacade.fetchTokenTotalBalance(token, chainId)
-  }
-
   async muteGroupMember(groupId: string, memberAddress: string) {
     await GroupFiSDKFacade.muteGroupMember(groupId, memberAddress)
   }
@@ -453,28 +441,8 @@ export class GroupFiService {
   ) {
     return GroupFiSDKFacade.listenningTPAccountChanged(callback)
   }
-  // listenningMetaMaskAccountsChanged(callback: (params: {address: string, mode: Mode, isAddressChanged: boolean}) => void) {
-  //   return GroupFiSDKFacade.listenningMetaMaskAccountsChanged(callback)
-  // }
   async onMetaMaskAccountChange(account: string) {
     await GroupFiSDKFacade.onMetaMaskAccountChanged(account)
-  }
-
-  async getRecommendGroups({
-    includes,
-    excludes
-  }: {
-    includes?: IIncludesAndExcludes[]
-    excludes?: IIncludesAndExcludes[]
-  }) {
-    return await GroupFiSDKFacade.getRecommendGroups({
-      includes,
-      excludes
-    })
-  }
-
-  async initialAddressQualifiedGroupConfigs() {
-    await GroupFiSDKFacade.initialAddressQualifiedGroupConfigs({})
   }
 
   async getMyGroups() {
@@ -550,20 +518,6 @@ export class GroupFiService {
 
   setWalletClient(dappClient: any) {
     GroupFiSDKFacade.setWalletClient(dappClient)
-  }
-
-  // fetchPublicGroupConfigs
-  async fetchPublicGroupConfigs({
-    includes,
-    excludes
-  }: {
-    includes?: IIncludesAndExcludes[]
-    excludes?: IIncludesAndExcludes[]
-  }) {
-    return await GroupFiSDKFacade.fetchPublicGroupConfigs({
-      includes,
-      excludes
-    })
   }
 
   // fetchForMeGroupConfigs

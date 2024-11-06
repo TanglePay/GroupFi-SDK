@@ -347,30 +347,6 @@ export class MessageAggregateRootDomain implements ICycle {
             this.groupFiService.enablePreparedRemainderHint()
         }
     }
-
-    async getGroupfiServiceRecommendGroups({
-        includes,
-        excludes,
-    }: {
-        includes?: IIncludesAndExcludes[];
-        excludes?: IIncludesAndExcludes[];
-    }) {
-        const res = await this.groupFiService.getRecommendGroups({
-            includes,
-            excludes
-        });
-
-        const forMeGroupIds = res.map((group) => group.groupId).map(this.groupFiService.addHexPrefixIfAbsent.bind(this.groupFiService));
-        const cmd:IFetchPublicGroupMessageCommand = {
-            type: 'publicGroupOnBoot',
-            groupIds: forMeGroupIds
-        }
-        // log
-        console.log('onFetchPublicGroupMessageCommand',cmd)
-        this.groupMemberDomain.groupMemberDomainCmdChannel.push(cmd)
-
-        return res
-    }
    
     // async handleGroupScrollToDirectionEnd({groupId, direction} : {groupId: string, direction: MessageFetchDirection}) {
     async handleConversationGroupScrollToDirectionEnd({groupId, direction} : {groupId: string, direction: MessageFetchDirection}) {
