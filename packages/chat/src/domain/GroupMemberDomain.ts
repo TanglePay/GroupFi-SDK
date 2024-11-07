@@ -160,7 +160,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             // emit event
             this._events.emit(EventForMeGroupConfigChangedKey,configs);
         } catch(error) {
-            console.error('_actualRefreshForMeGroupConfigs erorr', error)
+            console.error('_actualRefreshForMeGroupConfigs error', error)
+            throw error
         }
     }
 
