@@ -948,33 +948,6 @@ class GroupFiSDKFacade {
     }
   }
 
-  // register step three
-  // async sendRegister(metadataObjWithSignature: Object) {
-  //   const body = JSON.stringify(metadataObjWithSignature);
-  //   // const res = await auxiliaryService.register(body);
-  // }
-
-  // async registerPairX(modeInfo: ModeInfo) {
-  //   const pairX = modeInfo.pairX ?? generateSMRPair();
-  //   if (this._mode === ImpersonationMode) {
-  //     const adapter = this._client!.getRequestAdapter()  as ImpersonationModeRequestAdapter
-  //     const {bech32Address} = await adapter.getProxyAccount();
-  //     await this._client!.switchAddress(bech32Address, pairX);
-  //     await this._client!.registerTanglePayPairX({
-  //       evmAddress: this._address!,
-  //       pairX,
-  //     });
-  //     this._pairX = pairX
-  //     // import smr proxy account after registering pairX
-  //     adapter.importProxyAccount()
-  //   } else if (this._mode === DelegationMode) {
-  //     const adapter = this._client!.getRequestAdapter()  as DelegationModeRequestAdapter
-  //     const smrAddress = await adapter.registerPairX({pairX})
-  //     this._proxyAddress = smrAddress
-  //     this._pairX = pairX
-  //   }
-  // }
-
   async getSMRProxyAccount(): Promise<
     { bech32Address: string; hexAddress: string } | undefined
   > {
