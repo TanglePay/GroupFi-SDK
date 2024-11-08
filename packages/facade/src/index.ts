@@ -75,7 +75,7 @@ import {
   ImpersonationModeRequestAdapter,
   DelegationModeRequestAdapter,
 } from './client/clientMode';
-
+import auxiliaryService from './auxiliaryService';
 import { AuxiliaryService, config, ChainList, ChainInfo } from './auxiliaryService';
 import { IBasicOutput } from '@iota/iota.js';
 
@@ -690,10 +690,11 @@ class GroupFiSDKFacade {
     console.log('nodeManager.getUrl()', nodeManager.getUrl());
     this._client!.setNodeManager(nodeManager);
     GroupFiSDKObj.setNodeManager(nodeManager);
+    this._auxiliaryService.setNodeManager(nodeManager);
+    auxiliaryService.setNodeManager(nodeManager);
     GroupFiSDKObj.recreateMqttClient();
     // log after recreateMqttClient
     console.log('after recreateMqttClient');
-    this._auxiliaryService.setNodeManager(nodeManager);
     await this._client!.setup();
   }
 
