@@ -57,7 +57,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (!this._context.isIncludeGroupNamesSet) {
             return false
         }
-        if (this._context.userBrowseMode) {
+        const mode = this.groupFiService.getCurrentMode()
+        if (mode === undefined) {
             return true
         }
         return !!this._context.walletAddress
