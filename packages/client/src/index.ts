@@ -298,7 +298,7 @@ export class GroupfiSdkClient {
     }
     
     async recreateClient() {
-        const apiUrl = `https://${this.getUrl()}`;
+        const apiUrl = `${this.getUrl()}`;
         this._client = new SingleNodeClient(apiUrl);
         this._indexer = new IndexerPluginClient(this._client);
     
@@ -409,7 +409,7 @@ export class GroupfiSdkClient {
         //TODO try inx plugin 
         try {
             const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
-            const url = `https://${this.getUrl()}/api/groupfi/v1/nftswithpublickey?groupId=${prefixedGroupId}`
+            const url = `${this.getUrl()}/api/groupfi/v1/nftswithpublickey?groupId=${prefixedGroupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
             {
@@ -439,7 +439,7 @@ export class GroupfiSdkClient {
     async _getSharedOutputIdForGroupFromInxApi(groupId: string): Promise<{ outputId: string } | undefined> {
         try {
             const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
-            const url = `https://${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
+            const url = `${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
             try {
                 // @ts-ignore
                 const res = await fetch(url, {
@@ -1228,7 +1228,7 @@ export class GroupfiSdkClient {
     async _getOutputIdsFromMessageConsolidationApi(address:string){
         const params = {address:`${address}`}
         const paramStr = formatUrlParams(params)
-        const url = `https://${this.getUrl()}/api/groupfi/v1/consolidation/message${paramStr}`
+        const url = `${this.getUrl()}/api/groupfi/v1/consolidation/message${paramStr}`
         // @ts-ignore
         const res = await fetch(url,{
             method:'GET',
@@ -1257,7 +1257,7 @@ export class GroupfiSdkClient {
     async _getOutputIdsFromMessageConsolidationSharedApi(address: string): Promise<string[]> {
         const params = { address: `${address}` };
         const paramStr = formatUrlParams(params);
-        const url = `https://${this.getUrl()}/api/groupfi/v1/consolidation/shared${paramStr}`;
+        const url = `${this.getUrl()}/api/groupfi/v1/consolidation/shared${paramStr}`;
         // @ts-ignore
         const res = await fetch(url, {
             method: 'GET',
@@ -1271,7 +1271,7 @@ export class GroupfiSdkClient {
 
     // batchoutputidtooutput api, it is an inx api
     async batchOutputIdToOutput(outputIds:string[]){
-        const url = `https://${this.getUrl()}/api/groupfi/v1/batchoutputidtooutput`
+        const url = `${this.getUrl()}/api/groupfi/v1/batchoutputidtooutput`
         const res = await fetch(url,{
             method:'POST',
             headers:{
@@ -2056,7 +2056,7 @@ export class GroupfiSdkClient {
             const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
             const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${this.getUrl()}/api/groupfi/v1/messages${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/messages${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -2088,7 +2088,7 @@ export class GroupfiSdkClient {
             
             const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${this.getUrl()}/api/groupfi/v1/messages/until${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/messages/until${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -2107,7 +2107,7 @@ export class GroupfiSdkClient {
         try {
             const params = {address:`${address}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${this.getUrl()}/api/groupfi/v1/inboxitems${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/inboxitems${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',

@@ -296,7 +296,7 @@ class GroupFiSDK {
         try {
             const params = {address:`${address}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${this.getUrl()}/api/groupfi/v1/inboxitems${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/inboxitems${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -319,7 +319,7 @@ class GroupFiSDK {
                 endToken: endToken && this._addHexPrefixIfAbsent(endToken)
             }
             const paramStr = formatUrlParams(params)
-            const url = `https://${this.getUrl()}/api/groupfi/v1/publicitems${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/publicitems${paramStr}`
             const res = await fetch(url)
             const data = await res.json() as PublicItemsResponse
             return data
@@ -335,7 +335,7 @@ class GroupFiSDK {
         return ipfsOrigins
     }
     async fetchAddressQualifiedGroups(address:string,ipfsOrigins:string[]):Promise<IGroupQualify[]>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressgroupdetails?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressgroupdetails?address=${address}`
         const res = await fetch(url)
         const json = await res.json() as IGroupQualify[]
         const ipfsPolyfilled = (json ?? []).map((group:IGroupQualify)=>{
@@ -351,14 +351,14 @@ class GroupFiSDK {
     // fetch qualified addresses for a group, /groupqualifiedaddresses
     async fetchGroupQualifiedAddresses(groupId:string):Promise<string[]>{
         const fullfilled = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${this.getUrl()}/api/groupfi/v1/groupqualifiedaddresses?groupId=${fullfilled}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupqualifiedaddresses?groupId=${fullfilled}`
         const res = await fetch(url)
         const json = await res.json()
         return json
     }
     // fetch qualified addresse,pubkey for a group, /groupqualifiedaddresspublickeypairs
     async fetchGroupQualifiedAddressPublicKeyPairs(groupId:string):Promise<{ownerAddress:string,publicKey:string}[]>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/groupqualifiedaddresspublickeypairs?groupId=${this._addHexPrefixIfAbsent(groupId)}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupqualifiedaddresspublickeypairs?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -366,14 +366,14 @@ class GroupFiSDK {
     // fetch marked addresses for a group, /groupmarkedaddresses
     async fetchGroupMarkedAddresses(groupId:string):Promise<string[]>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${this.getUrl()}/api/groupfi/v1/groupmarkedaddresses?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupmarkedaddresses?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
     }
     // fetch member addresses for a group, /groupmemberaddresses
     async fetchGroupMemberAddresses(groupId:string):Promise<{ownerAddress:string,publicKey:string, timestamp: number}[]>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/groupmemberaddresses?groupId=${this._addHexPrefixIfAbsent(groupId)}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupmemberaddresses?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -384,7 +384,7 @@ class GroupFiSDK {
     }
     // fetch public key of a address, /getaddresspublickey
     async fetchAddressPublicKey(address:string):Promise<string|undefined>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/getaddresspublickey?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/getaddresspublickey?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -392,7 +392,7 @@ class GroupFiSDK {
     // fetch group votes for a group, /groupvotes
     async fetchGroupVotes(groupId:string):Promise<{groupId:string,addressSha256Hash:string,vote:number}>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${this.getUrl()}/api/groupfi/v1/groupvotes?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupvotes?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -405,20 +405,20 @@ class GroupFiSDK {
         memberCount: number;
     }>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${this.getUrl()}/api/groupfi/v1/groupvotescount?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupvotescount?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
     }
     async fetchAddressVotes(address: string): Promise<{groupId: string, vote: number}[]> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressvotes?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressvotes?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         const jsonList = this._ensureList(json)
         return jsonList.map(list => ({groupId: list.groupId, vote: list.vote})) 
     }
     async fetchAddressMutes(address: string): Promise<{groupId: string,addrSha256Hash: string}[]> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressmutes?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressmutes?address=${address}`
         const res = await fetch(url)
         const json = await res.json() 
         const jsonList = this._ensureList(json) as {groupId:string,mutedAddressSha256Hash:string}[]
@@ -429,7 +429,7 @@ class GroupFiSDK {
     }
     // fetchAddressLikes
     async fetchAddressLikes(address: string): Promise<{groupId: string,addrSha256Hash: string}[]> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addresslikes?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addresslikes?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         const jsonList = this._ensureList(json) as {groupId:string,likedAddressSha256Hash:string}[]
@@ -441,14 +441,14 @@ class GroupFiSDK {
     // fetch group blacklist for a group, /groupblacklist
     async fetchGroupBlacklist(groupId:string):Promise<string[]>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${this.getUrl()}/api/groupfi/v1/groupblacklist?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupblacklist?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
     }
     // fetch address member groups for an address, /addressmembergroups
     async fetchAddressMemberGroups(address:string):Promise<string[]>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressmembergroups?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressmembergroups?address=${address}`
         const res = await fetch(url)
         if (!res.ok) {
             throw new Error(`fetchAddressMemberGroups error ${res.status} ${res.statusText}`)
@@ -458,13 +458,13 @@ class GroupFiSDK {
     }
     // fetch address mark groups for an address, /addressmarkgroups
     async fetchAddressMarkGroups(address:string):Promise<string[]>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressmarkgroups?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressmarkgroups?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
     }
     async fetchAddressMarkGroupDetails(address:string): Promise<{groupId: string, timestamp: number}[]> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressmarkgroupdetails?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressmarkgroupdetails?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -472,7 +472,7 @@ class GroupFiSDK {
     // RouteGroupUserReputation = "/groupuserreputation"
     async fetchGroupUserReputation(groupId:string):Promise<IGroupUserReputation[]>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${this.getUrl()}/api/groupfi/v1/groupuserreputation?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupuserreputation?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -481,7 +481,7 @@ class GroupFiSDK {
     // RouteUserGroupReputation = "/usergroupreputation"
     async fetchUserGroupReputation(groupId:string,address:string):Promise<IGroupUserReputation>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${this.getUrl()}/api/groupfi/v1/usergroupreputation?address=${address}&groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/usergroupreputation?address=${address}&groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -491,7 +491,7 @@ class GroupFiSDK {
     }
     // get shared output for a group
     async checkIsGroupPublicFromSharedApiCall(groupId: string): Promise<boolean> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${this._gid(groupId)}`;
+        const url = `${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${this._gid(groupId)}`;
         try {
             const res = await fetch(url, {
                 method: 'GET',
@@ -518,7 +518,7 @@ class GroupFiSDK {
     // get shared output id for a group
     async fetchSharedOutputId(groupId: string): Promise<{ outputId: string }> {
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId);
-        const url = `https://${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
+        const url = `${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
         try {
             const res = await fetch(url, {
                 method: 'GET',
@@ -547,7 +547,7 @@ class GroupFiSDK {
     }
     // addressqualifiedgroupconfigs
     async fetchAddressQualifiedGroupConfigs({address, includes, excludes, ifSaveGroupConfigMap}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[], ifSaveGroupConfigMap: boolean}): Promise<MessageGroupMeta[]> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;
+        const url = `${this.getUrl()}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;
         const body = {
             includes,
             excludes
@@ -568,7 +568,7 @@ class GroupFiSDK {
 
     // fetch public group configs
     async fetchPublicGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfig[]> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/publicgroupconfigs`;
+        const url = `${this.getUrl()}/api/groupfi/v1/publicgroupconfigs`;
         const body = {
             includes,
             excludes
@@ -598,7 +598,7 @@ class GroupFiSDK {
     // fetch for me group configs
     async fetchForMeGroupConfigs({address, includes, excludes}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfigPlus[]> {
         try {
-            const url = `https://${this.getUrl()}/api/groupfi/v1/formegroupconfigs?address=${address}`
+            const url = `${this.getUrl()}/api/groupfi/v1/formegroupconfigs?address=${address}`
             const body = {
                 includes,
                 excludes
@@ -632,7 +632,7 @@ class GroupFiSDK {
 // fetch address marked group configs
     async fetchAddressMarkedGroupConfigs(address:string):Promise<GroupConfig[]>{
         try {
-            const url = `https://${this.getUrl()}/api/groupfi/v1/markedgroupconfigs?address=${address}`
+            const url = `${this.getUrl()}/api/groupfi/v1/markedgroupconfigs?address=${address}`
             const res = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -651,7 +651,7 @@ class GroupFiSDK {
         }
     }
     async fetchAddressPairX(evmAddress: string) {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addresspairx?address=${evmAddress}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addresspairx?address=${evmAddress}`
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -668,7 +668,7 @@ class GroupFiSDK {
     }
 
     async fetchTokenTotalBalance(token: string, chainId: number): Promise<{TotalSupply:string,Decimals: number,Name:string,Symbol:string}> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/tokentotalbalance?token=${token}&chainId=${chainId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/tokentotalbalance?token=${token}&chainId=${chainId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -676,14 +676,14 @@ class GroupFiSDK {
 
     // addressbalance
     async fetchAddressBalance(address:string):Promise<number>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressbalance?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressbalance?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json
     }
 
     async fetchAddressNames(addressList: string[]): Promise<{[key: string]: {name: string}}> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressdid`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressdid`
         const body = addressList
         const res = await fetch(url, {
             method: 'POST',
@@ -727,7 +727,7 @@ class GroupFiSDK {
         return result.join('')
     }
     async _fetchAddressGroupIds(address:string):Promise<string[]>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/addressgroupids?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressgroupids?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -748,7 +748,7 @@ class GroupFiSDK {
         return rawName
     }
     async _fetchProfilesByEvmAddresses(addresses: string[]): Promise<ProfileResponse[]> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/batchprofileunderevmaddress`;
+        const url = `${this.getUrl()}/api/groupfi/v1/batchprofileunderevmaddress`;
         
         const res = await fetch(url, {
             method: 'POST',
@@ -1155,7 +1155,7 @@ class GroupFiSDK {
     }
     // call /batchfetchgroupispublic, method POST
     async batchFetchGroupIsPublic(groupIds: string[]): Promise<{[key: string]: boolean}> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/batchfetchgroupispublic`;
+        const url = `${this.getUrl()}/api/groupfi/v1/batchfetchgroupispublic`;
         try {
             const res = await fetch(url, {
                 method: 'POST',
@@ -1269,7 +1269,7 @@ class GroupFiSDK {
 
     // call /batchsmraddresstoevmaddress, method POST
     async batchSmrAddressToEvmAddress(addresses:string[]):Promise<{[key:string]:string}>{
-        const url = `https://${this.getUrl()}/api/groupfi/v1/batchsmraddresstoevmaddress`
+        const url = `${this.getUrl()}/api/groupfi/v1/batchsmraddresstoevmaddress`
         try {
             
             const res = await fetch(url, {
@@ -1316,7 +1316,7 @@ class GroupFiSDK {
     }
 
     async fetchAddressProfile(address: string): Promise<{data: any, outputId: string} | null> {
-        const url = `https://${this.getUrl()}/api/groupfi/v1/profileunderevmaddress?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/profileunderevmaddress?address=${address}`
         try {
             const res = await fetch(url, {
                 method:'GET',
