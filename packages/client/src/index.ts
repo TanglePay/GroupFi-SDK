@@ -211,6 +211,8 @@ export class GroupfiSdkClient {
     // Method to inject NodeManager instance
     setNodeManager(nodeManager: INodeProvider): void {
       this._nodeManager = nodeManager;
+      // log client setNodeManager
+        console.log('client setNodeManager', this._nodeManager);
       // Initialize _currentUrlUsing on first setup
       this._currentUrlUsing = this._nodeManager.getUrl();
     }
