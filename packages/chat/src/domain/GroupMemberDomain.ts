@@ -54,7 +54,14 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     _onLoggedInHandler: () => void;
     // isCanRefreshForMeGroupConfigs
     _isCanRefreshForMeGroupConfigs(): boolean {
-        return this._context.isIncludeGroupNamesSet;
+        if (!this._context.isIncludeGroupNamesSet) {
+            return false
+        }
+        if (this._context.userBrowseMode) {
+            return true
+        }
+        return !!this._context.walletAddress
+        // return this._context.isIncludeGroupNamesSet;
     }
 
     _lastTimeRefreshForMeGroupConfigs: number = 0;
