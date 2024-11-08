@@ -142,6 +142,8 @@ class GroupFiSDK {
             console.log('Existing mqttClient closed');
         }
 
+        // log recreateMqttClient
+        console.log('recreateMqttClient enter');
         // Create a new MqttClient instance and set up event listeners
         const client = this._connectFn(`${this.getUrl()}/api/groupfi/mqtt/v1`);
         client.on('connect', () => {

@@ -687,6 +687,7 @@ class GroupFiSDKFacade {
     }
     const nodeManager = new NodeManager(process.env.AUXILIARY_SERVICE_DOMAIN!);
     await nodeManager.fetchUrlFromBackend();
+    console.log('nodeManager.getUrl()', nodeManager.getUrl());
     this._client!.setNodeManager(nodeManager);
     GroupFiSDKObj.setNodeManager(nodeManager);
     GroupFiSDKObj.recreateMqttClient();
