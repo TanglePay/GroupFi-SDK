@@ -25,7 +25,8 @@ import {
   isUniversalProfileAddress,
   getEvmOrSolanaAddressType,
   ImInboxEventTypeProfileChangedEvent,
-  GroupConfigPlus
+  GroupConfigPlus,
+  NodeManager
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -684,6 +685,10 @@ class GroupFiSDKFacade {
     if (this._storage) {
       this._client.setupStorage(this._storage)
     }
+    const nodeManager = new NodeManager(process.env.AUXILIARY_SERVICE_DOMAIN!);
+    this._client!.setNodeManager(nodeManager);
+    GroupFiSDKObj.setNodeManager(nodeManager);
+    this._auxiliaryService.setNodeManager(nodeManager);
     await this._client!.setup();
   }
 
