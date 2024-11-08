@@ -23,7 +23,7 @@ export class NodeManager implements INodeProvider {
     // Fetches a working URL from the backend API
     private async fetchUrlFromBackend(): Promise<void> {
       try {
-        const response = await fetch(`${this.backendDomain}/hornet`);
+        const response = await fetch(`https://${this.backendDomain}/hornet`);
         const data = await response.json();
   
         // Assuming the response format is: {"id":1,"result":true,"rpc":"https://test2.api.groupfi.ai"}
