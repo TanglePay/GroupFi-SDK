@@ -163,16 +163,14 @@ class GroupFiSDK {
         });
         client.on('message', this._handleMqttMessage.bind(this));
 
-        // log mqtt client setup
-        console.log('recreateMqttClient mqtt client setup', client);
         this._mqttClient = client;
     }
     _iotaMqttClient?:IotaMqttClient
     setupIotaMqttConnection(mqttClient:new (...args: any[])=>IotaMqttClient){
-        const client = new mqttClient(`wss://api.shimmer.network:443/api/mqtt/v1`)
-        console.log('iota mqtt client setup',client)
+        //const client = new mqttClient(`wss://api.shimmer.network:443/api/mqtt/v1`)
+        //console.log('iota mqtt client setup',client)
 
-        this._iotaMqttClient = client
+        // this._iotaMqttClient = client
     
     }
     async waitOutput(outputId:string) {
