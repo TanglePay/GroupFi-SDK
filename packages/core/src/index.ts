@@ -145,7 +145,9 @@ class GroupFiSDK {
         // log recreateMqttClient
         console.log('recreateMqttClient enter');
         // Create a new MqttClient instance and set up event listeners
-        const client = this._connectFn(`${this.getUrl()}/api/groupfi/mqtt/v1`);
+        const httpsUrl = this.getUrl();
+        const wssUrl = httpsUrl.replace('https://', 'wss://');
+        const client = this._connectFn(`${wssUrl}/api/groupfi/mqtt/v1`);
         client.on('connect', () => {
             console.log('mqtt connected');
         });
@@ -167,10 +169,10 @@ class GroupFiSDK {
     }
     _iotaMqttClient?:IotaMqttClient
     setupIotaMqttConnection(mqttClient:new (...args: any[])=>IotaMqttClient){
-        //const client = new mqttClient(`wss://api.shimmer.network:443/api/mqtt/v1`)
-        //console.log('iota mqtt client setup',client)
+        const client = new mqttClient(`wss://api.shimmer.network:443/api/mqtt/v1`)
+        console.log('iota mqtt client setup',client)
 
-        // this._iotaMqttClient = client
+        this._iotaMqttClient = client
     
     }
     async waitOutput(outputId:string) {
