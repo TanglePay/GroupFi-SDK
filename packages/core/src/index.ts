@@ -163,6 +163,8 @@ class GroupFiSDK {
         });
         client.on('message', this._handleMqttMessage.bind(this));
 
+        // log mqtt client setup
+        console.log('recreateMqttClient mqtt client setup', client);
         this._mqttClient = client;
     }
     _iotaMqttClient?:IotaMqttClient

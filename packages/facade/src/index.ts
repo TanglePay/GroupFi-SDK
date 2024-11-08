@@ -691,6 +691,8 @@ class GroupFiSDKFacade {
     this._client!.setNodeManager(nodeManager);
     GroupFiSDKObj.setNodeManager(nodeManager);
     GroupFiSDKObj.recreateMqttClient();
+    // log after recreateMqttClient
+    console.log('after recreateMqttClient');
     this._auxiliaryService.setNodeManager(nodeManager);
     await this._client!.setup();
   }
