@@ -128,15 +128,6 @@ class GroupFiSDK {
 
         // Log entry
         console.log('setupMqttConnection enter');
-        
-        if (this._mqttClient) {
-            console.log('setupMqttConnection already setup, recreating client');
-            this.recreateMqttClient();
-            return;
-        }
-
-        // Initial connection setup
-        this.recreateMqttClient();
     }
 
     recreateMqttClient() {

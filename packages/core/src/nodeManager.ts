@@ -6,7 +6,6 @@ export class NodeManager implements INodeProvider {
   
     constructor(backendDomain: string) {
       this.backendDomain = backendDomain;
-      this.fetchUrlFromBackend();
     }
   
     // Getter for the current URL
@@ -21,7 +20,7 @@ export class NodeManager implements INodeProvider {
     }
   
     // Fetches a working URL from the backend API
-    private async fetchUrlFromBackend(): Promise<void> {
+    async fetchUrlFromBackend(): Promise<void> {
       try {
         const response = await fetch(`https://${this.backendDomain}/hornet`);
         const data = await response.json();
