@@ -301,6 +301,7 @@ export class GroupfiSdkClient {
     
     async recreateClient() {
         // const apiUrl = `${this.getUrl()}`;
+        // use official hornet node api
         const officialHornetApiUrl = 'https://api.shimmer.network'
         this._client = new SingleNodeClient(officialHornetApiUrl);
         this._indexer = new IndexerPluginClient(this._client);

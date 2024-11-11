@@ -12,7 +12,7 @@ export class NodeManager implements INodeProvider {
     getUrl(): string {
       // Return an empty string when INX_GROUPFI_DOMAIN is not configured.
       if (process.env.INX_GROUPFI_DOMAIN) {
-        return process.env.INX_GROUPFI_DOMAIN
+        return 'https://' + process.env.INX_GROUPFI_DOMAIN
       }
       return this.currentUrl
     }

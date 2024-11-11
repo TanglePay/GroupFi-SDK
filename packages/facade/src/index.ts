@@ -15,13 +15,10 @@ import {
   ImInboxEventTypeNewMessage,
   ImInboxEventTypeGroupMemberChanged,
   InboxItemResponse,
-  MessageResponseItem,
   ImInboxEventTypeMarkChanged,
   IIncludesAndExcludes,
   ImInboxEventTypeMuteChanged,
   ImInboxEventTypeLikeChanged,
-  MessageResponseItemPlus,
-  INX_GROUPFI_DOMAIN,
   isUniversalProfileAddress,
   getEvmOrSolanaAddressType,
   ImInboxEventTypeProfileChangedEvent,
@@ -786,7 +783,7 @@ class GroupFiSDKFacade {
   }
 
   switchClientAdapter(mode: Mode) {
-    const nodeUrlHint = `https://${INX_GROUPFI_DOMAIN}`;
+    const nodeUrlHint = 'https://api.shimmer.network';
     switch (mode) {
       case ShimmerMode: {
         const adapter = new ShimmerModeRequestAdapter(
