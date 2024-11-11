@@ -118,7 +118,8 @@ export class ThreadHandler {
                 }
 
             } catch (error) {
-                console.error(`Unhandled error in poll method of ${this.name}:`, error)
+                console.error(`Unhandled error in poll method of ${this.name}, and sleep 1s:`, error)
+                await sleep(1000)
             }
         }
         if (this._stoppedCallback) {

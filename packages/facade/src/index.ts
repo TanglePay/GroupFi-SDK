@@ -25,7 +25,8 @@ import {
   isUniversalProfileAddress,
   getEvmOrSolanaAddressType,
   ImInboxEventTypeProfileChangedEvent,
-  GroupConfigPlus
+  GroupConfigPlus,
+  NodeManager
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -74,7 +75,7 @@ import {
   ImpersonationModeRequestAdapter,
   DelegationModeRequestAdapter,
 } from './client/clientMode';
-
+import auxiliaryService from './auxiliaryService';
 import { AuxiliaryService, config, ChainList, ChainInfo } from './auxiliaryService';
 import { IBasicOutput } from '@iota/iota.js';
 
@@ -684,6 +685,16 @@ class GroupFiSDKFacade {
     if (this._storage) {
       this._client.setupStorage(this._storage)
     }
+    const nodeManager = new NodeManager(process.env.AUXILIARY_SERVICE_DOMAIN!);
+    await nodeManager.fetchUrlFromBackend();
+    console.log('nodeManager.getUrl()', nodeManager.getUrl());
+    this._client!.setNodeManager(nodeManager);
+    GroupFiSDKObj.setNodeManager(nodeManager);
+    this._auxiliaryService.setNodeManager(nodeManager);
+    auxiliaryService.setNodeManager(nodeManager);
+    GroupFiSDKObj.recreateMqttClient();
+    // log after recreateMqttClient
+    console.log('after recreateMqttClient');
     await this._client!.setup();
   }
 
@@ -947,33 +958,6 @@ class GroupFiSDKFacade {
       }
     }
   }
-
-  // register step three
-  // async sendRegister(metadataObjWithSignature: Object) {
-  //   const body = JSON.stringify(metadataObjWithSignature);
-  //   // const res = await auxiliaryService.register(body);
-  // }
-
-  // async registerPairX(modeInfo: ModeInfo) {
-  //   const pairX = modeInfo.pairX ?? generateSMRPair();
-  //   if (this._mode === ImpersonationMode) {
-  //     const adapter = this._client!.getRequestAdapter()  as ImpersonationModeRequestAdapter
-  //     const {bech32Address} = await adapter.getProxyAccount();
-  //     await this._client!.switchAddress(bech32Address, pairX);
-  //     await this._client!.registerTanglePayPairX({
-  //       evmAddress: this._address!,
-  //       pairX,
-  //     });
-  //     this._pairX = pairX
-  //     // import smr proxy account after registering pairX
-  //     adapter.importProxyAccount()
-  //   } else if (this._mode === DelegationMode) {
-  //     const adapter = this._client!.getRequestAdapter()  as DelegationModeRequestAdapter
-  //     const smrAddress = await adapter.registerPairX({pairX})
-  //     this._proxyAddress = smrAddress
-  //     this._pairX = pairX
-  //   }
-  // }
 
   async getSMRProxyAccount(): Promise<
     { bech32Address: string; hexAddress: string } | undefined

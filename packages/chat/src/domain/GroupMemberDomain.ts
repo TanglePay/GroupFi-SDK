@@ -54,7 +54,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     _onLoggedInHandler: () => void;
     // isCanRefreshForMeGroupConfigs
     _isCanRefreshForMeGroupConfigs(): boolean {
-        return this._context.isIncludeGroupNamesSet;
+        if (!this._context.isIncludeGroupNamesSet) {
+            return false
+        }
+        const mode = this.groupFiService.getCurrentMode()
+        if (mode === undefined) {
+            return true
+        }
+        return !!this._context.proxyAddress
+        // return this._context.isIncludeGroupNamesSet;
     }
 
     _lastTimeRefreshForMeGroupConfigs: number = 0;
@@ -160,7 +168,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             // emit event
             this._events.emit(EventForMeGroupConfigChangedKey,configs);
         } catch(error) {
-            console.error('_actualRefreshForMeGroupConfigs erorr', error)
+            console.error('_actualRefreshForMeGroupConfigs error', error)
+            throw error
         }
     }
 
