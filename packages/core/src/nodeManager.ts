@@ -10,7 +10,11 @@ export class NodeManager implements INodeProvider {
   
     // Getter for the current URL
     getUrl(): string {
-      return process.env.INX_GROUPFI_DOMAIN??this.currentUrl;
+      // Return an empty string when INX_GROUPFI_DOMAIN is not configured.
+      if (process.env.INX_GROUPFI_DOMAIN) {
+        return process.env.INX_GROUPFI_DOMAIN
+      }
+      return this.currentUrl
     }
   
     // Report failure and trigger a new URL fetch
