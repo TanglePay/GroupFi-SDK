@@ -61,7 +61,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (mode === undefined) {
             return true
         }
-        return !!this._context.walletAddress
+        return !!this._context.proxyAddress
         // return this._context.isIncludeGroupNamesSet;
     }
 
