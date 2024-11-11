@@ -561,7 +561,7 @@ class GroupFiSDKFacade {
     return res;
   }
   // async batchConvertOutputIdsToMessages(outputIds: string[], address: string): Promise<{ messages: IMessage[], missedMessageOutputIds: string[] }> {
-  async batchConvertOutputIdsToMessages(outputIds: string[],onMessageCompleted: (msg: IMessage, outputId: string) => void) {
+  async batchConvertOutputIdsToMessages(outputIds: string[],onMessageCompleted: (msg: IMessage, outputId: string) => Promise<void>) {
     const res = await this._client!.batchConvertOutputIdsToMessages(
       outputIds,
       this._address!,

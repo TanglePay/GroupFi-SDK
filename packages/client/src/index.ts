@@ -1012,7 +1012,7 @@ export class GroupfiSdkClient {
     async batchConvertOutputIdsToMessages(
         outputIds: string[], 
         address: string, 
-        onMessageCompleted: (msg: IMessage, outputId: string) => void
+        onMessageCompleted: (msg: IMessage, outputId: string) => Promise<void>
     ): Promise<{ failedMessageOutputIds: string[] }> {
         const failedMessageOutputIds: string[] = [];
     
@@ -1100,7 +1100,7 @@ export class GroupfiSdkClient {
                         totalMessagesNeedingSharedOutput++;
                     } else {
                         const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender, name, avatar);
-                        onMessageCompleted(iMessage, outputIdHex); // Trigger the callback immediately
+                        await onMessageCompleted(iMessage, outputIdHex); // Trigger the callback immediately
                     }
                 } catch (error) {
                     console.log(`Error deserializing message for outputId: ${outputIdHex}`, error);
@@ -1127,7 +1127,7 @@ export class GroupfiSdkClient {
                             const completedIMMessage = GroupFiSDKObj.completeMessageWithSalt(imMessage, salt);
                             // const sender = ''; // You'll need to determine the sender value based on your context
                             const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender,name, avatar);
-                            onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
+                            await onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                         } catch (error) {
                             console.log('Error converting completed message to IMessage:', error);
                             failedMessageOutputIds.push(messageOutputId);
@@ -1166,7 +1166,7 @@ export class GroupfiSdkClient {
                                 const completedIMMessage = GroupFiSDKObj.completeMessageWithSalt(imMessage, salt);
                                 // const sender = ''; // You'll need to determine the sender value based on your context
                                 const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender, name, avatar);
-                                onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
+                                await onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                             } catch (error) {
                                 console.log('Error converting completed message to IMessage:', error);
                                 failedMessageOutputIds.push(messageOutputId);
