@@ -300,8 +300,9 @@ export class GroupfiSdkClient {
     }
     
     async recreateClient() {
-        const apiUrl = `${this.getUrl()}`;
-        this._client = new SingleNodeClient(apiUrl);
+        // const apiUrl = `${this.getUrl()}`;
+        const officialHornetApiUrl = 'https://api.shimmer.network'
+        this._client = new SingleNodeClient(officialHornetApiUrl);
         this._indexer = new IndexerPluginClient(this._client);
     
         // Fetch protocol info after reinitializing the client
