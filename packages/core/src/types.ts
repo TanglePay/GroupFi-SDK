@@ -319,3 +319,10 @@ export interface IIncludesAndExcludes {
     groupId: string
     buylink?: string
 }
+
+
+export interface INodeProvider {
+    getUrl(): string;
+    reportFailure(): void;
+}
+  

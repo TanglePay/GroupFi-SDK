@@ -58,7 +58,8 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     AddressType,
     MessageResponseItemPlus,
     IMAGE_PRESIGN_SERVICE_URL,
-    MessageTypePrivate
+    MessageTypePrivate,
+    INodeProvider
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -204,6 +205,39 @@ export class GroupfiSdkClient {
     _mode?: Mode
     _pairX?: PairX
     _updateNodeProtocolInfoInterval:NodeJS.Timeout|undefined
+    private _nodeManager: INodeProvider | null = null;
+    private _currentUrlUsing: string | null = null;
+  
+    // Method to inject NodeManager instance
+    setNodeManager(nodeManager: INodeProvider): void {
+      this._nodeManager = nodeManager;
+      // log client setNodeManager
+        console.log('client setNodeManager', this._nodeManager);
+      // Initialize _currentUrlUsing on first setup
+      this._currentUrlUsing = this._nodeManager.getUrl();
+    }
+  
+    // Wrapped method to get the current URL, reinitializing if the URL changes
+    getUrl(): string {
+      if (!this._nodeManager) {
+        throw new Error("NodeManager is not set. Please call setNodeManager() first.");
+      }
+  
+      const currentUrl = this._nodeManager.getUrl();
+      if (this._currentUrlUsing !== currentUrl) {
+        // URL has changed; update _currentUrlUsing and trigger reinitialization
+        this._currentUrlUsing = currentUrl;
+        this.reinitializeForNewUrl();
+      }
+  
+      return currentUrl;
+    }
+  
+    // Placeholder for reinitializing classes that depend on the URL
+    private reinitializeForNewUrl(): void {
+      // Reinitialization logic for components depending on the URL
+      this.recreateClient()
+    }
     // get pairX publickey in hex
     getPairXPublicKey():string|undefined{
         if (!this._pairX) return
@@ -246,24 +280,39 @@ export class GroupfiSdkClient {
     }
     
     _queuePromise:Promise<any>|undefined;
-    async setup(){
-        const apiUrl = `https://${INX_GROUPFI_DOMAIN}`
-        this._client = new SingleNodeClient(apiUrl)
-        this._indexer = new IndexerPluginClient(this._client)
-        this._protocolInfo = await this.firstGetNodeProtocolInfo(this._client)
-        this._networkId = TransactionHelper.networkIdFromNetworkName(this._protocolInfo!.networkName)
-        this._pubKeyCache = makeLRUCache<string>(200)
-        this._sharedNotFoundRecoveringMessageCheckInterval = setInterval(()=>{
-            this._tryProcessSharedNotFoundRecoveringMessage()
+    async setup() {
+        // Initial setup logic
+        await this.recreateClient();
+    
+        this._pubKeyCache = makeLRUCache<string>(200);
+    
+        this._sharedNotFoundRecoveringMessageCheckInterval = setInterval(() => {
+            this._tryProcessSharedNotFoundRecoveringMessage();
         }, 5000);
+    
         // Execute once every 10 minutes
         this._updateNodeProtocolInfoInterval = setInterval(() => {
-            this.periodicUpdateNodeProtocolInfo()
-        }, 1000*60*10)
-        this._queuePromise = Promise.resolve()
-        // console.log('NodeInfo', this._nodeInfo);
+            this.periodicUpdateNodeProtocolInfo();
+        }, 1000 * 60 * 10);
+    
+        this._queuePromise = Promise.resolve();
         console.log('ProtocolInfo', this._protocolInfo);
     }
+    
+    async recreateClient() {
+        // const apiUrl = `${this.getUrl()}`;
+        // use official hornet node api
+        const officialHornetApiUrl = 'https://api.shimmer.network'
+        this._client = new SingleNodeClient(officialHornetApiUrl);
+        this._indexer = new IndexerPluginClient(this._client);
+    
+        // Fetch protocol info after reinitializing the client
+        this._protocolInfo = await this.firstGetNodeProtocolInfo(this._client);
+        this._networkId = TransactionHelper.networkIdFromNetworkName(this._protocolInfo!.networkName);
+    
+        console.log('Recreated client with updated ProtocolInfo:', this._protocolInfo);
+    }
+    
     getNodeProtocolInfoStorageKey() {
         return `${this._storage?.prefix}.ProtocolInfo`
     }
@@ -364,7 +413,7 @@ export class GroupfiSdkClient {
         //TODO try inx plugin 
         try {
             const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/nftswithpublickey?groupId=${prefixedGroupId}`
+            const url = `${this.getUrl()}/api/groupfi/v1/nftswithpublickey?groupId=${prefixedGroupId}`
             console.log('_getAddressListForGroupFromInxApi url', url);
             const res = await fetch(url,
             {
@@ -394,7 +443,7 @@ export class GroupfiSdkClient {
     async _getSharedOutputIdForGroupFromInxApi(groupId: string): Promise<{ outputId: string } | undefined> {
         try {
             const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
+            const url = `${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
             try {
                 // @ts-ignore
                 const res = await fetch(url, {
@@ -963,7 +1012,7 @@ export class GroupfiSdkClient {
     async batchConvertOutputIdsToMessages(
         outputIds: string[], 
         address: string, 
-        onMessageCompleted: (msg: IMessage, outputId: string) => void
+        onMessageCompleted: (msg: IMessage, outputId: string) => Promise<void>
     ): Promise<{ failedMessageOutputIds: string[] }> {
         const failedMessageOutputIds: string[] = [];
     
@@ -1051,7 +1100,7 @@ export class GroupfiSdkClient {
                         totalMessagesNeedingSharedOutput++;
                     } else {
                         const iMessage = this.convertIMMessageToIMessage(imMessage, messageId, sender, name, avatar);
-                        onMessageCompleted(iMessage, outputIdHex); // Trigger the callback immediately
+                        await onMessageCompleted(iMessage, outputIdHex); // Trigger the callback immediately
                     }
                 } catch (error) {
                     console.log(`Error deserializing message for outputId: ${outputIdHex}`, error);
@@ -1078,7 +1127,7 @@ export class GroupfiSdkClient {
                             const completedIMMessage = GroupFiSDKObj.completeMessageWithSalt(imMessage, salt);
                             // const sender = ''; // You'll need to determine the sender value based on your context
                             const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender,name, avatar);
-                            onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
+                            await onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                         } catch (error) {
                             console.log('Error converting completed message to IMessage:', error);
                             failedMessageOutputIds.push(messageOutputId);
@@ -1117,7 +1166,7 @@ export class GroupfiSdkClient {
                                 const completedIMMessage = GroupFiSDKObj.completeMessageWithSalt(imMessage, salt);
                                 // const sender = ''; // You'll need to determine the sender value based on your context
                                 const iMessage = this.convertIMMessageToIMessage(completedIMMessage, messageId, sender, name, avatar);
-                                onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
+                                await onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
                             } catch (error) {
                                 console.log('Error converting completed message to IMessage:', error);
                                 failedMessageOutputIds.push(messageOutputId);
@@ -1183,7 +1232,7 @@ export class GroupfiSdkClient {
     async _getOutputIdsFromMessageConsolidationApi(address:string){
         const params = {address:`${address}`}
         const paramStr = formatUrlParams(params)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/consolidation/message${paramStr}`
+        const url = `${this.getUrl()}/api/groupfi/v1/consolidation/message${paramStr}`
         // @ts-ignore
         const res = await fetch(url,{
             method:'GET',
@@ -1212,7 +1261,7 @@ export class GroupfiSdkClient {
     async _getOutputIdsFromMessageConsolidationSharedApi(address: string): Promise<string[]> {
         const params = { address: `${address}` };
         const paramStr = formatUrlParams(params);
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/consolidation/shared${paramStr}`;
+        const url = `${this.getUrl()}/api/groupfi/v1/consolidation/shared${paramStr}`;
         // @ts-ignore
         const res = await fetch(url, {
             method: 'GET',
@@ -1226,7 +1275,7 @@ export class GroupfiSdkClient {
 
     // batchoutputidtooutput api, it is an inx api
     async batchOutputIdToOutput(outputIds:string[]){
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/batchoutputidtooutput`
+        const url = `${this.getUrl()}/api/groupfi/v1/batchoutputidtooutput`
         const res = await fetch(url,{
             method:'POST',
             headers:{
@@ -2011,7 +2060,7 @@ export class GroupfiSdkClient {
             const prefixedGroupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
             const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/messages${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -2043,7 +2092,7 @@ export class GroupfiSdkClient {
             
             const params = {groupId:prefixedGroupId,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/messages/until${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/messages/until${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -2062,7 +2111,7 @@ export class GroupfiSdkClient {
         try {
             const params = {address:`${address}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/inboxitems${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/inboxitems${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',

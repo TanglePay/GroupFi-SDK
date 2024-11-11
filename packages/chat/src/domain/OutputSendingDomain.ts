@@ -324,6 +324,7 @@ export class OutputSendingDomain implements ICycle, IRunnable {
         this._isReadyToChat = false
 
         this._lastTimeLoadProxyAddressAndPairX = 0
+        this._loadProxyAddressAndPairXInterval = 1000*2
         this._context.clearPairX('outputSendingDomain', 'thread start')
         this._context.clearProxyAddress('outputSendingDomain', 'thread start')
         this._context.clearEncryptedPairX('outputSendingDomain', 'thread start')
@@ -460,6 +461,7 @@ export class OutputSendingDomain implements ICycle, IRunnable {
             } else if (cmd.type === 8) {
                 const { encryptionPublicKey } = cmd as IRegisterPairXCommand
                 await this._tryRegisterPairX(encryptionPublicKey);
+                this._loadProxyAddressAndPairXInterval = 1000*2
                 await sleep(cmd.sleepAfterFinishInMs);
             } else if (cmd.type === 9) {
                 const {groupId,sleepAfterFinishInMs} = cmd as IMarkGroupCommend;
@@ -544,15 +546,15 @@ export class OutputSendingDomain implements ICycle, IRunnable {
     }
 
     _isCanLoadProxyAddressAndPairX() {
-        return this._mode !== ShimmerMode && !this._context.userBrowseMode && this._context.walletAddress 
+        const isCan = this._mode !== ShimmerMode && !this._context.userBrowseMode && this._context.walletAddress
+        const isAlreadyLoaded = this._context.proxyAddress && this._context.pairX
+        return isCan && !isAlreadyLoaded
     }
 
     _lastTimeLoadProxyAddressAndPairX: number = 0
+    _loadProxyAddressAndPairXInterval: number = 1000*2
     _isShouldLoadProxyAddressAndPairX() {
-        if (Date.now() - this._lastTimeLoadProxyAddressAndPairX < 1000*2) {
-            return false
-        }
-        return !this._context.proxyAddress || !this._context.pairX
+        return Date.now() - this._lastTimeLoadProxyAddressAndPairX >= this._loadProxyAddressAndPairXInterval
     }
 
     _isNeedToStoreRegister: boolean = false
@@ -570,21 +572,23 @@ export class OutputSendingDomain implements ICycle, IRunnable {
     }
 
     async _actualLoadProxyAddressAndPairX() {
-        const {detail, pairX} = await this.proxyModeDomain.getModeInfoFromStorage()
-        console.log('===>up _actualLoadProxyAddressAndPairX', detail, pairX)
-        if (detail?.account && pairX) {
-            const isValid = await this._checkIsPairXValid(pairX.publicKey, detail.account)
-            console.log('===>up is local pairX valid', isValid)
-            
-            if (isValid) {
-                this._context.setPairX(pairX, 'loadProxyAddressAndPairX', 'initial load from storage')
-                this._context.setProxyAddress(detail.account, 'loadProxyAddressAndPairX', 'initial load from storage')
-                return
+        try {
+            const {detail, pairX} = await this.proxyModeDomain.getModeInfoFromStorage()
+            if (detail?.account && pairX) {
+                const isValid = await this._checkIsPairXValid(pairX.publicKey, detail.account)
+                if (isValid) {
+                    this._context.setPairX(pairX, 'loadProxyAddressAndPairX', 'initial load from storage')
+                    this._context.setProxyAddress(detail.account, 'loadProxyAddressAndPairX', 'initial load from storage')
+                    return
+                }
+                await this.proxyModeDomain.clearModeInfoFromStorage()
             }
-            await this.proxyModeDomain.clearModeInfoFromStorage()
+            this._isNeedToStoreRegister = true
+            await this.loadProxyAddressAndEncryptedPairXFromService()
+        } catch(error) {
+            console.error('_actualLoadProxyAddressAndPairX error:', error)
+            throw error
         }
-        this._isNeedToStoreRegister = true
-        await this.loadProxyAddressAndEncryptedPairXFromService()
     }
 
 
@@ -595,6 +599,8 @@ export class OutputSendingDomain implements ICycle, IRunnable {
         if (this._isShouldLoadProxyAddressAndPairX()) {
             await this._actualLoadProxyAddressAndPairX();
             this._lastTimeLoadProxyAddressAndPairX = Date.now()
+            // Retrieve again after 10 minutes from the last retrieval.
+            this._loadProxyAddressAndPairXInterval = 1000*60*10
             return true
         }
         return false
@@ -631,7 +637,6 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                 }
                 if (this._mode === DelegationMode && res['mmProxyAddress']) {
                     this._context.setProxyAddress(res['mmProxyAddress'], 'loadProxyAddressAndEncryptedPairXFromService', '')
-                    console.log('Exec loadProxyAddressAndEncryptedPairXFromService end111')
                     return
                 }
                 if (this._mode === ImpersonationMode && res['tpProxyAddress']) {

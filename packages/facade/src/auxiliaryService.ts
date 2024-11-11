@@ -1,6 +1,6 @@
 import { IBasicOutput } from '@iota/iota.js';
 import { Profile } from './types';
-import { INX_GROUPFI_DOMAIN } from 'groupfi-sdk-core';
+import { INodeProvider, INX_GROUPFI_DOMAIN } from 'groupfi-sdk-core';
 
 export const config = [
   {
@@ -27,6 +27,37 @@ export const config = [
 ];
 
 export class AuxiliaryService {
+  private _nodeManager: INodeProvider | null = null;
+    private _currentUrlUsing: string | null = null;
+  
+    // Method to inject NodeManager instance
+    setNodeManager(nodeManager: INodeProvider): void {
+      this._nodeManager = nodeManager;
+      // Initialize _currentUrlUsing on first setup
+      this._currentUrlUsing = this._nodeManager.getUrl();
+    }
+  
+    // Wrapped method to get the current URL, reinitializing if the URL changes
+    getUrl(): string {
+      if (!this._nodeManager) {
+        throw new Error("NodeManager is not set. Please call setNodeManager() first.");
+      }
+  
+      const currentUrl = this._nodeManager.getUrl();
+      if (this._currentUrlUsing !== currentUrl) {
+        // URL has changed; update _currentUrlUsing and trigger reinitialization
+        this._currentUrlUsing = currentUrl;
+        this.reinitializeForNewUrl();
+      }
+  
+      return currentUrl;
+    }
+  
+    // Placeholder for reinitializing classes that depend on the URL
+    private reinitializeForNewUrl(): void {
+      // Reinitialization logic for components depending on the URL
+      // (To be filled in when specifics are available)
+    }
   _domain = process.env.AUXILIARY_SERVICE_DOMAIN;
 
   async fetchSMRPrice(chainId: number) {
@@ -65,12 +96,11 @@ export class AuxiliaryService {
     result: boolean;
     transactionId: string;
   }> {
-    const domain = INX_GROUPFI_DOMAIN!; 
+    const domain = this.getUrl();
     // split domain to get first part
-    const domainParts = domain.split('.')
-    const domainFirstPart = domainParts[0]
+    const domainEncoded = encodeURIComponent(domain);
     console.log('send proxy tx body:');
-    const res = await fetch(`https://${this._domain}/proxy/send?hornet=${domainFirstPart}`, {
+    const res = await fetch(`https://${this._domain}/proxy/send?hornet=${domainEncoded}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
