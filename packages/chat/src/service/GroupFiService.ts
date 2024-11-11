@@ -224,7 +224,7 @@ export class GroupFiService {
   // async batchConvertOutputIdsToMessages(outputIds: string[], address: string): Promise<{ messages: IMessage[], missedMessageOutputIds: string[] }> {
   async batchConvertOutputIdsToMessages(
     outputIds: string[],
-    onMessageCompleted: (msg: IMessage, outputId: string) => void
+    onMessageCompleted: (msg: IMessage, outputId: string) => Promise<void>
   ): Promise<{ failedMessageOutputIds: string[] }> {
     return await GroupFiSDKFacade.batchConvertOutputIdsToMessages(
       outputIds,
