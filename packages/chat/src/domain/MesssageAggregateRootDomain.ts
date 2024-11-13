@@ -486,14 +486,41 @@ export class MessageAggregateRootDomain implements ICycle {
     }
 
     setDappIncluding({includes, excludes, announcement}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[], announcement?: IIncludesAndExcludes[]}) {
+        this.listenGroups({includes, announcement})
+        // if (includes) {
+        //     const isChanged = this._context.setIncludesAndExcludes(includes,'MessageAggregateRootDomain setDappInlcuding', 'from dapp')
+        //     if (isChanged) {
+        //         this._context.setIsForMeGroupsLoading(true, 'MessageAggregateRootDomain setDappInlcuding', 'includes changed')
+        //     }
+        // }
+        // if (announcement) {
+        //     this._context.setAnnouncement(announcement)
+        // }
+    }
+
+    listenGroups({includes, announcement}: {includes?: IIncludesAndExcludes[], announcement?: IIncludesAndExcludes[]}) {
         if (includes) {
-            const isChanged = this._context.setIncludesAndExcludes(includes,'MessageAggregateRootDomain setDappInlcuding', 'from dapp')
+            const isChanged = this._context.setIncludesAndExcludes(includes, 'MessageAggregateRootDomain', 'listenGroups')
             if (isChanged) {
-                this._context.setIsForMeGroupsLoading(true, 'MessageAggregateRootDomain setDappInlcuding', 'includes changed')
+                this._context.setIsForMeGroupsLoading(true, 'MessageAggregateRootDomain', 'listenGroups changed')
             }
         }
         if (announcement) {
             this._context.setAnnouncement(announcement)
+        }
+    }
+
+    // Add additional includes and announcement
+    listenGroupsAdd({includes, announcement}: {includes?: IIncludesAndExcludes[], announcement?: IIncludesAndExcludes[]}) {
+        if (includes) {
+            const isChanged = this._context.addIncludesAndExcludes(includes, 'MessageAggregateRootDomain', 'listenGroupsAdd')
+            // If the includes setting has changed compared to the last time, set IsForMeGroupsLoading to true.
+            if (isChanged) {
+                this._context.setIsForMeGroupsLoading(true, 'MessageAggregateRootDomain', 'listenGroupsAdd changed')
+            }
+        }
+        if (announcement) {
+            this._context.addAnnouncement(announcement)
         }
     }
 
