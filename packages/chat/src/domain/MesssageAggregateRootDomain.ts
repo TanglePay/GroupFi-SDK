@@ -475,9 +475,6 @@ export class MessageAggregateRootDomain implements ICycle {
     login() {
         this.outputSendingDomain.login()
     }
-    // getName() {
-    //     return this._context.name
-    // }
     onNameChanged(callback: () => void) {
         this._context.onNameChanged(callback)
     }
@@ -485,8 +482,9 @@ export class MessageAggregateRootDomain implements ICycle {
         this._context.offNameChanged(callback)
     }
 
-    setDappIncluding({includes, excludes, announcement}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[], announcement?: IIncludesAndExcludes[]}) {
-        this.listenGroups({includes, announcement})
+    setDappIncluding({includes, announcement}: {includes?: IIncludesAndExcludes[], announcement?: IIncludesAndExcludes[]}) {
+        this.listenGroups(includes)
+        this.setAnnouncement(announcement)
         // if (includes) {
         //     const isChanged = this._context.setIncludesAndExcludes(includes,'MessageAggregateRootDomain setDappInlcuding', 'from dapp')
         //     if (isChanged) {
@@ -498,20 +496,17 @@ export class MessageAggregateRootDomain implements ICycle {
         // }
     }
 
-    listenGroups({includes, announcement}: {includes?: IIncludesAndExcludes[], announcement?: IIncludesAndExcludes[]}) {
+    listenGroups(includes?: IIncludesAndExcludes[]) {
         if (includes) {
             const isChanged = this._context.setIncludesAndExcludes(includes, 'MessageAggregateRootDomain', 'listenGroups')
             if (isChanged) {
                 this._context.setIsForMeGroupsLoading(true, 'MessageAggregateRootDomain', 'listenGroups changed')
             }
         }
-        if (announcement) {
-            this._context.setAnnouncement(announcement)
-        }
     }
 
-    // Add additional includes and announcement
-    listenGroupsAdd({includes, announcement}: {includes?: IIncludesAndExcludes[], announcement?: IIncludesAndExcludes[]}) {
+    // Add additional includes
+    listenGroupsAdd(includes?: IIncludesAndExcludes[]) {
         if (includes) {
             const isChanged = this._context.addIncludesAndExcludes(includes, 'MessageAggregateRootDomain', 'listenGroupsAdd')
             // If the includes setting has changed compared to the last time, set IsForMeGroupsLoading to true.
@@ -519,8 +514,11 @@ export class MessageAggregateRootDomain implements ICycle {
                 this._context.setIsForMeGroupsLoading(true, 'MessageAggregateRootDomain', 'listenGroupsAdd changed')
             }
         }
+    }
+
+    setAnnouncement(announcement?: IIncludesAndExcludes[]) {
         if (announcement) {
-            this._context.addAnnouncement(announcement)
+            this._context.setAnnouncement(announcement)
         }
     }
 

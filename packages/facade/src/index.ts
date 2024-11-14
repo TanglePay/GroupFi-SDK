@@ -622,8 +622,8 @@ class GroupFiSDKFacade {
   }
   
   // fetchForMeGroupConfigs
-  async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
-    const res = await GroupFiSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})
+  async fetchForMeGroupConfigs({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
+    const res = await GroupFiSDKObj.fetchForMeGroupConfigs({address: this._address!, includes})
     if (!this._address) {
       return res
     }
