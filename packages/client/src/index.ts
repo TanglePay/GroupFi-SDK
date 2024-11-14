@@ -1628,7 +1628,6 @@ export class GroupfiSdkClient {
                 data: Converter.bytesToHex(pl, true)
             };
             const messageId = GroupFiSDKObj.getMessageId(pl, Converter.hexToBytes(this._accountHexAddress!))
-            const nameRes = await nameMappingCache.getRes(senderAddr)
             // IMessage = {messageId:string, groupId:string, sender:string, message:string, timestamp:number}
             const messageSent: IMessage = {
                 type: ImInboxEventTypeNewMessage,
@@ -1637,7 +1636,6 @@ export class GroupfiSdkClient {
                 sender: senderAddr,
                 message: rawText,
                 timestamp: message.timestamp,
-                name: nameRes?.name 
             };
             // 3. Create outputs, in this simple example only one basic output and a remainder that goes back to genesis address
             const expireInDays = message.isAnnouncement ? 30 : 5;

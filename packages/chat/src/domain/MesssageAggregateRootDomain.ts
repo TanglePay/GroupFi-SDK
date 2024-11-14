@@ -556,4 +556,7 @@ export class MessageAggregateRootDomain implements ICycle {
     setProfile(profile: Profile, shouldMint: boolean) {
         this.outputSendingDomain.setProfile(profile, shouldMint)
     }
+    getSelfProfile() {
+        return this._context.getProfile()
+    }
 }
