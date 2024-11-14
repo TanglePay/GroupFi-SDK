@@ -108,7 +108,8 @@ export class SharedContext {
     }
 
     get includesAndExcludes(): IIncludesAndExcludes[] {
-        return (this._state.get('includesAndExcludes') as List<IIncludesAndExcludes>).toArray();
+        return this._getProperty<IIncludesAndExcludes[]>('includesAndExcludes')
+        // return (this._state.get('includesAndExcludes') as List<IIncludesAndExcludes>).toArray();
     }
 
     setIncludesAndExcludes(includesAndExcludes: IIncludesAndExcludes[], whoDidThis: string, why: string): boolean {
@@ -123,6 +124,22 @@ export class SharedContext {
             console.log(`setIncludesAndExcludes: no change detected by ${whoDidThis} because ${why}`);
             return false
         }
+    }
+
+    _mergeArray<T>(a1: T[], a2: T[], equalFn: (v1: T, v2:T) => boolean) {
+        const combined = [...a1, ...a2]
+        return combined.reduce((acc: T[], current: T) => {
+            const exists = acc.find(item => equalFn(item, current));
+            if (!exists) {
+              acc.push(current); 
+            }
+            return acc;
+        }, []);
+    }
+
+    addIncludesAndExcludes(includesAndExcludes: IIncludesAndExcludes[], whoDidThis: string, why: string): boolean {
+        const combined = this._mergeArray<IIncludesAndExcludes>(this.includesAndExcludes, includesAndExcludes, (v1: IIncludesAndExcludes, v2:IIncludesAndExcludes) => v1.groupId === v2.groupId)
+        return this.setIncludesAndExcludes(combined, whoDidThis, why)
     }
 
     onIncludesAndExcludesChanged(callback: () => void) {
@@ -142,19 +159,6 @@ export class SharedContext {
             console.log(`clearIncludesAndExcludes: no change detected by ${whoDidThis} because ${why}`);
         }
     }
-
-    // isAnnouncementGroup(groupId: string) {
-    //     // const forMeGroupConfigs = this.
-    //     // const groupIdShortHash = SHA256HashBytesReturnString(groupId)
-    //     // const announcement = this._getProperty<IIncludesAndExcludes[]>('announcement')
-    //     // for(const group of announcement) {
-    //     //   const id = group.groupId.slice(-64)
-    //     //   if (id === groupIdShortHash) {
-    //     //     return true
-    //     //   }
-    //     // }
-    //     // return false
-    // }
     
     get isAnnouncementSet(): boolean {
         return (this._state.get('announcement') as List<IIncludesAndExcludes>).size > 0;
@@ -166,6 +170,11 @@ export class SharedContext {
 
     setAnnouncement(announcement: IIncludesAndExcludes[]): boolean {
         return this._setProperty<IIncludesAndExcludes[]>('announcement', announcement, 'setAnnouncement', '', true)
+    }
+
+    addAnnouncement(announcement: IIncludesAndExcludes[], ): boolean {
+        const combined = this._mergeArray<IIncludesAndExcludes>(this.announcement, announcement, (v1: IIncludesAndExcludes, v2: IIncludesAndExcludes) => v1.groupId === v2.groupId)
+        return this.setAnnouncement(combined)
     }
 
     clearAnnouncement() {
