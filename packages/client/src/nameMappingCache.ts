@@ -7,6 +7,8 @@ class MappingCache<T> {
     return `mapping-${key}`;
   }
 
+  private _notFetchedSet: Set<string> = new Set()
+
   private _api: (keys: string[]) => Promise<{ [key: string]: T }>;
 
   constructor(api: (keys: string[]) => Promise<{ [key: string]: T }>) {
@@ -22,11 +24,17 @@ class MappingCache<T> {
     return result;
   }
 
-  private _updateCache(newMappings: Map<string, T>): void {
+  private _updateCache(newMappings: Map<string, T>, allKeys: string[]): void {
     for (const [key, res] of newMappings) {
       const mapkey = this._getMapKey(key);
       this._mappingCache.set(mapkey, res);
     }
+    allKeys.forEach(key => {
+      if (!newMappings.has(key)) {
+        this._notFetchedSet.add(key)
+      }
+    })
+    console.log('notFetchedProfileSet', this._notFetchedSet)
   }
 
   public async batchGetRes(keys: string[]): Promise<Map<string, T>> {
@@ -38,13 +46,15 @@ class MappingCache<T> {
       if (this._mappingCache.has(mapkey)) {
         result.set(key, this._mappingCache.get(mapkey)!);
       } else {
-        cacheMisses.push(key);
+        if (!this._notFetchedSet.has(key)) {
+          cacheMisses.push(key);
+        }
       }
     }
 
     if (cacheMisses.length > 0) {
       const fetchedMappings = await this._fetchFromApi(cacheMisses);
-      this._updateCache(fetchedMappings);
+      this._updateCache(fetchedMappings, cacheMisses);
       for (const [key, res] of fetchedMappings) {
         result.set(key, res);
       }
@@ -63,7 +73,7 @@ class MappingCache<T> {
   async getRes(key: string): Promise<T | null> {
     try {
       return await new Promise((resolve, reject) => {
-        this.getMapping(key, resolve, reject);
+        this._getMapping(key, resolve, reject);
       });
     } catch(error) {
       console.log('nameMappingCache getRes error', key, error)
@@ -71,14 +81,16 @@ class MappingCache<T> {
     } 
   }
 
-  public getMapping(
+  _getMapping(
     address: string,
-    callback: (res: T) => void,
+    callback: (res: T | null) => void,
     errorCallBack: (error: Error) => void
   ): void {
     const mapkey = this._getMapKey(address);
     if (this._mappingCache.has(mapkey)) {
       callback(this._mappingCache.get(mapkey)!);
+    } else if (this._notFetchedSet.has(address)) {
+      callback(null)
     } else {
       if (!this._callbacks.has(mapkey)) {
         this._callbacks.set(mapkey, []);
@@ -117,11 +129,11 @@ class MappingCache<T> {
       const keys = Array.from(this._pendingSet);
       // Clear the pending set
       this._pendingSet.clear();
-      const mapping = await this._api(keys);
+      const fetchedMappings = await this._fetchFromApi(keys)
+      this._updateCache(fetchedMappings, keys)
       // Store the mapping and emit the event
-      for (const [key, res] of Object.entries(mapping)) {
+      for (const [key, res] of fetchedMappings) {
         const mapkey = this._getMapKey(key);
-        this._mappingCache.set(mapkey, res);
         // Emit the event for all callbacks
         if (this._callbacks.has(mapkey)) {
           for (const callback of this._callbacks.get(mapkey)!) {
