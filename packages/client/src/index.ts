@@ -1283,7 +1283,7 @@ export class GroupfiSdkClient {
             },
             body:JSON.stringify(outputIds)
         })
-        const data = await res.json() as {outputIdHex:string,output:OutputTypes}[]
+        const data = await res.json() as {outputIdHex:string,output:OutputTypes,milestoneTimestamp:number}[]
         return data
     }
     // check then consolidate shared
