@@ -541,11 +541,10 @@ class GroupFiSDK {
         return {...meta,groupId}
     }
     // addressqualifiedgroupconfigs
-    async fetchAddressQualifiedGroupConfigs({address, includes, excludes, ifSaveGroupConfigMap}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[], ifSaveGroupConfigMap: boolean}): Promise<MessageGroupMeta[]> {
+    async fetchAddressQualifiedGroupConfigs({address, includes, ifSaveGroupConfigMap}: {address: string, includes?: IIncludesAndExcludes[], ifSaveGroupConfigMap: boolean}): Promise<MessageGroupMeta[]> {
         const url = `${this.getUrl()}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;
         const body = {
-            includes,
-            excludes
+            includes
         };
         const res = await fetch(url, {
             method: 'POST',
@@ -562,11 +561,10 @@ class GroupFiSDK {
     }
 
     // fetch public group configs
-    async fetchPublicGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfig[]> {
+    async fetchPublicGroupConfigs({includes}: {includes?: IIncludesAndExcludes[]}): Promise<GroupConfig[]> {
         const url = `${this.getUrl()}/api/groupfi/v1/publicgroupconfigs`;
         const body = {
-            includes,
-            excludes
+            includes
         };
         const res = await fetch(url, {
             method: 'POST',
@@ -591,12 +589,11 @@ class GroupFiSDK {
     }
 
     // fetch for me group configs
-    async fetchForMeGroupConfigs({address, includes, excludes}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfigPlus[]> {
+    async fetchForMeGroupConfigs({address, includes}: {address: string, includes?: IIncludesAndExcludes[]}): Promise<GroupConfigPlus[]> {
         try {
             const url = `${this.getUrl()}/api/groupfi/v1/formegroupconfigs?address=${address}`
             const body = {
-                includes,
-                excludes
+                includes
             };
             const res = await fetch(url, {
                 method: 'POST',
