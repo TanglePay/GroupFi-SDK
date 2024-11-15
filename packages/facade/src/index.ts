@@ -213,15 +213,22 @@ class GroupFiSDKFacade {
         message: IMMessage;
         sender: string;
       };
-      const message: IMessage = {
-        type: ImInboxEventTypeNewMessage,
+      const message: IMessage = this._client!.convertIMMessageToIMessage({
+        imMessage: resUnwrapped.message,
         messageId: resUnwrapped.messageId,
-        groupId: resUnwrapped.message.groupId,
         sender: resUnwrapped.sender,
-        message: resUnwrapped.message.data,
-        timestamp: resUnwrapped.message.timestamp,
-        name: undefined
-      };
+        // Mqtt lacks a milestoneTimestamp; use the receiver’s timestamp instead.
+        milestoneTimestamp: getCurrentEpochInSeconds()
+      })
+      // const message: IMessage = {
+      //   type: ImInboxEventTypeNewMessage,
+      //   messageId: resUnwrapped.messageId,
+      //   groupId: resUnwrapped.message.groupId,
+      //   sender: resUnwrapped.sender,
+      //   message: resUnwrapped.message.data,
+      //   timestamp: resUnwrapped.message.timestamp,
+      //   name: undefined
+      // };
 
       if (this._mode !== ShimmerMode) {
         const evmAddress = await AddressMappingStore.getEvmAddress(
@@ -622,8 +629,8 @@ class GroupFiSDKFacade {
   }
   
   // fetchForMeGroupConfigs
-  async fetchForMeGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
-    const res = await GroupFiSDKObj.fetchForMeGroupConfigs({address: this._address!, includes, excludes})
+  async fetchForMeGroupConfigs({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
+    const res = await GroupFiSDKObj.fetchForMeGroupConfigs({address: this._address!, includes})
     if (!this._address) {
       return res
     }

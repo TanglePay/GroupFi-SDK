@@ -522,13 +522,11 @@ export class GroupFiService {
 
   // fetchForMeGroupConfigs
   async fetchForMeGroupConfigs({
-    includes,
-    excludes
+    includes
   }: {
     includes?: IIncludesAndExcludes[]
-    excludes?: IIncludesAndExcludes[]
   }) {
-    return await GroupFiSDKFacade.fetchForMeGroupConfigs({ includes, excludes })
+    return await GroupFiSDKFacade.fetchForMeGroupConfigs({ includes })
   }
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {

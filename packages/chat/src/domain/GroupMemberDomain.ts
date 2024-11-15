@@ -172,17 +172,17 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         }
     }
 
-    _isFristRefrshForMeGroupConfigs:boolean = false
+    _isStartRefreshForMeGroupConfigs:boolean = false
     // try refresh public group configs, return is actual refreshed
     async tryRefreshForMeGroupConfigs() {
         if (!this._isCanRefreshForMeGroupConfigs()) {
             return false;
         }
         if (this._isShouldRefreshForMeGroupConfigs()) {
-            if (!this._isFristRefrshForMeGroupConfigs) {
+            if (!this._isStartRefreshForMeGroupConfigs) {
                 this._context.setIsForMeGroupsLoading(true, 'tryRefreshForMeGroupConfigs', 'start loading forme groups')
             }
-            this._isFristRefrshForMeGroupConfigs = true
+            this._isStartRefreshForMeGroupConfigs = true
             await this._actualRefreshForMeGroupConfigs();
             this._context.setIsForMeGroupsLoading(false, 'tryRefreshForMeGroupConfigs', 'forme groups loaded')
             return true;
@@ -364,7 +364,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         this._context.clearIsForMeGroupsLoading('GroupMemberDomain','thread start')
 
         this._lastTimeRefreshForMeGroupConfigs = 0
-        this._isFristRefrshForMeGroupConfigs = false
+        this._isStartRefreshForMeGroupConfigs = false
         this._lastTimeRefreshMarkedGroupConfigs = 0
 
         this._forMeGroupConfigs = undefined
