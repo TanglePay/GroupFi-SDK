@@ -1221,6 +1221,15 @@ class GroupFiSDK {
                     threshold: thresValue
                 })
             } 
+            else if (groupConfig.qualifyType === 'metadata'){
+                let erctype = groupConfig.ercType??'erc721'
+                erctype = erctype.toLowerCase()
+                const erc = erctype === 'erc1159' ? 115900 : 72100
+                filterParam = Object.assign(filterParam,{
+                    erc,
+                    uriContains: groupConfig.uriContains
+                })
+            }
              else if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
                     erc:721,
