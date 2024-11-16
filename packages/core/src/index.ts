@@ -1183,7 +1183,7 @@ class GroupFiSDK {
         return addressList.length > 0
     }
     _getActualThresholdValue(groupConfig:MessageGroupMeta):string{
-        if (['nft','event'].includes(groupConfig.qualifyType)) return '1'
+        if (['nft','event', 'metadata'].includes(groupConfig.qualifyType)) return '1'
         const humanReadable = groupConfig.tokenThresValue!
         const decimal = parseInt(groupConfig.tokenDecimals!)
         return ethers.parseUnits(humanReadable,decimal).toString()
