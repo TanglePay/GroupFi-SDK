@@ -124,7 +124,7 @@ export interface MessageGroupMeta {
     tokenDecimals?: string
     symbol?: string
     uriContains?: string
-    ercType?: string
+    contractType?: string
     qualifyDescription?: string
     collectionName?: string
     extraChains?: ExtraChain[] // Adding the new property
