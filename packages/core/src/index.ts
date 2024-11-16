@@ -1204,6 +1204,7 @@ class GroupFiSDK {
                 chain:groupConfig.chainId,
                 contract:groupConfig.contractAddress,
                 threshold: '0',
+                uriContains: '',
                 // chainId 518, spl token, erc = 1
                 erc:20 as 20|721|0|1,
                 ts:getCurrentEpochInSeconds()
@@ -1248,6 +1249,7 @@ class GroupFiSDK {
                         chain: filterParam.chain,
                         contract: filterParam.contract,
                         erc: filterParam.erc,
+                        uriContains: filterParam.uriContains,
                         threshold: filterParam.threshold?.toString() // Ensure threshold is a string
                     },
                     ...groupConfig.extraChains?.map(extraChain => ({
