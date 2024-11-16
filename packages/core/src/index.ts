@@ -1183,7 +1183,7 @@ class GroupFiSDK {
         return addressList.length > 0
     }
     _getActualThresholdValue(groupConfig:MessageGroupMeta):string{
-        if (['nft','event'].includes(groupConfig.qualifyType)) return '1'
+        if (['nft','event', 'metadata'].includes(groupConfig.qualifyType)) return '1'
         const humanReadable = groupConfig.tokenThresValue!
         const decimal = parseInt(groupConfig.tokenDecimals!)
         return ethers.parseUnits(humanReadable,decimal).toString()
@@ -1204,6 +1204,7 @@ class GroupFiSDK {
                 chain:groupConfig.chainId,
                 contract:groupConfig.contractAddress,
                 threshold: '0',
+                uriContains: '',
                 // chainId 518, spl token, erc = 1
                 erc:20 as 20|721|0|1,
                 ts:getCurrentEpochInSeconds()
@@ -1221,6 +1222,15 @@ class GroupFiSDK {
                     threshold: thresValue
                 })
             } 
+            else if (groupConfig.qualifyType === 'metadata'){
+                let erctype = groupConfig.contractType??'erc721'
+                erctype = erctype.toLowerCase()
+                const erc = erctype === 'erc1159' ? 115900 : 72100
+                filterParam = Object.assign(filterParam,{
+                    erc,
+                    uriContains: groupConfig.uriContains
+                })
+            }
              else if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
                     erc:721,
@@ -1239,6 +1249,7 @@ class GroupFiSDK {
                         chain: filterParam.chain,
                         contract: filterParam.contract,
                         erc: filterParam.erc,
+                        uriContains: filterParam.uriContains,
                         threshold: filterParam.threshold?.toString() // Ensure threshold is a string
                     },
                     ...groupConfig.extraChains?.map(extraChain => ({
