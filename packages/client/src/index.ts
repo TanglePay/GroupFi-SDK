@@ -433,6 +433,11 @@ export class GroupfiSdkClient {
             }
             newRemainderHints.reverse();
             this.resetAllRemainderHints(newRemainderHints);
+
+            // Record the last actual prepare time
+            this._lastActualPrepareTimestamp = currentTime;
+            console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
+
             return true;
         } catch (error) {
             console.log('prepareRemainderHint error', error);
