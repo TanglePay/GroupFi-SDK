@@ -394,6 +394,7 @@ export class GroupfiSdkClient {
                 const output = outputsToSend[idx]
                 newRemainderHints.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx)})
             }
+            newRemainderHints.reverse();
             this.resetAllRemainderHints(newRemainderHints);
             return true
         } catch (error) {
