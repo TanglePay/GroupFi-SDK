@@ -200,7 +200,7 @@ export class GroupfiSdkClient {
     _sharedSaltFailedCache:Set<string> = new Set()
     _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
     _lastSendTimestamp:number = 0
-    _remainderHintOutdatedTimeperiod = 35 * 1000
+    _remainderHintOutdatedTimeperiod = 25 * 1000
 
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
@@ -352,12 +352,32 @@ export class GroupfiSdkClient {
     disablePrepareRemainderHint(){
         this._prepareRemainderHintSwitch = false
     }
+    private _lastActualPrepareTimestamp: number = 0; // New property to track last prepare time
+    private _prepareCooldownTime: number = 1 * 60 * 1000; // Example: 1 minutes cooldown
+    
     async prepareRemainderHint() {
         if (!this._prepareRemainderHintSwitch) return false;
         try {
-            const timeElapsed = Date.now() - this._lastSendTimestamp;
-            if (timeElapsed < this._remainderHintOutdatedTimeperiod && this._remainderHintSet.length > 0) return false;
-    
+            const currentTime = Date.now();
+            const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
+
+            // Check if prepare is being called too soon
+            if (timeSinceLastPrepare < this._prepareCooldownTime) {
+                console.log(
+                    `Prepare called too frequently. Last prepare was ${timeSinceLastPrepare} ms ago.`
+                );
+                return false;
+            }
+
+            const timeElapsed = currentTime - this._lastSendTimestamp;
+            if (
+                timeElapsed < this._remainderHintOutdatedTimeperiod &&
+                this._remainderHintSet.length > 0
+            ) {
+                console.log('Remainder hint set is still valid. No need to prepare.');
+                return false;
+            }
+
             // Log actually start prepare
             console.log('Actually start prepare remainder hint');
     
@@ -1362,9 +1382,10 @@ export class GroupfiSdkClient {
         if (idsForFiltering) {
             outputIds = outputIds.filter(outputId=>!idsForFiltering.has(outputId))
         }
-        let outputsRaw = await this._getUnSpentOutputsFromOutputIds(outputIds)
-        console.log('Unspent Outputs', outputsRaw);
-        let outputs = outputsRaw.map(output=>this._outputResponseWrapperToBasicOutputWrapper(output))
+        
+        const outputsRaws = await this.batchOutputIdToOutput(outputIds);
+        console.log('Unspent Outputs', outputsRaws);
+        let outputs = outputsRaws.map(({outputIdHex, output})=>{return {outputId:outputIdHex,output:output as IBasicOutput}})
         if (amountLargerThan) {
             outputs = outputs.filter(output=>bigInt(output.output.amount).greater(amountLargerThan))
         }
