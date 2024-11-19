@@ -380,7 +380,10 @@ export class GroupfiSdkClient {
 
             // Log actually start prepare
             console.log('Actually start prepare remainder hint');
-    
+            // Record the last actual prepare time
+            this._lastActualPrepareTimestamp = currentTime;
+            console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
+
             // Fetch current unspent outputs
             const currentUnspentOutputs = await this._getUnSpentOutputs({ numbersWanted: 100 });
             // Log current unspent outputs
@@ -433,10 +436,6 @@ export class GroupfiSdkClient {
             }
             newRemainderHints.reverse();
             this.resetAllRemainderHints(newRemainderHints);
-
-            // Record the last actual prepare time
-            this._lastActualPrepareTimestamp = currentTime;
-            console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
 
             return true;
         } catch (error) {
