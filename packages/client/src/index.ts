@@ -353,7 +353,7 @@ export class GroupfiSdkClient {
         this._prepareRemainderHintSwitch = false
     }
     private _lastActualPrepareTimestamp: number = 0; // New property to track last prepare time
-    private _prepareCooldownTime: number = 1 * 60 * 1000; // Example: 1 minutes cooldown
+    private _prepareCooldownTime: number = 25 * 1000; // Example: 25 sec cooldown
     
     async prepareRemainderHint() {
         if (!this._prepareRemainderHintSwitch) return false;
