@@ -352,54 +352,71 @@ export class GroupfiSdkClient {
     disablePrepareRemainderHint(){
         this._prepareRemainderHintSwitch = false
     }
-// prepare remainder hint
-    // first check timeelapsed > 15 seconds since last send
-    // then fetch all basic outputs for address with no timelock, no metadata
-    // also fetch all basic outputs that timelock expires
-    // then pick all as inputs, and split to 3 equal amount outputs, and send, outputs will be used as remainder hint
-    async prepareRemainderHint(){
-        if (!this._prepareRemainderHintSwitch) return false
+    async prepareRemainderHint() {
+        if (!this._prepareRemainderHintSwitch) return false;
         try {
-            const timeElapsed = Date.now() - this._lastSendTimestamp
-            if (timeElapsed < this._remainderHintOutdatedTimeperiod && this._remainderHintSet.length > 0) return false
-            // log actually start prepare
+            const timeElapsed = Date.now() - this._lastSendTimestamp;
+            if (timeElapsed < this._remainderHintOutdatedTimeperiod && this._remainderHintSet.length > 0) return false;
+    
+            // Log actually start prepare
             console.log('Actually start prepare remainder hint');
-            const outputs = await this._getUnSpentOutputs({numbersWanted:100})
-            // log outputs
-            // console.log('outputs', outputs);
-            if (outputs.length === 0) return false
-            let amount = outputs.reduce((acc,output)=>acc.add(bigInt(output.output.amount)),bigInt(0))
-            // log amount
+    
+            // Fetch current unspent outputs
+            const currentUnspentOutputs = await this._getUnSpentOutputs({ numbersWanted: 100 });
+            // Log current unspent outputs
+            console.log('currentUnspentOutputs', currentUnspentOutputs);
+    
+            // Compare current unspent outputs with the remainder hint set
+            const currentUnspentOutputIds = new Set(currentUnspentOutputs.map(output => output.outputId));
+            const remainderHintOutputIds = new Set(this._remainderHintSet.map(hint => hint.outputId));
+    
+            // Check if both sets are identical
+            const areSetsIdentical =
+                currentUnspentOutputIds.size === remainderHintOutputIds.size &&
+                [...currentUnspentOutputIds].every(id => remainderHintOutputIds.has(id));
+    
+            if (areSetsIdentical) {
+                // Log that the remainder set is identical to current unspent outputs and abort
+                console.log('Remainder hint set is identical to current unspent outputs. Aborting preparation.');
+                return false;
+            }
+    
+            const outputs = currentUnspentOutputs;
+            if (outputs.length === 0) return false;
+    
+            let amount = outputs.reduce((acc, output) => acc.add(bigInt(output.output.amount)), bigInt(0));
+            // Log amount
             console.log('amount', amount);
-            const amountPerOutput = amount.divide(cashSplitNums)
-            const outputsToSend:IBasicOutput[] = []
-            for (let i = 0; i < cashSplitNums-1; i++) {
-                outputsToSend.push(this._makeCashBasicOutput(amountPerOutput))
-                amount = amount.subtract(amountPerOutput)
+            const amountPerOutput = amount.divide(cashSplitNums);
+            const outputsToSend: IBasicOutput[] = [];
+            for (let i = 0; i < cashSplitNums - 1; i++) {
+                outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
+                amount = amount.subtract(amountPerOutput);
             }
-            outputsToSend.push(this._makeCashBasicOutput(amount))
-            const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0],this._protocolInfo!.rentStructure)
-            // check if first output is enough for deposit
+            outputsToSend.push(this._makeCashBasicOutput(amount));
+            const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0], this._protocolInfo!.rentStructure);
+            // Check if first output is enough for deposit
             if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
-                // log then return
+                // Log then return
                 console.log('First output is not enough for deposit');
-                this._remainderHintSet = []
-                return false
+                this._remainderHintSet = [];
+                return false;
             }
-            // log outputsToSend and outputs in one line
-            // console.log('outputsToSend', outputsToSend, 'outputs', outputs);
-            const {transactionId} = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs,outputsToSend)
-            const newRemainderHints = [] as BasicOutputWrapper[]
-            for (let idx =0;idx<outputsToSend.length;idx++) {
-                const output = outputsToSend[idx]
-                newRemainderHints.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx)})
+            // Log outputsToSend and outputs in one line
+            console.log('outputsToSend', outputsToSend, 'outputs', outputs);
+    
+            const { transactionId } = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs, outputsToSend);
+            const newRemainderHints: BasicOutputWrapper[] = [];
+            for (let idx = 0; idx < outputsToSend.length; idx++) {
+                const output = outputsToSend[idx];
+                newRemainderHints.push({ output, outputId: TransactionHelper.outputIdFromTransactionData(transactionId, idx) });
             }
             newRemainderHints.reverse();
             this.resetAllRemainderHints(newRemainderHints);
-            return true
+            return true;
         } catch (error) {
             console.log('prepareRemainderHint error', error);
-            return false
+            return false;
         }
     }
     async _getDltShimmer(){
