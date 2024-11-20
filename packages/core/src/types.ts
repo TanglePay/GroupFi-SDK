@@ -82,6 +82,8 @@ export type Address = {
 }
 export const INX_GROUPFI_DOMAIN = process.env.INX_GROUPFI_DOMAIN
 export const IMAGE_PRESIGN_SERVICE_URL = process.env.IMAGE_PRESIGN_SERVICE_URL
+// addresslist presign service
+export const ADDRESSLIST_PRESIGN_SERVICE_URL = process.env.ADDRESSLIST_PRESIGN_SERVICE_URL
 
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
