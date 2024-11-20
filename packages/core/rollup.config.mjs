@@ -13,5 +13,6 @@ decoratePlugin(config, replace({
     'process.env.INX_GROUPFI_DOMAIN': JSON.stringify(process.env.INX_GROUPFI_DOMAIN || ""),
     'process.env.AUXILIARY_SERVICE_DOMAIN': JSON.stringify(process.env.AUXILIARY_SERVICE_DOMAIN || ""),
     'process.env.IMAGE_PRESIGN_SERVICE_URL': JSON.stringify(process.env.IMAGE_PRESIGN_SERVICE_URL || ""),
+    'process.env.ADDRESSLIST_PRESIGN_SERVICE_URL': JSON.stringify(process.env.ADDRESSLIST_PRESIGN_SERVICE_URL || ""),
 }), true);
 export default config
