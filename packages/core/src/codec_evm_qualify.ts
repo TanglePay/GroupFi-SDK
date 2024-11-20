@@ -10,7 +10,7 @@ export const QUALIFY_MODE_RAW = 0x00;
 export const QUALIFY_MODE_URI = 0x01;
 
 // Define constant for maximum address list size
-export const MAX_ADDRESS_LIST_SIZE = 300;
+export const MAX_ADDRESS_LIST_SIZE = 1;
 
 /**
  * Concatenates multiple Uint8Array instances into a single Uint8Array.
