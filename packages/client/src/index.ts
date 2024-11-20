@@ -363,9 +363,6 @@ export class GroupfiSdkClient {
 
             // Check if prepare is being called too soon
             if (timeSinceLastPrepare < this._prepareCooldownTime) {
-                console.log(
-                    `Prepare called too frequently. Last prepare was ${timeSinceLastPrepare} ms ago.`
-                );
                 return false;
             }
 
@@ -374,7 +371,6 @@ export class GroupfiSdkClient {
                 timeElapsed < this._remainderHintOutdatedTimeperiod &&
                 this._remainderHintSet.length > 0
             ) {
-                console.log('Remainder hint set is still valid. No need to prepare.');
                 return false;
             }
 
