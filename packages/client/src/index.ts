@@ -58,6 +58,7 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     AddressType,
     MessageResponseItemPlus,
     IMAGE_PRESIGN_SERVICE_URL,
+    ADDRESSLIST_PRESIGN_SERVICE_URL,
     MessageTypePrivate,
     INodeProvider
 } from "groupfi-sdk-core";
@@ -107,6 +108,7 @@ import { Mode, DelegationMode, ImpersonationMode, ShimmerMode } from './types'
 import { GROUPFIQUALIFYTAG } from 'groupfi-sdk-core';
 import { serializeEvmQualify } from 'groupfi-sdk-core';
 import addressMappingCache from './AddressMappingCache';
+import { getPresignedUploadUrl } from './UploadHelper';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -1729,20 +1731,32 @@ export class GroupfiSdkClient {
         }
         
     }
-    async _getPresignedImageUploadUrl({publicKey,signature,message,ext}:{publicKey:string,signature:string,message:string,ext:string}):Promise<{uploadURL:string,imageURL:string}>{
-        const url = IMAGE_PRESIGN_SERVICE_URL!
-        const body = {publicKey,signature,message,ext}
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        })
-        const json = await res.json() as {uploadURL:string}
-        const {uploadURL} = json
-        const imageURL = uploadURL.split('?')[0]
-        return {uploadURL,imageURL}
+    /**
+     * Obtains a presigned S3 upload URL for images using the generic utility function.
+     * 
+     * @param params - Parameters including publicKey, signature, message, and file extension.
+     * @returns A Promise that resolves to an object containing the upload URL and the S3 URI.
+     */
+    private async _getPresignedImageUploadUrl(params: { publicKey: string; signature: string; message: string; ext: string }): Promise<{ uploadURL: string; imageURL: string }> {
+        const { serviceUrl } = { serviceUrl: IMAGE_PRESIGN_SERVICE_URL! }; // Define IMAGE_PRESIGN_SERVICE_URL appropriately
+        return getPresignedUploadUrl({
+            serviceUrl,
+            ...params
+        });
+    }
+
+    /**
+     * Obtains a presigned S3 upload URL for address lists using the generic utility function.
+     * 
+     * @param params - Parameters including publicKey, signature, message, and file extension.
+     * @returns A Promise that resolves to an object containing the upload URL and the S3 URI.
+     */
+    private async _getPresignedAddressListUploadUrl(params: { publicKey: string; signature: string; message: string; ext: string }): Promise<{ uploadURL: string; imageURL: string }> {
+        const { serviceUrl } = { serviceUrl: ADDRESSLIST_PRESIGN_SERVICE_URL! }; // Define ADDRESS_LIST_PRESIGN_SERVICE_URL appropriately
+        return getPresignedUploadUrl({
+            serviceUrl,
+            ...params
+        });
     }
     async uploadImageToS3({fileGetter,pairX, fileObj}:{fileGetter?:()=>Promise<File>,pairX:PairX, fileObj?:File}):Promise<{imageURL:string, 
         dimensionsPromise:Promise<{width:number,height:number}>,
@@ -1790,6 +1804,70 @@ export class GroupfiSdkClient {
             },
             body: file
         })
+    }
+    /**
+     * Uploads raw data to S3 using the provided upload URL.
+     * 
+     * @param data - The data to upload as a string (e.g., JSON).
+     * @param uploadURL - The presigned S3 upload URL.
+     * @returns A Promise that resolves when the upload is complete.
+     */
+    private async _uploadDataToS3({ data, uploadURL }: { data: string; uploadURL: string }): Promise<void> {
+        const response = await fetch(uploadURL, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json', // Set to 'application/json' for JSON data
+                'Cache-Control': 'max-age=31536000' // Adjust as needed
+            },
+            body: data
+        });
+
+        if (!response.ok) {
+            console.error('Failed to upload address list to S3:', response.statusText);
+            throw new Error('Failed to upload address list to S3');
+        }
+    }
+    /**
+     * Uploads the address list to S3 and returns the S3 URI.
+     * This function matches the UploadAddressListFunction signature.
+     * 
+     * @param groupId - The ID of the group.
+     * @param addressList - Array of addresses to upload.
+     * @returns A Promise that resolves to the S3 URI as a string.
+     */
+    async uploadAddressListToS3(
+        groupId: string,
+        addressList: string[],
+        pairX: PairX // Assuming PairX is needed for signing
+    ): Promise<string> {
+        const message = this._accountBech32Address!;
+
+        // Sign the message to get signature and public key
+        const sigRes = await this._requestAdapter!.ed25519SignAndGetPublicKey({ message, pairX });
+        const { signature, publicKey } = sigRes;
+
+        // Serialize the address list as JSON
+        const serializedAddressList = JSON.stringify(addressList);
+
+        // Define the file extension
+        const ext = 'json';
+
+        // Obtain a presigned S3 upload URL from your backend
+        const { uploadURL, imageURL } = await this._getPresignedAddressListUploadUrl({
+            publicKey,
+            signature,
+            message,
+            ext
+        });
+
+        // Upload the serialized address list to S3
+        await this._uploadDataToS3({
+            data: serializedAddressList,
+            uploadURL
+        });
+
+        // Return the S3 URI where the address list is stored
+        return imageURL;
     }
     async _findLargestUnspentOutput(outputIds:string[]){
         let largestAmount = bigInt('0')
@@ -2516,7 +2594,11 @@ export class GroupfiSdkClient {
     // _persistEvmQualify
     async _getEvmQualify(groupId:string,addressList:string[],signature:string, addressType:AddressType,timestamp:number):Promise<IBasicOutput>{
         const tag = `0x${Converter.utf8ToHex(GROUPFIQUALIFYTAG)}`
-        const data = serializeEvmQualify(groupId,addressList,signature,addressType,timestamp)
+        const func = async (groupId:string,addressList:string[]) => {
+            return this.uploadAddressListToS3(groupId,addressList,this._pairX!)
+        }
+
+        const data = await serializeEvmQualify(groupId,addressList,signature,addressType,timestamp, func)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const twoWeekSecs =  60 * 60 * 24 * 14
         this._addTimeUnlockToBasicOutput(basicOutput, twoWeekSecs)
