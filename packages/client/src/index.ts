@@ -58,6 +58,7 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     AddressType,
     MessageResponseItemPlus,
     IMAGE_PRESIGN_SERVICE_URL,
+    ADDRESSLIST_PRESIGN_SERVICE_URL,
     MessageTypePrivate,
     INodeProvider
 } from "groupfi-sdk-core";
@@ -107,6 +108,7 @@ import { Mode, DelegationMode, ImpersonationMode, ShimmerMode } from './types'
 import { GROUPFIQUALIFYTAG } from 'groupfi-sdk-core';
 import { serializeEvmQualify } from 'groupfi-sdk-core';
 import addressMappingCache from './AddressMappingCache';
+import { getPresignedUploadUrl } from './UploadHelper';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
@@ -200,7 +202,7 @@ export class GroupfiSdkClient {
     _sharedSaltFailedCache:Set<string> = new Set()
     _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
     _lastSendTimestamp:number = 0
-    _remainderHintOutdatedTimeperiod = 35 * 1000
+    _remainderHintOutdatedTimeperiod = 25 * 1000
 
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
@@ -352,53 +354,91 @@ export class GroupfiSdkClient {
     disablePrepareRemainderHint(){
         this._prepareRemainderHintSwitch = false
     }
-// prepare remainder hint
-    // first check timeelapsed > 15 seconds since last send
-    // then fetch all basic outputs for address with no timelock, no metadata
-    // also fetch all basic outputs that timelock expires
-    // then pick all as inputs, and split to 3 equal amount outputs, and send, outputs will be used as remainder hint
-    async prepareRemainderHint(){
-        if (!this._prepareRemainderHintSwitch) return false
+    private _lastActualPrepareTimestamp: number = 0; // New property to track last prepare time
+    private _prepareCooldownTime: number = 25 * 1000; // Example: 25 sec cooldown
+    
+    async prepareRemainderHint() {
+        if (!this._prepareRemainderHintSwitch) return false;
         try {
-            const timeElapsed = Date.now() - this._lastSendTimestamp
-            if (timeElapsed < this._remainderHintOutdatedTimeperiod && this._remainderHintSet.length > 0) return false
-            // log actually start prepare
+            const currentTime = Date.now();
+            const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
+
+            // Check if prepare is being called too soon
+            if (timeSinceLastPrepare < this._prepareCooldownTime) {
+                return false;
+            }
+
+            const timeElapsed = currentTime - this._lastSendTimestamp;
+            if (
+                timeElapsed < this._remainderHintOutdatedTimeperiod &&
+                this._remainderHintSet.length > 0
+            ) {
+                return false;
+            }
+
+            // Log actually start prepare
             console.log('Actually start prepare remainder hint');
-            const outputs = await this._getUnSpentOutputs({numbersWanted:100})
-            // log outputs
-            // console.log('outputs', outputs);
-            if (outputs.length === 0) return false
-            let amount = outputs.reduce((acc,output)=>acc.add(bigInt(output.output.amount)),bigInt(0))
-            // log amount
+            // Record the last actual prepare time
+            this._lastActualPrepareTimestamp = currentTime;
+            console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
+
+            // Fetch current unspent outputs
+            const currentUnspentOutputs = await this._getUnSpentOutputs({ numbersWanted: 100 });
+            // Log current unspent outputs
+            console.log('currentUnspentOutputs', currentUnspentOutputs);
+    
+            // Compare current unspent outputs with the remainder hint set
+            const currentUnspentOutputIds = new Set(currentUnspentOutputs.map(output => output.outputId));
+            const remainderHintOutputIds = new Set(this._remainderHintSet.map(hint => hint.outputId));
+    
+            // Check if both sets are identical
+            const areSetsIdentical =
+                currentUnspentOutputIds.size === remainderHintOutputIds.size &&
+                [...currentUnspentOutputIds].every(id => remainderHintOutputIds.has(id));
+    
+            if (areSetsIdentical) {
+                // Log that the remainder set is identical to current unspent outputs and abort
+                console.log('Remainder hint set is identical to current unspent outputs. Aborting preparation.');
+                return false;
+            }
+    
+            const outputs = currentUnspentOutputs;
+            if (outputs.length === 0) return false;
+    
+            let amount = outputs.reduce((acc, output) => acc.add(bigInt(output.output.amount)), bigInt(0));
+            // Log amount
             console.log('amount', amount);
-            const amountPerOutput = amount.divide(cashSplitNums)
-            const outputsToSend:IBasicOutput[] = []
-            for (let i = 0; i < cashSplitNums-1; i++) {
-                outputsToSend.push(this._makeCashBasicOutput(amountPerOutput))
-                amount = amount.subtract(amountPerOutput)
+            const amountPerOutput = amount.divide(cashSplitNums);
+            const outputsToSend: IBasicOutput[] = [];
+            for (let i = 0; i < cashSplitNums - 1; i++) {
+                outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
+                amount = amount.subtract(amountPerOutput);
             }
-            outputsToSend.push(this._makeCashBasicOutput(amount))
-            const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0],this._protocolInfo!.rentStructure)
-            // check if first output is enough for deposit
+            outputsToSend.push(this._makeCashBasicOutput(amount));
+            const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0], this._protocolInfo!.rentStructure);
+            // Check if first output is enough for deposit
             if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
-                // log then return
+                // Log then return
                 console.log('First output is not enough for deposit');
-                this._remainderHintSet = []
-                return false
+                this._remainderHintSet = [];
+                return false;
             }
-            // log outputsToSend and outputs in one line
-            // console.log('outputsToSend', outputsToSend, 'outputs', outputs);
-            const {transactionId} = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs,outputsToSend)
-            const newRemainderHints = [] as BasicOutputWrapper[]
-            for (let idx =0;idx<outputsToSend.length;idx++) {
-                const output = outputsToSend[idx]
-                newRemainderHints.push({output,outputId:TransactionHelper.outputIdFromTransactionData(transactionId,idx)})
+            // Log outputsToSend and outputs in one line
+            console.log('outputsToSend', outputsToSend, 'outputs', outputs);
+    
+            const { transactionId } = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs, outputsToSend);
+            const newRemainderHints: BasicOutputWrapper[] = [];
+            for (let idx = 0; idx < outputsToSend.length; idx++) {
+                const output = outputsToSend[idx];
+                newRemainderHints.push({ output, outputId: TransactionHelper.outputIdFromTransactionData(transactionId, idx) });
             }
+            newRemainderHints.reverse();
             this.resetAllRemainderHints(newRemainderHints);
-            return true
+
+            return true;
         } catch (error) {
             console.log('prepareRemainderHint error', error);
-            return false
+            return false;
         }
     }
     async _getDltShimmer(){
@@ -1344,9 +1384,10 @@ export class GroupfiSdkClient {
         if (idsForFiltering) {
             outputIds = outputIds.filter(outputId=>!idsForFiltering.has(outputId))
         }
-        let outputsRaw = await this._getUnSpentOutputsFromOutputIds(outputIds)
-        console.log('Unspent Outputs', outputsRaw);
-        let outputs = outputsRaw.map(output=>this._outputResponseWrapperToBasicOutputWrapper(output))
+        
+        const outputsRaws = await this.batchOutputIdToOutput(outputIds);
+        console.log('Unspent Outputs', outputsRaws);
+        let outputs = outputsRaws.map(({outputIdHex, output})=>{return {outputId:outputIdHex,output:output as IBasicOutput}})
         if (amountLargerThan) {
             outputs = outputs.filter(output=>bigInt(output.output.amount).greater(amountLargerThan))
         }
@@ -1686,20 +1727,32 @@ export class GroupfiSdkClient {
         }
         
     }
-    async _getPresignedImageUploadUrl({publicKey,signature,message,ext}:{publicKey:string,signature:string,message:string,ext:string}):Promise<{uploadURL:string,imageURL:string}>{
-        const url = IMAGE_PRESIGN_SERVICE_URL!
-        const body = {publicKey,signature,message,ext}
-        const res = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        })
-        const json = await res.json() as {uploadURL:string}
-        const {uploadURL} = json
-        const imageURL = uploadURL.split('?')[0]
-        return {uploadURL,imageURL}
+    /**
+     * Obtains a presigned S3 upload URL for images using the generic utility function.
+     * 
+     * @param params - Parameters including publicKey, signature, message, and file extension.
+     * @returns A Promise that resolves to an object containing the upload URL and the S3 URI.
+     */
+    private async _getPresignedImageUploadUrl(params: { publicKey: string; signature: string; message: string; ext: string }): Promise<{ uploadURL: string; imageURL: string }> {
+        const { serviceUrl } = { serviceUrl: IMAGE_PRESIGN_SERVICE_URL! }; // Define IMAGE_PRESIGN_SERVICE_URL appropriately
+        return getPresignedUploadUrl({
+            serviceUrl,
+            ...params
+        });
+    }
+
+    /**
+     * Obtains a presigned S3 upload URL for address lists using the generic utility function.
+     * 
+     * @param params - Parameters including publicKey, signature, message, and file extension.
+     * @returns A Promise that resolves to an object containing the upload URL and the S3 URI.
+     */
+    private async _getPresignedAddressListUploadUrl(params: { publicKey: string; signature: string; message: string; ext: string }): Promise<{ uploadURL: string; imageURL: string }> {
+        const { serviceUrl } = { serviceUrl: ADDRESSLIST_PRESIGN_SERVICE_URL! }; // Define ADDRESS_LIST_PRESIGN_SERVICE_URL appropriately
+        return getPresignedUploadUrl({
+            serviceUrl,
+            ...params
+        });
     }
     async uploadImageToS3({fileGetter,pairX, fileObj}:{fileGetter?:()=>Promise<File>,pairX:PairX, fileObj?:File}):Promise<{imageURL:string, 
         dimensionsPromise:Promise<{width:number,height:number}>,
@@ -1747,6 +1800,70 @@ export class GroupfiSdkClient {
             },
             body: file
         })
+    }
+    /**
+     * Uploads raw data to S3 using the provided upload URL.
+     * 
+     * @param data - The data to upload as a string (e.g., JSON).
+     * @param uploadURL - The presigned S3 upload URL.
+     * @returns A Promise that resolves when the upload is complete.
+     */
+    private async _uploadDataToS3({ data, uploadURL }: { data: string; uploadURL: string }): Promise<void> {
+        const response = await fetch(uploadURL, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json', // Set to 'application/json' for JSON data
+                'Cache-Control': 'max-age=31536000' // Adjust as needed
+            },
+            body: data
+        });
+
+        if (!response.ok) {
+            console.error('Failed to upload address list to S3:', response.statusText);
+            throw new Error('Failed to upload address list to S3');
+        }
+    }
+    /**
+     * Uploads the address list to S3 and returns the S3 URI.
+     * This function matches the UploadAddressListFunction signature.
+     * 
+     * @param groupId - The ID of the group.
+     * @param addressList - Array of addresses to upload.
+     * @returns A Promise that resolves to the S3 URI as a string.
+     */
+    async uploadAddressListToS3(
+        groupId: string,
+        addressList: string[],
+        pairX: PairX // Assuming PairX is needed for signing
+    ): Promise<string> {
+        const message = this._accountBech32Address!;
+
+        // Sign the message to get signature and public key
+        const sigRes = await this._requestAdapter!.ed25519SignAndGetPublicKey({ message, pairX });
+        const { signature, publicKey } = sigRes;
+
+        // Serialize the address list as JSON
+        const serializedAddressList = JSON.stringify(addressList);
+
+        // Define the file extension
+        const ext = 'json';
+
+        // Obtain a presigned S3 upload URL from your backend
+        const { uploadURL, imageURL } = await this._getPresignedAddressListUploadUrl({
+            publicKey,
+            signature,
+            message,
+            ext
+        });
+
+        // Upload the serialized address list to S3
+        await this._uploadDataToS3({
+            data: serializedAddressList,
+            uploadURL
+        });
+
+        // Return the S3 URI where the address list is stored
+        return imageURL;
     }
     async _findLargestUnspentOutput(outputIds:string[]){
         let largestAmount = bigInt('0')
@@ -2473,7 +2590,11 @@ export class GroupfiSdkClient {
     // _persistEvmQualify
     async _getEvmQualify(groupId:string,addressList:string[],signature:string, addressType:AddressType,timestamp:number):Promise<IBasicOutput>{
         const tag = `0x${Converter.utf8ToHex(GROUPFIQUALIFYTAG)}`
-        const data = serializeEvmQualify(groupId,addressList,signature,addressType,timestamp)
+        const func = async (groupId:string,addressList:string[]) => {
+            return this.uploadAddressListToS3(groupId,addressList,this._pairX!)
+        }
+
+        const data = await serializeEvmQualify(groupId,addressList,signature,addressType,timestamp, func)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
         const twoWeekSecs =  60 * 60 * 24 * 14
         this._addTimeUnlockToBasicOutput(basicOutput, twoWeekSecs)
