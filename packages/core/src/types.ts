@@ -88,7 +88,7 @@ export const ADDRESSLIST_PRESIGN_SERVICE_URL = process.env.ADDRESSLIST_PRESIGN_S
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
 // schema version for evm qualify
-export const EvmQualifySchemaVersion = 2
+export const EvmQualifySchemaVersion = 3
 // like
 export const LikeSchemaVersion = 1
 // mark
