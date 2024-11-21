@@ -2306,8 +2306,10 @@ export class GroupfiSdkClient {
     }
     // memberList should contain self if already qualified
     async markGroup({groupId,memberList, userAddress,memberSelf,
+        isGroupPublic = true,
         qualifyList
     }:{groupId:string,
+        isGroupPublic?:boolean,
         memberList?:{addr:string,publicKey:string}[], userAddress: string,
         memberSelf?:{addr:string,publicKey:string},
         qualifyList?:{addr:string,publicKey:string}[]
@@ -2318,7 +2320,7 @@ export class GroupfiSdkClient {
         console.log('markGroup', groupId, memberList, userAddress, memberSelf);
         try {
             const tasks:Promise<any>[] = [this._getMarkedGroupIds(userAddress)]
-            const isMakeSharedOutput = memberList && memberList.length > 0
+            const isMakeSharedOutput = !isGroupPublic && memberList && memberList.length > 0
             if (isMakeSharedOutput) {
                 tasks.push(this._makeSharedOutputForGroup({groupId,memberList,memberSelf}))
             }

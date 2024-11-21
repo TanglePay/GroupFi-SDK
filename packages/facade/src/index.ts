@@ -1131,10 +1131,12 @@ class GroupFiSDKFacade {
     memberList,
     publicKey,
     qualifyList,
+    isGroupPublic,
   }: {
     groupId: string;
     publicKey: string;
     memberList: { addr: string; publicKey: string }[];
+    isGroupPublic: boolean;
     qualifyList?: { addr: string; publicKey: string }[];
   }) {
     groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
@@ -1154,6 +1156,7 @@ class GroupFiSDKFacade {
       memberList,
       userAddress: this._address!,
       memberSelf,
+      isGroupPublic,
       qualifyList,
     })) as TransactionRes | undefined;
     return res;
