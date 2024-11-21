@@ -2042,11 +2042,13 @@ export class GroupfiSdkClient {
         // log oldest remainder hint
         console.log('oldest remainder hint', oldest);
         // return undefined if the oldest is too old
+        /*
         if (Date.now() - oldest.timestamp > this._remainderHintOutdatedTimeperiod) {
             // log oldest remainder hint too old
             console.log('oldest remainder hint too old', Date.now() - oldest.timestamp)
             return undefined
         }
+        */
         const {output,outputId} = oldest
         // log get cash from remainder hint, got, lefted
         console.log('get cash from remainder hint, got:', outputId, 'lefted:', this._remainderHintSet.map(hint=>hint.outputId));
