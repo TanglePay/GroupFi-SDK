@@ -377,7 +377,7 @@ export class GroupfiSdkClient {
             }
 
             // Log actually start prepare
-            console.log('Actually start prepare remainder hint');
+            console.log('Actually start prepare remainder hint, timeSinceLastPrepare:', timeSinceLastPrepare, 'timeElapsed:', timeElapsed);
             // Record the last actual prepare time
             this._lastActualPrepareTimestamp = currentTime;
             console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
