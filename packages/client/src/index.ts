@@ -202,7 +202,7 @@ export class GroupfiSdkClient {
     _sharedSaltFailedCache:Set<string> = new Set()
     _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
     _lastSendTimestamp:number = 0
-    _remainderHintOutdatedTimeperiod = 45 * 1000
+    _remainderHintOutdatedTimeperiod = 85 * 1000
 
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
@@ -2042,11 +2042,13 @@ export class GroupfiSdkClient {
         // log oldest remainder hint
         console.log('oldest remainder hint', oldest);
         // return undefined if the oldest is too old
+        /*
         if (Date.now() - oldest.timestamp > this._remainderHintOutdatedTimeperiod) {
             // log oldest remainder hint too old
             console.log('oldest remainder hint too old', Date.now() - oldest.timestamp)
             return undefined
         }
+        */
         const {output,outputId} = oldest
         // log get cash from remainder hint, got, lefted
         console.log('get cash from remainder hint, got:', outputId, 'lefted:', this._remainderHintSet.map(hint=>hint.outputId));
