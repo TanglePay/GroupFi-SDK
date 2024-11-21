@@ -375,16 +375,19 @@ export class GroupFiService {
     groupId,
     memberList,
     publicKey,
+    isGroupPublic,
     qualifyList
   }: {
     groupId: string
     publicKey: string
+    isGroupPublic: boolean
     memberList: { addr: string; publicKey: string }[]
     qualifyList?: { addr: string; publicKey: string }[]
   }) {
     await GroupFiSDKFacade.joinGroup({
       groupId,
       memberList,
+      isGroupPublic,
       publicKey,
       qualifyList
     })

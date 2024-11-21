@@ -202,7 +202,7 @@ export class GroupfiSdkClient {
     _sharedSaltFailedCache:Set<string> = new Set()
     _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
     _lastSendTimestamp:number = 0
-    _remainderHintOutdatedTimeperiod = 25 * 1000
+    _remainderHintOutdatedTimeperiod = 85 * 1000
 
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
@@ -355,7 +355,7 @@ export class GroupfiSdkClient {
         this._prepareRemainderHintSwitch = false
     }
     private _lastActualPrepareTimestamp: number = 0; // New property to track last prepare time
-    private _prepareCooldownTime: number = 25 * 1000; // Example: 25 sec cooldown
+    private _prepareCooldownTime: number = 45 * 1000; // Example: 25 sec cooldown
     
     async prepareRemainderHint() {
         if (!this._prepareRemainderHintSwitch) return false;
@@ -377,7 +377,7 @@ export class GroupfiSdkClient {
             }
 
             // Log actually start prepare
-            console.log('Actually start prepare remainder hint');
+            console.log('Actually start prepare remainder hint, timeSinceLastPrepare:', timeSinceLastPrepare, 'timeElapsed:', timeElapsed);
             // Record the last actual prepare time
             this._lastActualPrepareTimestamp = currentTime;
             console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
@@ -2042,12 +2042,16 @@ export class GroupfiSdkClient {
         // log oldest remainder hint
         console.log('oldest remainder hint', oldest);
         // return undefined if the oldest is too old
+        /*
         if (Date.now() - oldest.timestamp > this._remainderHintOutdatedTimeperiod) {
             // log oldest remainder hint too old
             console.log('oldest remainder hint too old', Date.now() - oldest.timestamp)
             return undefined
         }
+        */
         const {output,outputId} = oldest
+        // log get cash from remainder hint, got, lefted
+        console.log('get cash from remainder hint, got:', outputId, 'lefted:', this._remainderHintSet.map(hint=>hint.outputId));
         return {output,outputId}
     }
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
@@ -2304,8 +2308,10 @@ export class GroupfiSdkClient {
     }
     // memberList should contain self if already qualified
     async markGroup({groupId,memberList, userAddress,memberSelf,
+        isGroupPublic = true,
         qualifyList
     }:{groupId:string,
+        isGroupPublic?:boolean,
         memberList?:{addr:string,publicKey:string}[], userAddress: string,
         memberSelf?:{addr:string,publicKey:string},
         qualifyList?:{addr:string,publicKey:string}[]
@@ -2316,7 +2322,7 @@ export class GroupfiSdkClient {
         console.log('markGroup', groupId, memberList, userAddress, memberSelf);
         try {
             const tasks:Promise<any>[] = [this._getMarkedGroupIds(userAddress)]
-            const isMakeSharedOutput = memberList && memberList.length > 0
+            const isMakeSharedOutput = !isGroupPublic && memberList && memberList.length > 0
             if (isMakeSharedOutput) {
                 tasks.push(this._makeSharedOutputForGroup({groupId,memberList,memberSelf}))
             }
