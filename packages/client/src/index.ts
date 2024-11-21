@@ -2048,6 +2048,8 @@ export class GroupfiSdkClient {
             return undefined
         }
         const {output,outputId} = oldest
+        // log get cash from remainder hint, got, lefted
+        console.log('get cash from remainder hint, got:', oldest, 'lefted:', this._remainderHintSet);
         return {output,outputId}
     }
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
