@@ -202,7 +202,7 @@ export class GroupfiSdkClient {
     _sharedSaltFailedCache:Set<string> = new Set()
     _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
     _lastSendTimestamp:number = 0
-    _remainderHintOutdatedTimeperiod = 25 * 1000
+    _remainderHintOutdatedTimeperiod = 45 * 1000
 
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
@@ -355,7 +355,7 @@ export class GroupfiSdkClient {
         this._prepareRemainderHintSwitch = false
     }
     private _lastActualPrepareTimestamp: number = 0; // New property to track last prepare time
-    private _prepareCooldownTime: number = 25 * 1000; // Example: 25 sec cooldown
+    private _prepareCooldownTime: number = 45 * 1000; // Example: 25 sec cooldown
     
     async prepareRemainderHint() {
         if (!this._prepareRemainderHintSwitch) return false;
