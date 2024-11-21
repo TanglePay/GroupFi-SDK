@@ -202,7 +202,7 @@ export class GroupfiSdkClient {
     _sharedSaltFailedCache:Set<string> = new Set()
     _sharedSaltWaitingCache:Record<string,{resolve:Function,reject:Function}[]> = {}
     _lastSendTimestamp:number = 0
-    _remainderHintOutdatedTimeperiod = 45 * 1000
+    _remainderHintOutdatedTimeperiod = 85 * 1000
 
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
