@@ -375,15 +375,9 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                 //TODO
                 //if (!this._isHasPublicKey) return false;
                 const {groupId, sleepAfterFinishInMs} = cmd as IJoinGroupCommand;
+                const isGroupPublic = this.groupMemberDomain.isGroupPublicLite(groupId)
                 const memberList = await this.groupMemberDomain.getGroupMember(groupId)??[];
-                const isEvm = this.proxyModeDomain.getMode() !== ShimmerMode
-                const param = {groupId,memberList,publicKey:this._publicKey!,qualifyList:undefined as any}
-                if (isEvm) {
-                    const qualifyList = await this.groupMemberDomain.getGroupEvmQualify(groupId)
-                    console.log('===>Join qualifyList', qualifyList)
-                    param.qualifyList = qualifyList
-                    console.log('===>Join param', param)
-                }
+                const param = {groupId,memberList,publicKey:this._publicKey!,qualifyList:undefined as any,isGroupPublic}
                 await this.groupFiService.joinGroup(param)
                 await sleep(sleepAfterFinishInMs);
             } else if (cmd.type === 4) {
