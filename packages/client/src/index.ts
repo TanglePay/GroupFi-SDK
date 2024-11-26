@@ -361,8 +361,8 @@ export class GroupfiSdkClient {
         this._prepareRemainderHintSwitch = false
     }
     private _lastActualPrepareTimestamp: number = 0; // New property to track last prepare time
-    private _prepareCooldownTime: number = 45 * 1000; // Example: 25 sec cooldown
-    
+    private _prepareCooldownTimeNoPending: number = 60 * 1000;
+    private _prepareCooldownTimeWithPending: number = 5 * 1000;    
     async prepareRemainderHint() {
         if (!this._prepareRemainderHintSwitch) return false;
         if (!this._isCashDataInited) {
@@ -373,23 +373,15 @@ export class GroupfiSdkClient {
             const currentTime = Date.now();
             const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
 
+            const coolDownTime = this._pendingTransactions.size > 0 ? this._prepareCooldownTimeWithPending : this._prepareCooldownTimeNoPending;
             // Check if prepare is being called too soon
-            if (timeSinceLastPrepare < this._prepareCooldownTime) {
-                return false;
-            }
-
-            const timeElapsed = currentTime - this._lastSendTimestamp;
-            if (
-                timeElapsed < this._remainderHintOutdatedTimeperiod &&
-                this._remainderHintSet.length > 0
-            ) {
+            if (timeSinceLastPrepare < coolDownTime) {
                 return false;
             }
 
             // Log actually start prepare
-            console.log('Actually start prepare remainder hint, timeSinceLastPrepare:', timeSinceLastPrepare, 'timeElapsed:', timeElapsed);
-            // Record the last actual prepare time
-            this._lastActualPrepareTimestamp = currentTime;
+            console.log('Actually start prepare remainder hint, timeSinceLastPrepare:', timeSinceLastPrepare, 'with pending:', this._pendingTransactions.size > 0);
+    
             console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
 
             try {
@@ -400,8 +392,9 @@ export class GroupfiSdkClient {
                 }
             } catch (error) {
                 console.error('Periodic synchronization failed:', error);
-                // Optionally implement retry logic or alerts
             }
+            // Record the last actual prepare time
+            this._lastActualPrepareTimestamp = Date.now();
             return true;
         } catch (error) {
             console.log('prepareRemainderHint error', error);
@@ -2289,7 +2282,7 @@ export class GroupfiSdkClient {
         const { outputId } = oldest;
         
         // Log the retrieval details
-        console.log('Retrieved UTXO from remainder hint set:', outputId, 'Remaining UTXOs:', this._remainderHintSet.map(hint => hint.outputId));
+        console.log('Retrieved UTXO from remainder hint set:', outputId);
         
         // Return the output and its index in the remainder hint set
         return { output:oldest, index: oldestIdx };
