@@ -65,7 +65,7 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import nameMappingCache from './nameMappingCache';
-import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
+import { IRequestAdapter, PairX, IProxyModeRequestAdapter, CashOutputResponse, OutputIdOutputResponse } from './types'
 export * from './types'
 export { AddressMappingStore, nameMappingCache}
 type IntermediateResult = {
@@ -180,7 +180,10 @@ type NftItemReponse = {
 
 export const SharedNotFoundLaterRecoveredMessageKey = 'SharedNotFoundLaterRecovered'
 type Constructor<T> = new () => T;
+
 export class GroupfiSdkClient {
+    private readonly PENDING_TX_KEY = 'pendingTransactions';
+    private readonly PENDING_SPENT_KEY = 'pendingSpentOutputs';
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
     // _nodeInfo?: INodeInfo;
@@ -384,64 +387,84 @@ export class GroupfiSdkClient {
             this._lastActualPrepareTimestamp = currentTime;
             console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
 
-            // Fetch current unspent outputs
-            const currentUnspentOutputs = await this._getUnSpentOutputs({ numbersWanted: 100 });
-            // Log current unspent outputs
-            console.log('currentUnspentOutputs', currentUnspentOutputs);
-    
-            // Compare current unspent outputs with the remainder hint set
-            const currentUnspentOutputIds = new Set(currentUnspentOutputs.map(output => output.outputId));
-            const remainderHintOutputIds = new Set(this._remainderHintSet.map(hint => hint.outputId));
-    
-            // Check if both sets are identical
-            const areSetsIdentical =
-                currentUnspentOutputIds.size === remainderHintOutputIds.size &&
-                [...currentUnspentOutputIds].every(id => remainderHintOutputIds.has(id));
-    
-            if (areSetsIdentical) {
-                // Log that the remainder set is identical to current unspent outputs and abort
-                console.log('Remainder hint set is identical to current unspent outputs. Aborting preparation.');
-                return false;
+            try {
+                await this.synchronizeUTXOPool();
+                this.checkForStaleTransactions(); // Check for stale transactions after synchronization
+            } catch (error) {
+                console.error('Periodic synchronization failed:', error);
+                // Optionally implement retry logic or alerts
             }
-    
-            const outputs = currentUnspentOutputs;
-            if (outputs.length === 0) return false;
-    
-            let amount = outputs.reduce((acc, output) => acc.add(bigInt(output.output.amount)), bigInt(0));
-            // Log amount
-            console.log('amount', amount);
-            const amountPerOutput = amount.divide(cashSplitNums);
-            const outputsToSend: IBasicOutput[] = [];
-            for (let i = 0; i < cashSplitNums - 1; i++) {
-                outputsToSend.push(this._makeCashBasicOutput(amountPerOutput));
-                amount = amount.subtract(amountPerOutput);
-            }
-            outputsToSend.push(this._makeCashBasicOutput(amount));
-            const depositOfFirstOutput = TransactionHelper.getStorageDeposit(outputsToSend[0], this._protocolInfo!.rentStructure);
-            // Check if first output is enough for deposit
-            if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
-                // Log then return
-                console.log('First output is not enough for deposit');
-                this._remainderHintSet = [];
-                return false;
-            }
-            // Log outputsToSend and outputs in one line
-            console.log('outputsToSend', outputsToSend, 'outputs', outputs);
-    
-            const { transactionId } = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs, outputsToSend);
-            const newRemainderHints: BasicOutputWrapper[] = [];
-            for (let idx = 0; idx < outputsToSend.length; idx++) {
-                const output = outputsToSend[idx];
-                newRemainderHints.push({ output, outputId: TransactionHelper.outputIdFromTransactionData(transactionId, idx) });
-            }
-            newRemainderHints.reverse();
-            this.resetAllRemainderHints(newRemainderHints);
-
             return true;
         } catch (error) {
             console.log('prepareRemainderHint error', error);
             return false;
         }
+    }
+    private async loadPersistedData(): Promise<void> {
+        try {
+            // Load pending transactions
+            const pendingTxData = await this._storage!.get(this.PENDING_TX_KEY);
+            if (pendingTxData) {
+                const txMap = JSON.parse(pendingTxData) as Record<string, { inputs: string[]; changeOutputId?: string; timestamp: number }>;
+                Object.entries(txMap).forEach(([txId, tx]) => {
+                    this._pendingTransactions.set(txId, tx);
+                    // Map change output ID to transaction ID
+                    if (tx.changeOutputId) {
+                        this._outputIdToTxId.set(tx.changeOutputId, txId);
+                    }
+                });
+                console.log('Loaded persisted pending transactions.');
+            } else {
+                console.log('No persisted pending transactions found.');
+            }
+
+            // Load pending spent outputs
+            const pendingSpentData = await this._storage!.get(this.PENDING_SPENT_KEY);
+            if (pendingSpentData) {
+                const spentSet = JSON.parse(pendingSpentData) as string[];
+                spentSet.forEach((outputId) => this._pendingSpentOutputs.add(outputId));
+                console.log('Loaded persisted pending spent outputs.');
+            } else {
+                console.log('No persisted pending spent outputs found.');
+            }
+        } catch (error) {
+            console.error('Failed to load persisted data:', error);
+        }
+    }
+
+    /**
+     * Persists pending transactions and spent outputs to storage.
+     */
+    private async persistData(): Promise<void> {
+        try {
+            // Persist pending transactions
+            const txMap: Record<string, { inputs: string[]; changeOutputId?: string; timestamp: number }> = {};
+            this._pendingTransactions.forEach((tx, txId) => {
+                txMap[txId] = tx;
+            });
+            await this._storage!.set(this.PENDING_TX_KEY, JSON.stringify(txMap, null, 2));
+            console.log('Persisted pending transactions.');
+
+            // Persist pending spent outputs
+            const spentArray = Array.from(this._pendingSpentOutputs);
+            await this._storage!.set(this.PENDING_SPENT_KEY, JSON.stringify(spentArray, null, 2));
+            console.log('Persisted pending spent outputs.');
+        } catch (error) {
+            console.error('Failed to persist data:', error);
+        }
+    }
+
+    private checkForStaleTransactions() {
+        const now = Date.now();
+        const timeout = 5 * 60 * 1000; // 5 minutes
+    
+        this._pendingTransactions.forEach((tx, txId) => {
+            if (now - tx.timestamp > timeout) {
+                console.warn(`Transaction ${txId} is stale. Handling as failed.`);
+                // Handle as failed transaction
+                this.handleTransactionFailure(txId);
+            }
+        });
     }
     async _getDltShimmer(){
         const url = 'https://dlt.green/api?dns=shimmer&id=tanglepay&token=egm9jvee56sfjrohylvs0tkc6quwghyo'
@@ -1327,8 +1350,40 @@ export class GroupfiSdkClient {
             },
             body:JSON.stringify(outputIds)
         })
-        const data = await res.json() as {outputIdHex:string,output:OutputTypes,milestoneTimestamp:number}[]
+        const data = await res.json() as OutputIdOutputResponse[]
         return data
+    }
+    async getAddressCashOutputs(): Promise<CashOutputResponse> {
+        const url = `${this.getUrl()}/api/groupfi/v1/addresscashoutputs?address=${this._evmAdderss!}`;
+    
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    // Add other headers if necessary, e.g., Authorization
+                },
+            });
+    
+            if (!response.ok) {
+                // Handle HTTP errors
+                const errorText = await response.text();
+                throw new Error(`Error fetching address cash outputs: ${response.status} ${response.statusText} - ${errorText}`);
+            }
+    
+            const data = await response.json() as CashOutputResponse;
+    
+            // Optional: Validate the structure of the response
+            if (!Array.isArray(data.createdCashOutputs) || !Array.isArray(data.recentConsumedOutputIds)) {
+                throw new Error('Invalid response structure');
+            }
+    
+            return data;
+        } catch (error) {
+            // Handle network or parsing errors
+            console.error('Failed to fetch address cash outputs:', error);
+            throw error;
+        }
     }
     // check then consolidate shared
     async checkThenConsolidateShared(){
@@ -1946,6 +2001,8 @@ export class GroupfiSdkClient {
         const cashNeeded = amountToSend.subtract(depositFromExtraOutputs)
         console.log('cashNeeded', cashNeeded);
         let remainderBasicOutput:IBasicOutput|undefined
+        let consumedCashOutputId:string|undefined
+        let remainderIndex = -1;
         if (cashNeeded.lesser(bigInt('0'))) {
             // add diff to first created output, diff is -1 * cashNeeded
             createdOutputs[0].amount = bigInt(createdOutputs[0].amount).subtract(cashNeeded).toString()
@@ -1953,16 +2010,20 @@ export class GroupfiSdkClient {
             const threshold = cashNeeded.multiply(2)
             let consumedOutputWrapper:BasicOutputWrapper|undefined
             // first try get cash from remainder hint
-            const remainderBasicOutputWrapperFromHint = this._tryGetCashFromRemainderHint()
-            if (remainderBasicOutputWrapperFromHint) {
-                const amount = bigInt(remainderBasicOutputWrapperFromHint.output.amount)
-                if (amount.greaterOrEquals(threshold)) {
-                    consumedOutputWrapper = remainderBasicOutputWrapperFromHint
-                    // log get cash from remainder hint
-                    console.log('get cash from remainder hint', remainderBasicOutputWrapperFromHint);
+            const remainderRes = this._tryGetCashFromRemainderHint()
+            
+            if (remainderRes) {
+                const {output:remainderBasicOutputWrapperFromHint, index}  = remainderRes
+                if (remainderBasicOutputWrapperFromHint) {
+                    const amount = bigInt(remainderBasicOutputWrapperFromHint.output.amount)
+                    if (amount.greaterOrEquals(threshold)) {
+                        consumedOutputWrapper = remainderBasicOutputWrapperFromHint
+                        // log get cash from remainder hint
+                        console.log('get cash from remainder hint', remainderBasicOutputWrapperFromHint);
+                    }
+                    remainderIndex = index
                 }
-            } 
-        
+            }
             if (!consumedOutputWrapper ) {
                 // log get cash from unspent outputs on the fly
                 console.log('get cash from unspent outputs on the fly');
@@ -1976,6 +2037,7 @@ export class GroupfiSdkClient {
             if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
             extraOutputsToBeConsumed.push(consumedOutputWrapper)
             const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
+            consumedCashOutputId = consumedOutputId
             console.log('ConsumedOutput', consumedOutput);
             remainderBasicOutput = {
                 type: BASIC_OUTPUT_TYPE,
@@ -1998,10 +2060,143 @@ export class GroupfiSdkClient {
         const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(extraOutputsToBeConsumed, createdOutputs)
         console.log('===> send transaction res', res)
         const {blockId,outputId,transactionId,remainderOutputId} = res
+        // Add transaction to pending transactions
+        if (consumedCashOutputId) {
+            this._addPendingTransaction(transactionId, [consumedCashOutputId], remainderOutputId);
+        }
+        
+        // Map change output ID to transaction ID for confirmation handling
+        if (remainderOutputId) {
+            this._outputIdToTxId.set(remainderOutputId, transactionId);
+        }
+    
+        // Remove the spent UTXO from _remainderHintSet using the index
+        if (remainderIndex !== -1) {
+            this._remainderHintSet.splice(remainderIndex, 1);
+        }
         this._setRemainderHint(remainderBasicOutput,remainderOutputId)
         return res
     }
     _remainderHintSet:{output:IBasicOutput,outputId:string,timestamp:number}[] = []
+    private _pendingSpentOutputs: Set<string> = new Set(); // Tracks UTXOs involved in pending transactions
+    private _pendingTransactions: Map<string, { inputs: string[]; changeOutputId?: string; timestamp: number }> = new Map();
+    private _outputIdToTxId: Map<string, string> = new Map();
+    
+    
+    async synchronizeUTXOPool(): Promise<void> {
+        try {
+            const cashOutputs: CashOutputResponse = await this.getAddressCashOutputs();
+
+            // Process created cash outputs
+            cashOutputs.createdCashOutputs.forEach((utxo) => {
+                const outputIdHex = utxo.outputIdHex;
+
+                // **Check if this UTXO is already being spent in a pending transaction**
+                if (this._pendingSpentOutputs.has(outputIdHex)) {
+                    console.log(`UTXO ${outputIdHex} is already spent in a pending transaction. Skipping addition to remainder hints.`);
+                    return; // Skip adding to _remainderHintSet
+                }
+
+                // check existence in remainder hints
+                const existingHint = this._remainderHintSet.find((hint) => hint.outputId === outputIdHex);
+                if (existingHint) {
+                    console.log(`UTXO ${outputIdHex} already exists in remainder hints.`);
+                    return; // Skip adding to _remainderHintSet
+                }
+                this._remainderHintSet.push({
+                    output: utxo.output as IBasicOutput,
+                    outputId: outputIdHex,
+                    timestamp: utxo.milestoneTimestamp,
+                });
+                console.log(`Added UTXO ${outputIdHex} to remainder hints.`);
+
+            });
+
+            // Process recently consumed output IDs
+            cashOutputs.recentConsumedOutputIds.forEach((outputId) => {
+                // Remove from _remainderHintSet if present
+                const initialLength = this._remainderHintSet.length;
+                this._remainderHintSet = this._remainderHintSet.filter(
+                    (hint) => hint.outputId !== outputId
+                );
+                if (this._remainderHintSet.length < initialLength) {
+                    console.log(`Removed consumed UTXO ${outputId} from remainder hints.`);
+                }
+
+                // Check if this output ID is associated with any pending transaction
+                const txId = this._outputIdToTxId.get(outputId);
+                if (txId) {
+                    this.handleTransactionConfirmation(txId);
+                }
+
+                // Remove from pending spent outputs as it's now confirmed
+                this._pendingSpentOutputs.delete(outputId);
+                console.log(`Removed UTXO ${outputId} from pending spent outputs.`);
+            });
+
+            // Persist data after synchronization
+            this.persistData();
+
+            console.log('UTXO pool synchronized successfully.');
+        } catch (error) {
+            console.error('Failed to synchronize UTXO pool:', error);
+            // Optionally implement retry logic or alerting mechanisms
+        }
+    }
+    private async handleTransactionConfirmation(txId: string): Promise<void> {
+        const pendingTx = this._pendingTransactions.get(txId);
+        if (pendingTx) {
+            // Remove inputs from pending spent outputs
+            pendingTx.inputs.forEach((outputId) => {
+                this._pendingSpentOutputs.delete(outputId);
+                // Optionally, add to _spentOutputSet if needed
+            });
+    
+            // If there's a change output, it's already handled in synchronizeUTXOPool by being added to createdCashOutputs
+    
+            // Remove from pending transactions
+            this._pendingTransactions.delete(txId);
+            console.log(`Transaction ${txId} confirmed and removed from pending transactions.`);
+        }
+    }
+    /**
+     * Handles failed transactions by removing them from pending sets and re-adding UTXOs to the pool.
+     * @param txId The transaction ID to handle.
+     */
+    private async handleTransactionFailure(txId: string): Promise<void> {
+        const pendingTx = this._pendingTransactions.get(txId);
+        if (pendingTx) {
+            // Remove inputs from pending spent outputs
+            pendingTx.inputs.forEach((outputId) => {
+                this._pendingSpentOutputs.delete(outputId);
+                // Re-add the UTXO to the pool if it still exists
+                const output = this._remainderHintSet.find((hint) => hint.outputId === outputId)?.output;
+                if (output) {
+                    this._remainderHintSet.push({ output, outputId, timestamp: Date.now() });
+                } else {
+                    // If the output is not in the pool, it might have been already spent or never existed
+                    console.warn(`Output ID ${outputId} for transaction ${txId} not found in UTXO pool.`);
+                }
+            });
+
+            // Remove mapping from change output ID to transaction ID
+            if (pendingTx.changeOutputId) {
+                this._outputIdToTxId.delete(pendingTx.changeOutputId);
+            }
+
+            // Remove the transaction from pending transactions
+            this._pendingTransactions.delete(txId);
+
+            console.log(`Transaction ${txId} marked as failed and removed from pending transactions.`);
+        }
+    }
+    private _addPendingTransaction(txId: string, inputs: string[], changeOutputId?: string) {
+        this._pendingTransactions.set(txId, {
+            inputs,
+            changeOutputId,
+            timestamp: Date.now(),
+        });
+    }
     _isRemainderHintSetDirty = false
     _setRemainderHint(output?:IBasicOutput,outputId?:string){
         // log set remainder hint, outputId and output
@@ -2026,36 +2221,41 @@ export class GroupfiSdkClient {
         console.log('reset all remainder hints done');
         this._lastSendTimestamp = Date.now()
     }
-    _tryGetCashFromRemainderHint():BasicOutputWrapper|undefined{
-        // log enter try get cash from remainder hint
+    _tryGetCashFromRemainderHint(): { output: BasicOutputWrapper; index: number } | undefined {
+        // Log entry into the function
         console.log('try get cash from remainder hint');
-        if (this._remainderHintSet.length === 0) return undefined
-        // find then remove the one with oldest timestamp
-        let oldest = this._remainderHintSet[0]
-        let oldestIdx = 0
+        
+        // Check if there are any UTXOs available
+        if (this._remainderHintSet.length === 0) {
+            console.log('No UTXOs available in remainder hint set.');
+            return undefined;
+        }
+        
+        // Initialize variables to track the oldest UTXO
+        let oldest = this._remainderHintSet[0];
+        let oldestIdx = 0;
+        
+        // Iterate through the remainder hint set to find the oldest UTXO based on timestamp
         for (let i = 1; i < this._remainderHintSet.length; i++) {
-            const hint = this._remainderHintSet[i]
+            const hint = this._remainderHintSet[i];
             if (hint.timestamp < oldest.timestamp) {
-                oldest = hint
-                oldestIdx = i
+                oldest = hint;
+                oldestIdx = i;
             }
         }
-        this._remainderHintSet.splice(oldestIdx,1)
-        // log oldest remainder hint
-        console.log('oldest remainder hint', oldest);
-        // return undefined if the oldest is too old
-        /*
-        if (Date.now() - oldest.timestamp > this._remainderHintOutdatedTimeperiod) {
-            // log oldest remainder hint too old
-            console.log('oldest remainder hint too old', Date.now() - oldest.timestamp)
-            return undefined
-        }
-        */
-        const {output,outputId} = oldest
-        // log get cash from remainder hint, got, lefted
-        console.log('get cash from remainder hint, got:', outputId, 'lefted:', this._remainderHintSet.map(hint=>hint.outputId));
-        return {output,outputId}
+        
+        // Log the selected oldest UTXO
+        console.log('Selected oldest remainder hint:', oldest);
+        
+        const { outputId } = oldest;
+        
+        // Log the retrieval details
+        console.log('Retrieved UTXO from remainder hint set:', outputId, 'Remaining UTXOs:', this._remainderHintSet.map(hint => hint.outputId));
+        
+        // Return the output and its index in the remainder hint set
+        return { output:oldest, index: oldestIdx };
     }
+    
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
     async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:OutputWrapper[],createdOutputs:OutputTypes[]){
         this._ensureClientInited()

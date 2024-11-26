@@ -1,4 +1,4 @@
-import { IKeyPair, INftOutput } from '@iota/iota.js';
+import { IKeyPair, INftOutput, OutputTypes } from '@iota/iota.js';
 
 export const ShimmerMode = 1;
 export const ImpersonationMode = 2;
@@ -39,7 +39,15 @@ export interface IRequestAdapter {
     params: IRequestAdapterSendTransationParams
   ) => Promise<SendTransationRes>;
 }
-
+export interface OutputIdOutputResponse {
+  outputIdHex: string;
+  output: OutputTypes;
+  milestoneTimestamp: number;
+}
+export interface CashOutputResponse {
+  createdCashOutputs: OutputIdOutputResponse[];
+  recentConsumedOutputIds: string[];
+}
 export interface IProxyModeRequest {
   getEncryptionPublicKey: () => Promise<string>;
   ethSign: (params: { dataToBeSignedHex: string}) => Promise<string>;
