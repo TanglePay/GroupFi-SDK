@@ -184,6 +184,7 @@ type Constructor<T> = new () => T;
 export class GroupfiSdkClient {
     private readonly PENDING_TX_KEY = 'pendingTransactions';
     private readonly PENDING_SPENT_KEY = 'pendingSpentOutputs';
+    private readonly PENDING_CREATE_KEY = 'pendingCreateOutputs';
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
     // _nodeInfo?: INodeInfo;
@@ -364,6 +365,10 @@ export class GroupfiSdkClient {
     
     async prepareRemainderHint() {
         if (!this._prepareRemainderHintSwitch) return false;
+        if (!this._isCashDataInited) {
+            await this.loadPersistedData();
+            this._isCashDataInited = true;
+        }
         try {
             const currentTime = Date.now();
             const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
@@ -390,6 +395,9 @@ export class GroupfiSdkClient {
             try {
                 await this.synchronizeUTXOPool();
                 this.checkForStaleTransactions(); // Check for stale transactions after synchronization
+                if (this._cashDataDirty) {
+                    await this.persistCashData();
+                }
             } catch (error) {
                 console.error('Periodic synchronization failed:', error);
                 // Optionally implement retry logic or alerts
@@ -400,6 +408,7 @@ export class GroupfiSdkClient {
             return false;
         }
     }
+    _isCashDataInited:boolean = false
     private async loadPersistedData(): Promise<void> {
         try {
             // Load pending transactions
@@ -408,10 +417,6 @@ export class GroupfiSdkClient {
                 const txMap = JSON.parse(pendingTxData) as Record<string, { inputs: string[]; changeOutputId?: string; timestamp: number }>;
                 Object.entries(txMap).forEach(([txId, tx]) => {
                     this._pendingTransactions.set(txId, tx);
-                    // Map change output ID to transaction ID
-                    if (tx.changeOutputId) {
-                        this._outputIdToTxId.set(tx.changeOutputId, txId);
-                    }
                 });
                 console.log('Loaded persisted pending transactions.');
             } else {
@@ -421,11 +426,27 @@ export class GroupfiSdkClient {
             // Load pending spent outputs
             const pendingSpentData = await this._storage!.get(this.PENDING_SPENT_KEY);
             if (pendingSpentData) {
-                const spentSet = JSON.parse(pendingSpentData) as string[];
-                spentSet.forEach((outputId) => this._pendingSpentOutputs.add(outputId));
+                const spentOutputIdToTxIdMap = JSON.parse(pendingSpentData) as Record<string, string>;
+
+                Object.entries(spentOutputIdToTxIdMap).forEach(([outputId, txId]) => {
+                    this._pendingSpentOutputIdToTxId.set(outputId, txId);
+                });
                 console.log('Loaded persisted pending spent outputs.');
             } else {
                 console.log('No persisted pending spent outputs found.');
+            }
+
+            // Load pending create outputs
+            const pendingCreateData = await this._storage!.get(this.PENDING_CREATE_KEY);
+            if (pendingCreateData) {
+                const createOutputIdToTxIdMap = JSON.parse(pendingCreateData) as Record<string, string>;
+
+                Object.entries(createOutputIdToTxIdMap).forEach(([outputId, txId]) => {
+                    this._pendingCreatedOutputToTxId.set(outputId, txId);
+                });
+                console.log('Loaded persisted pending create outputs.');
+            } else {
+                console.log('No persisted pending create outputs found.');
             }
         } catch (error) {
             console.error('Failed to load persisted data:', error);
@@ -435,7 +456,8 @@ export class GroupfiSdkClient {
     /**
      * Persists pending transactions and spent outputs to storage.
      */
-    private async persistData(): Promise<void> {
+    private async persistCashData(): Promise<void> {
+        this._cashDataDirty = false;
         try {
             // Persist pending transactions
             const txMap: Record<string, { inputs: string[]; changeOutputId?: string; timestamp: number }> = {};
@@ -446,9 +468,20 @@ export class GroupfiSdkClient {
             console.log('Persisted pending transactions.');
 
             // Persist pending spent outputs
-            const spentArray = Array.from(this._pendingSpentOutputs);
-            await this._storage!.set(this.PENDING_SPENT_KEY, JSON.stringify(spentArray, null, 2));
+            const spentOutputIdToTxIdMap: Record<string, string> = {};
+            this._pendingSpentOutputIdToTxId.forEach((txId, outputId) => {
+                spentOutputIdToTxIdMap[outputId] = txId;
+            })
+            await this._storage!.set(this.PENDING_SPENT_KEY, JSON.stringify(spentOutputIdToTxIdMap, null, 2));
             console.log('Persisted pending spent outputs.');
+
+            // Persist pending create outputs
+            const createOutputIdToTxIdMap: Record<string, string> = {};
+            this._pendingCreatedOutputToTxId.forEach((txId, outputId) => {
+                createOutputIdToTxIdMap[outputId] = txId;
+            })
+            await this._storage!.set(this.PENDING_CREATE_KEY, JSON.stringify(createOutputIdToTxIdMap, null, 2));
+
         } catch (error) {
             console.error('Failed to persist data:', error);
         }
@@ -2077,11 +2110,10 @@ export class GroupfiSdkClient {
     private _pendingTransactions: Map<string, { inputs: string[]; changeOutputId?: string; timestamp: number }> = new Map();
     private _pendingCreatedOutputToTxId: Map<string, string> = new Map();
     
-    
+    _cashDataDirty = false
     async synchronizeUTXOPool(): Promise<void> {
         try {
             const cashOutputs: CashOutputResponse = await this.getAddressCashOutputs();
-            let dataChanged = false;
             // Process created cash outputs
             cashOutputs.createdCashOutputs.forEach((utxo) => {
                 const outputIdHex = utxo.outputIdHex;
@@ -2100,14 +2132,14 @@ export class GroupfiSdkClient {
                         outputId: outputIdHex,
                         timestamp: utxo.milestoneTimestamp,
                     });
-                    dataChanged = true;
+                    this._cashDataDirty = true;
                     console.log(`Added UTXO ${outputIdHex} to remainder hints.`);
                 }
 
                 if (this._pendingCreatedOutputToTxId.has(outputIdHex)) {
                     // pending created output is confirmed
                     this.handleTransactionConfirmation(this._pendingCreatedOutputToTxId.get(outputIdHex)!);
-                    dataChanged = true;
+                    this._cashDataDirty = true;
                 }
 
             });
@@ -2120,24 +2152,19 @@ export class GroupfiSdkClient {
                     (hint) => hint.outputId !== outputId
                 );
                 if (this._remainderHintSet.length < initialLength) {
-                    dataChanged = true;
+                    this._cashDataDirty = true;
                     console.log(`Removed consumed UTXO ${outputId} from remainder hints.`);
                 }
 
                 // Check if this output ID is associated with any pending transaction
                 const txId = this._pendingSpentOutputIdToTxId.get(outputId);
                 if (txId) {
-                    dataChanged = true;
+                    this._cashDataDirty = true;
                     this.handleTransactionConfirmation(txId);
                 }
 
                 console.log(`Removed UTXO ${outputId} from pending spent outputs.`);
             });
-
-            // Persist data after synchronization
-            if (dataChanged) {
-                await this.persistData();
-            }
 
             console.log('UTXO pool synchronized successfully.');
         } catch (error) {
@@ -2207,6 +2234,7 @@ export class GroupfiSdkClient {
         if (changeOutputId) {
             this._pendingCreatedOutputToTxId.set(changeOutputId, txId);
         }
+        this._cashDataDirty = true;
     }
     _isRemainderHintSetDirty = false
     _setRemainderHint(output?:IBasicOutput,outputId?:string){
