@@ -2065,50 +2065,50 @@ export class GroupfiSdkClient {
             this._addPendingTransaction(transactionId, [consumedCashOutputId], remainderOutputId);
         }
         
-        // Map change output ID to transaction ID for confirmation handling
-        if (remainderOutputId) {
-            this._outputIdToTxId.set(remainderOutputId, transactionId);
-        }
     
         // Remove the spent UTXO from _remainderHintSet using the index
         if (remainderIndex !== -1) {
             this._remainderHintSet.splice(remainderIndex, 1);
         }
-        this._setRemainderHint(remainderBasicOutput,remainderOutputId)
         return res
     }
     _remainderHintSet:{output:IBasicOutput,outputId:string,timestamp:number}[] = []
-    private _pendingSpentOutputs: Set<string> = new Set(); // Tracks UTXOs involved in pending transactions
+    private _pendingSpentOutputIdToTxId: Map<string, string> = new Map();
     private _pendingTransactions: Map<string, { inputs: string[]; changeOutputId?: string; timestamp: number }> = new Map();
-    private _outputIdToTxId: Map<string, string> = new Map();
+    private _pendingCreatedOutputToTxId: Map<string, string> = new Map();
     
     
     async synchronizeUTXOPool(): Promise<void> {
         try {
             const cashOutputs: CashOutputResponse = await this.getAddressCashOutputs();
-
+            let dataChanged = false;
             // Process created cash outputs
             cashOutputs.createdCashOutputs.forEach((utxo) => {
                 const outputIdHex = utxo.outputIdHex;
 
                 // **Check if this UTXO is already being spent in a pending transaction**
-                if (this._pendingSpentOutputs.has(outputIdHex)) {
+                if (this._pendingSpentOutputIdToTxId.has(outputIdHex)) {
                     console.log(`UTXO ${outputIdHex} is already spent in a pending transaction. Skipping addition to remainder hints.`);
                     return; // Skip adding to _remainderHintSet
                 }
 
                 // check existence in remainder hints
                 const existingHint = this._remainderHintSet.find((hint) => hint.outputId === outputIdHex);
-                if (existingHint) {
-                    console.log(`UTXO ${outputIdHex} already exists in remainder hints.`);
-                    return; // Skip adding to _remainderHintSet
+                if (!existingHint) {
+                    this._remainderHintSet.push({
+                        output: utxo.output as IBasicOutput,
+                        outputId: outputIdHex,
+                        timestamp: utxo.milestoneTimestamp,
+                    });
+                    dataChanged = true;
+                    console.log(`Added UTXO ${outputIdHex} to remainder hints.`);
                 }
-                this._remainderHintSet.push({
-                    output: utxo.output as IBasicOutput,
-                    outputId: outputIdHex,
-                    timestamp: utxo.milestoneTimestamp,
-                });
-                console.log(`Added UTXO ${outputIdHex} to remainder hints.`);
+
+                if (this._pendingCreatedOutputToTxId.has(outputIdHex)) {
+                    // pending created output is confirmed
+                    this.handleTransactionConfirmation(this._pendingCreatedOutputToTxId.get(outputIdHex)!);
+                    dataChanged = true;
+                }
 
             });
 
@@ -2120,22 +2120,24 @@ export class GroupfiSdkClient {
                     (hint) => hint.outputId !== outputId
                 );
                 if (this._remainderHintSet.length < initialLength) {
+                    dataChanged = true;
                     console.log(`Removed consumed UTXO ${outputId} from remainder hints.`);
                 }
 
                 // Check if this output ID is associated with any pending transaction
-                const txId = this._outputIdToTxId.get(outputId);
+                const txId = this._pendingSpentOutputIdToTxId.get(outputId);
                 if (txId) {
+                    dataChanged = true;
                     this.handleTransactionConfirmation(txId);
                 }
 
-                // Remove from pending spent outputs as it's now confirmed
-                this._pendingSpentOutputs.delete(outputId);
                 console.log(`Removed UTXO ${outputId} from pending spent outputs.`);
             });
 
             // Persist data after synchronization
-            this.persistData();
+            if (dataChanged) {
+                await this.persistData();
+            }
 
             console.log('UTXO pool synchronized successfully.');
         } catch (error) {
@@ -2148,11 +2150,14 @@ export class GroupfiSdkClient {
         if (pendingTx) {
             // Remove inputs from pending spent outputs
             pendingTx.inputs.forEach((outputId) => {
-                this._pendingSpentOutputs.delete(outputId);
+                this._pendingSpentOutputIdToTxId.delete(outputId);
                 // Optionally, add to _spentOutputSet if needed
             });
     
-            // If there's a change output, it's already handled in synchronizeUTXOPool by being added to createdCashOutputs
+            // remove output from pending created outputs
+            if (pendingTx.changeOutputId) {
+                this._pendingCreatedOutputToTxId.delete(pendingTx.changeOutputId);
+            }
     
             // Remove from pending transactions
             this._pendingTransactions.delete(txId);
@@ -2168,7 +2173,7 @@ export class GroupfiSdkClient {
         if (pendingTx) {
             // Remove inputs from pending spent outputs
             pendingTx.inputs.forEach((outputId) => {
-                this._pendingSpentOutputs.delete(outputId);
+                this._pendingSpentOutputIdToTxId.delete(outputId);
                 // Re-add the UTXO to the pool if it still exists
                 const output = this._remainderHintSet.find((hint) => hint.outputId === outputId)?.output;
                 if (output) {
@@ -2181,7 +2186,7 @@ export class GroupfiSdkClient {
 
             // Remove mapping from change output ID to transaction ID
             if (pendingTx.changeOutputId) {
-                this._outputIdToTxId.delete(pendingTx.changeOutputId);
+                this._pendingCreatedOutputToTxId.delete(pendingTx.changeOutputId);
             }
 
             // Remove the transaction from pending transactions
@@ -2196,6 +2201,12 @@ export class GroupfiSdkClient {
             changeOutputId,
             timestamp: Date.now(),
         });
+        for (const input of inputs) {
+            this._pendingSpentOutputIdToTxId.set(input, txId);
+        }
+        if (changeOutputId) {
+            this._pendingCreatedOutputToTxId.set(changeOutputId, txId);
+        }
     }
     _isRemainderHintSetDirty = false
     _setRemainderHint(output?:IBasicOutput,outputId?:string){
