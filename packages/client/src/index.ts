@@ -207,6 +207,7 @@ export class GroupfiSdkClient {
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
     _pairX?: PairX
+    _evmAdderss?: string
     _updateNodeProtocolInfoInterval:NodeJS.Timeout|undefined
     private _nodeManager: INodeProvider | null = null;
     private _currentUrlUsing: string | null = null;
@@ -259,8 +260,9 @@ export class GroupfiSdkClient {
         return this._requestAdapter
     }
 
-    async switchAddress(bech32Address: string, pairX?: PairX){
+    async switchAddress({bech32Address, pairX, evmAddress}:{bech32Address: string, pairX?: PairX, evmAddress?: string}){
         this._pairX = pairX
+        this._evmAdderss = evmAddress
         this._accountBech32Address = bech32Address
         // const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
         const res = Bech32Helper.fromBech32(bech32Address, this._protocolInfo!.bech32Hrp)

@@ -830,7 +830,7 @@ class GroupFiSDKFacade {
     // shimmer mode, setup normally
     if (this._mode === ShimmerMode) {
       this._proxyAddress = this._address;
-      this._client!.switchAddress(this._address!);
+      this._client!.switchAddress({bech32Address: this._address!});
     } else if (this._mode === ImpersonationMode) {
       const proxy = await this.getSMRProxyAccount();
       if (proxy) {
@@ -856,7 +856,11 @@ class GroupFiSDKFacade {
       return;
     }
     this._proxyAddress = modeInfo.detail.account;
-    this._client!.switchAddress(this._proxyAddress, modeInfo.pairX);
+    this._client!.switchAddress({
+      bech32Address: this._proxyAddress, 
+      pairX: modeInfo.pairX, 
+      evmAddress: this._address
+    });
     this._pairX = modeInfo.pairX;
   }
 
@@ -938,7 +942,7 @@ class GroupFiSDKFacade {
       const { bech32Address } = await (
         adapter as ImpersonationModeRequestAdapter
       ).getProxyAccount();
-      await this._client!.switchAddress(bech32Address, pairX);
+      await this._client!.switchAddress({bech32Address, pairX, evmAddress: this._address});
       await this._client!.registerTanglePayPairX({
         pairX,
         metadataObjWithSignature,
