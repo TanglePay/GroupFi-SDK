@@ -1397,20 +1397,23 @@ export class GroupfiSdkClient {
                 throw new Error(`Error fetching address cash outputs: ${response.status} ${response.statusText} - ${errorText}`);
             }
     
-            const data = await response.json() as CashOutputResponse;
+            const data = await response.json();
     
-            // Optional: Validate the structure of the response
-            if (!Array.isArray(data.createdCashOutputs) || !Array.isArray(data.recentConsumedOutputIds)) {
-                throw new Error('Invalid response structure');
-            }
+            // Ensure `createdCashOutputIds` and `recentConsumedOutputIds` are arrays
+            const createdCashOutputIds = Array.isArray(data.createdCashOutputIds) ? data.createdCashOutputIds : [];
+            const recentConsumedOutputIds = Array.isArray(data.recentConsumedOutputIds) ? data.recentConsumedOutputIds : [];
     
-            return data;
+            return {
+                createdCashOutputIds,
+                recentConsumedOutputIds,
+            };
         } catch (error) {
             // Handle network or parsing errors
             console.error('Failed to fetch address cash outputs:', error);
             throw error;
         }
     }
+    
     // check then consolidate shared
     async checkThenConsolidateShared(){
         this._ensureClientInited()
@@ -2107,26 +2110,23 @@ export class GroupfiSdkClient {
     async synchronizeUTXOPool(): Promise<void> {
         try {
             const cashOutputs: CashOutputResponse = await this.getAddressCashOutputs();
-            // Process created cash outputs
-            cashOutputs.createdCashOutputs.forEach((utxo) => {
-                const outputIdHex = utxo.outputIdHex;
 
+            // Collect outputIds to batch process
+            const outputIdsToPush: string[] = [];
+
+            // Process created cash outputs
+            cashOutputs.createdCashOutputIds.forEach((outputIdHex) => {
                 // **Check if this UTXO is already being spent in a pending transaction**
                 if (this._pendingSpentOutputIdToTxId.has(outputIdHex)) {
                     console.log(`UTXO ${outputIdHex} is already spent in a pending transaction. Skipping addition to remainder hints.`);
-                    return; // Skip adding to _remainderHintSet
+                    return; // Skip processing
                 }
 
-                // check existence in remainder hints
+                // Check existence in remainder hints
                 const existingHint = this._remainderHintSet.find((hint) => hint.outputId === outputIdHex);
                 if (!existingHint) {
-                    this._remainderHintSet.push({
-                        output: utxo.output as IBasicOutput,
-                        outputId: outputIdHex,
-                        timestamp: utxo.milestoneTimestamp,
-                    });
-                    this._cashDataDirty = true;
-                    console.log(`Added UTXO ${outputIdHex} to remainder hints.`);
+                    // Add to batch for later processing
+                    outputIdsToPush.push(outputIdHex);
                 }
 
                 if (this._pendingCreatedOutputToTxId.has(outputIdHex)) {
@@ -2134,8 +2134,17 @@ export class GroupfiSdkClient {
                     this.handleTransactionConfirmation(this._pendingCreatedOutputToTxId.get(outputIdHex)!);
                     this._cashDataDirty = true;
                 }
-
             });
+
+            // Process the batched outputIds
+            if (outputIdsToPush.length > 0) {
+                const outputIdsResp = await this.batchOutputIdToOutput(outputIdsToPush);
+                outputIdsResp.forEach(({ outputIdHex, output, milestoneTimestamp }) => {
+                    this._remainderHintSet.push({ output:output as IBasicOutput, outputId: outputIdHex, timestamp: milestoneTimestamp });
+                    console.log(`Added UTXO ${outputIdHex} to remainder hints.`);
+                });
+                this._cashDataDirty = true;
+            }
 
             // Process recently consumed output IDs
             cashOutputs.recentConsumedOutputIds.forEach((outputId) => {

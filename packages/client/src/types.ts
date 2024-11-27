@@ -45,9 +45,10 @@ export interface OutputIdOutputResponse {
   milestoneTimestamp: number;
 }
 export interface CashOutputResponse {
-  createdCashOutputs: OutputIdOutputResponse[];
+  createdCashOutputIds: string[];
   recentConsumedOutputIds: string[];
 }
+
 export interface IProxyModeRequest {
   getEncryptionPublicKey: () => Promise<string>;
   ethSign: (params: { dataToBeSignedHex: string}) => Promise<string>;
