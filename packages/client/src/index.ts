@@ -369,6 +369,9 @@ export class GroupfiSdkClient {
             await this.loadPersistedData();
             this._isCashDataInited = true;
         }
+        if (this._cashDataDirty) {
+            await this.persistCashData();
+        }
         try {
             const currentTime = Date.now();
             const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
@@ -387,9 +390,6 @@ export class GroupfiSdkClient {
             try {
                 await this.synchronizeUTXOPool();
                 this.checkForStaleTransactions(); // Check for stale transactions after synchronization
-                if (this._cashDataDirty) {
-                    await this.persistCashData();
-                }
             } catch (error) {
                 console.error('Periodic synchronization failed:', error);
             }
