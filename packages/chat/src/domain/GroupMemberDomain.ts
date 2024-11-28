@@ -41,6 +41,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         // if isLoggedIn, return all for me group configs, else return only public group configs
         // return this._context.isLoggedIn ? this._forMeGroupConfigs : this._forMeGroupConfigs?.filter(({isPublic}) => isPublic);
         // regardless of whether the user is logged in, do not filter public groups.
+        // The Chat module also displays private groups.
         return this._forMeGroupConfigs
     }
     // get marked group configs
@@ -212,16 +213,22 @@ export class GroupMemberDomain implements ICycle, IRunnable {
 
     _getAllGroupIds() {
         // merge for me group ids and marked group ids
-        return [...this._getForMeGroupIds(),...this._getMarkedGroupIds()];
+        const allGroupIds = [...this._getForMeGroupIds(),...this._getMarkedGroupIds()];
+        // Remove duplicate group IDs.
+        return [...new Set(allGroupIds)]
     }
 
+    
     _getForMeGroupIds() {
         // if isLoggedIn, return all for me group ids, else return only public group ids from for me group configs
-        if (this._context.isLoggedIn) {
-            return (this._forMeGroupConfigs ?? []).map(({groupId}) => groupId);
-        } else {
-            return (this._forMeGroupConfigs ?? []).filter(({isPublic}) => isPublic).map(({groupId}) => groupId);
-        }        
+        // if (this._context.isLoggedIn) {
+        //     return (this._forMeGroupConfigs ?? []).map(({groupId}) => groupId);
+        // } else {
+        //     return (this._forMeGroupConfigs ?? []).filter(({isPublic}) => isPublic).map(({groupId}) => groupId);
+        // }   
+        // Regardless of whether the user is logged in, do not filter public groups.
+        // The Chat module also displays private groups.
+        return (this._forMeGroupConfigs ?? []).map(({groupId}) => groupId)
     }
     _getMarkedGroupIds() {
         // if isLoggedIn, return all marked group ids, else return empty array
