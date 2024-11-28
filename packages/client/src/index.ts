@@ -366,11 +366,11 @@ export class GroupfiSdkClient {
     async prepareRemainderHint() {
         if (!this._prepareRemainderHintSwitch) return false;
         if (!this._isCashDataInited) {
-            await this.loadPersistedData();
+            // await this.loadPersistedData();
             this._isCashDataInited = true;
         }
         if (this._cashDataDirty) {
-            await this.persistCashData();
+            // await this.persistCashData();
         }
         try {
             const currentTime = Date.now();
@@ -2068,21 +2068,7 @@ export class GroupfiSdkClient {
             const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
             consumedCashOutputId = consumedOutputId
             console.log('ConsumedOutput', consumedOutput);
-            remainderBasicOutput = {
-                type: BASIC_OUTPUT_TYPE,
-                amount: bigInt(consumedOutput.amount).minus(cashNeeded).toString(),
-                nativeTokens: [],
-                unlockConditions: [
-                    {
-                        type: ADDRESS_UNLOCK_CONDITION_TYPE,
-                        address: {
-                            type: ED25519_ADDRESS_TYPE,
-                            pubKeyHash: this._accountHexAddress!
-                        }
-                    }
-                ],
-                features: []
-            };
+            remainderBasicOutput = this._makeCashBasicOutput(bigInt(consumedOutput.amount).minus(cashNeeded))
             createdOutputs.push(remainderBasicOutput)
             console.log("Remainder Basic Output: ", remainderBasicOutput);
         }
