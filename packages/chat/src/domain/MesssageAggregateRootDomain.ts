@@ -11,7 +11,7 @@ import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
 import { EventGroupMemberChanged, IMessage } from "groupfi-sdk-core";
 import { EventItemFromFacade } from "groupfi-sdk-core";
-import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey } from "./GroupMemberDomain";
+import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey } from "./GroupMemberDomain";
 import { AquiringPublicKeyEventKey, DelegationModeNameNftChangedEventKey, NotEnoughCashTokenEventKey, OutputSendingDomain, PairXChangedEventKey, PublicKeyChangedEventKey, VoteOrUnVoteGroupLiteEventKey } from "./OutputSendingDomain";
 
 import { Mode, IIncludesAndExcludes, Profile } from '../types'
@@ -186,11 +186,17 @@ export class MessageAggregateRootDomain implements ICycle {
             this.groupMemberDomain.on(EventGroupLikeChangedLiteKey, this._likeOrUnLikeGroupMemberChangedCallback)
         })
     }
-    onGroupMemberChanged(callback: (param: EventGroupMemberChanged) => void) {    
-        this.groupMemberDomain.on(EventGroupMemberChangedLiteKey,callback)
+    onGroupMemberChangedLite(callback: (param: EventGroupMemberChanged) => void) {    
+        this.groupMemberDomain.on(EventGroupMemberChangedLiteKey, callback)
     }
-    offGroupMemberChanged(callback: (param: EventGroupMemberChanged) => void) { 
+    offGroupMemberChangedLite(callback: (param: EventGroupMemberChanged) => void) { 
         this.groupMemberDomain.off(EventGroupMemberChangedLiteKey,callback)
+    }
+    onGroupMemberChanged(callback: (params: {groupId: string}) => void) {
+        this.groupMemberDomain.on(EventGroupMemberChangedKey, callback)
+    }
+    offGroupMemberChanged(callback: (params: {groupId: string}) => void) {
+        this.groupMemberDomain.off(EventGroupMemberChangedKey, callback)
     }
     async start(): Promise<void> {
         this._cycleableDomains = [this.outputSendingDomain, this.groupMemberDomain, this.inboxDomain, this.conversationDomain, this.messageHubDomain, this.eventSourceDomain]
