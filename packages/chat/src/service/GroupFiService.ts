@@ -345,7 +345,7 @@ export class GroupFiService {
   ): Promise<
     | {
         sentMessagePromise: Promise<IMessage>
-        sendBasicOutputPromise: Promise<{ blockId: string; outputId: string }>
+        sendBasicOutputPromise: Promise<{ blockId: string; outputIds: string[] }>
       }
     | undefined
   > {
@@ -357,7 +357,14 @@ export class GroupFiService {
       memberList
     )
   }
-
+  // consolidateIfNeeded
+  async consolidateIfNeeded() {
+    return await GroupFiSDKFacade.consolidateIfNeeded()
+  }
+  // cashInit
+  async cashInit() {
+    return await GroupFiSDKFacade.cashInit()
+  }
   async getUserGroupReputation(groupId: string) {
     return await GroupFiSDKFacade.getUserGroupReputation(groupId)
   }
