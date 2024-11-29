@@ -584,4 +584,8 @@ export class MessageAggregateRootDomain implements ICycle {
     getSelfProfile() {
         return this._context.getProfile()
     }
+
+    async getGroupMember(groupId: string) {
+        return await this.groupMemberDomain.getGroupMember(groupId)
+    }
 }
