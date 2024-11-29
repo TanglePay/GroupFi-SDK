@@ -419,6 +419,18 @@ class GroupFiSDKFacade {
     const res = await this._client!.prepareRemainderHint();
     return res;
   }
+  // consolidateIfNeeded
+  async consolidateIfNeeded() {
+    this._ensureWalletConnected();
+    const res = await this._client!.consolidateIfNeeded()
+    return res;
+  }
+  // async cashInit(){
+  async cashInit() {
+    this._ensureWalletConnected();
+    const res = await this._client!.cashInit();
+    return res;
+  }
   // enablePreparedRemainderHint
   enablePreparedRemainderHint() {
     this._ensureWalletConnected();

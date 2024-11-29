@@ -15,9 +15,8 @@ export interface PairX {
 
 export interface SendTransationRes {
   blockId: string;
-  outputId: string;
+  outputIds: string[];
   transactionId: string;
-  remainderOutputId?: string | undefined;
 }
 
 export interface IRequestAdapterDecryptParams {
