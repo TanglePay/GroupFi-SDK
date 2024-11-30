@@ -437,8 +437,8 @@ export class GroupfiSdkClient {
             const areSetsIdentical =
                 currentUnspentOutputIds.size === remainderHintOutputIds.size &&
                 [...currentUnspentOutputIds].every(id => remainderHintOutputIds.has(id));
-    
-            if (areSetsIdentical) {
+            const cashOutputNum = remainderHintOutputIds.size;
+            if (areSetsIdentical && cashOutputNum >= cashSplitNums) {
                 // Log that the remainder set is identical to current unspent outputs and abort
                 console.log('Remainder hint set is identical to current unspent outputs. Aborting preparation.');
                 return false;
@@ -2372,7 +2372,7 @@ export class GroupfiSdkClient {
         const remainderHints = outputIds.map((outputId, idx) => {
             return { outputId, output: outputs[idx], timestamp: Date.now() };
         });
-        this._remainderHintSet =remainderHints;
+        this._remainderHintSet = remainderHints;
         // log reset all remainder hints done
         console.log('reset all remainder hints done');
         this._lastSendTimestamp = Date.now()
