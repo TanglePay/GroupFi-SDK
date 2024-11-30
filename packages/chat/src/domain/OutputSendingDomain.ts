@@ -530,13 +530,12 @@ export class OutputSendingDomain implements ICycle, IRunnable {
         this._tryStoreRegiserInfo()
 
         // this._tryGetDelegationModeNameNft()
-        
+        const isPrepareRemainderHintDoingSomeWork = await this.groupFiService.prepareRemainderHint();
+        if (isPrepareRemainderHintDoingSomeWork) return false;
         const isHasDelegationModeNameNft = await this.checkDelegationModeNameNft()
         if (!isHasDelegationModeNameNft) return true
 
         this._isReadyToChat = true
-        const isPrepareRemainderHint = await this.groupFiService.prepareRemainderHint();
-        if (!isPrepareRemainderHint) return true;
         return true
     }
 

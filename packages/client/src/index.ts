@@ -460,7 +460,6 @@ export class GroupfiSdkClient {
             if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
                 // Log then return
                 console.log('First output is not enough for deposit');
-                this._remainderHintSet = [];
                 return false;
             }
             // Log outputsToSend and outputs in one line
