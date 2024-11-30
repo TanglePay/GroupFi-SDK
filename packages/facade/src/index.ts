@@ -977,13 +977,7 @@ class GroupFiSDKFacade {
       this._proxyAddress = smrAddress
       this._pairX = pairX
       if (outputids.length) {
-        const outputsAsWrapper = outputids.map((outputIdHex, index) => {
-          return {
-            outputId: outputIdHex,
-            output: outputs[index]
-          }
-        })
-        this._client!.resetAllRemainderHints(outputsAsWrapper)
+        this._client!.resetAllRemainderHints('register', outputids)
       }
     }
   }

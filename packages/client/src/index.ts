@@ -62,7 +62,7 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     MessageTypePrivate,
     INodeProvider
 } from "groupfi-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions, sleep } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import nameMappingCache from './nameMappingCache';
 import { IRequestAdapter, PairX, IProxyModeRequestAdapter, CashOutputResponse, OutputIdOutputResponse } from './types'
@@ -418,6 +418,10 @@ export class GroupfiSdkClient {
     async consolidateIfNeeded() {
         try {
             this._isCashDataInited = true;
+            if (this._pendingTransactions.size > 0) {
+                console.log('Pending transactions exist. Skipping consolidation.');
+                return;
+            }
             // Log actually start prepare
             console.log('start consolidate remainder hint');
             
@@ -469,6 +473,8 @@ export class GroupfiSdkClient {
             const filteredOutputIds = filteredOutputs.map(output=>output.outputId)
             // Add transaction to pending transactions
             this._addPendingTransaction(transactionId, filteredOutputIds, outputIds);
+            // empty remainder hint set
+            this._remainderHintSet = [];
 
             return true;
         } catch (error) {
@@ -2150,7 +2156,7 @@ export class GroupfiSdkClient {
             const threshold = cashNeeded.multiply(2)
             let consumedOutputWrapper:BasicOutputWrapper|undefined
             // first try get cash from remainder hint
-            const remainderRes = this._tryGetCashFromRemainderHint()
+            const remainderRes = await this._tryGetCashFromRemainderHint()
             
             if (remainderRes) {
                 const {output:remainderBasicOutputWrapperFromHint, index}  = remainderRes
@@ -2362,32 +2368,46 @@ export class GroupfiSdkClient {
 
         this._remainderHintSet.push({output,outputId,timestamp:Date.now()})
     }
-    resetAllRemainderHints(remainderHints:BasicOutputWrapper[]){
-        // remove old hints
-        this._remainderHintSet = []
-        // log reset all remainder hints
-        console.log('reset all remainder hints');
-        for (const {output,outputId} of remainderHints) {
-            this._setRemainderHint(output,outputId)
-        }
+    resetAllRemainderHints(transactionId:string, outputIds:string[]){
+        this._addPendingTransaction(transactionId, [], outputIds);
+        // empty remainder hint set
+        this._remainderHintSet = [];
         // log reset all remainder hints done
         console.log('reset all remainder hints done');
         this._lastSendTimestamp = Date.now()
     }
-    _tryGetCashFromRemainderHint(): { output: BasicOutputWrapper; index: number } | undefined {
+    async _tryGetCashFromRemainderHint(): Promise<{ output: BasicOutputWrapper; index: number } | undefined> {
         // Log entry into the function
-        console.log('try get cash from remainder hint');
-        
-        // Check if there are any UTXOs available
-        if (this._remainderHintSet.length === 0) {
-            console.log('No UTXOs available in remainder hint set.');
-            return undefined;
+        console.log('Attempting to get cash from remainder hint');
+    
+        const maxRetries = 10;       // Maximum number of retry attempts
+        const delayMs = 2000;        // Delay between retries in milliseconds (2 seconds)
+        let attempt = 0;             // Current attempt count
+    
+        // Retry mechanism for checking UTXOs
+        while (attempt < maxRetries) {
+            // Check if there are any UTXOs available
+            if (this._remainderHintSet.length === 0) {
+                attempt++;
+                if (attempt === maxRetries) {
+                    console.log(`No UTXOs available after ${maxRetries} attempts. Failing.`);
+                    return undefined;
+                }
+                console.log(`No UTXOs available. Attempt ${attempt} of ${maxRetries}. Waiting for ${delayMs / 1000} seconds before retrying...`);
+                await sleep(delayMs);
+            } else {
+                // UTXOs are available, exit the retry loop
+                break;
+            }
         }
-        
+    
+        // If no UTXOs are available after retries, the function has already returned undefined
+        // Proceed only if UTXOs are available
+    
         // Initialize variables to track the oldest UTXO
         let oldest = this._remainderHintSet[0];
         let oldestIdx = 0;
-        
+    
         // Iterate through the remainder hint set to find the oldest UTXO based on timestamp
         for (let i = 1; i < this._remainderHintSet.length; i++) {
             const hint = this._remainderHintSet[i];
@@ -2396,18 +2416,19 @@ export class GroupfiSdkClient {
                 oldestIdx = i;
             }
         }
-        
+    
         // Log the selected oldest UTXO
         console.log('Selected oldest remainder hint:', oldest);
-        
+    
         const { outputId } = oldest;
-        
+    
         // Log the retrieval details
         console.log('Retrieved UTXO from remainder hint set:', outputId);
-        
+    
         // Return the output and its index in the remainder hint set
-        return { output:oldest, index: oldestIdx };
+        return { output: oldest, index: oldestIdx };
     }
+    
     
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
     async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:OutputWrapper[],createdOutputs:OutputTypes[]){
