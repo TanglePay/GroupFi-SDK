@@ -977,7 +977,7 @@ class GroupFiSDKFacade {
       this._proxyAddress = smrAddress
       this._pairX = pairX
       if (outputids.length) {
-        this._client!.resetAllRemainderHints('register', outputids)
+        this._client!.resetAllRemainderHints('register', outputids, outputs)
       }
     }
   }

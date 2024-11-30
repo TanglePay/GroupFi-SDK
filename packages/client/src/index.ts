@@ -2367,10 +2367,12 @@ export class GroupfiSdkClient {
 
         this._remainderHintSet.push({output,outputId,timestamp:Date.now()})
     }
-    resetAllRemainderHints(transactionId:string, outputIds:string[]){
+    resetAllRemainderHints(transactionId:string, outputIds:string[], outputs:IBasicOutput[]) {
         this._addPendingTransaction(transactionId, [], outputIds);
-        // empty remainder hint set
-        this._remainderHintSet = [];
+        const remainderHints = outputIds.map((outputId, idx) => {
+            return { outputId, output: outputs[idx], timestamp: Date.now() };
+        });
+        this._remainderHintSet =remainderHints;
         // log reset all remainder hints done
         console.log('reset all remainder hints done');
         this._lastSendTimestamp = Date.now()
