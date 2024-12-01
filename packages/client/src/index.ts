@@ -385,19 +385,22 @@ export class GroupfiSdkClient {
         if (this._cashDataDirty) {
             // await this.persistCashData();
         }
+        const currentTime = Date.now();
+        const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
+
+        const coolDownTime = hasPending ? this._prepareCooldownTimeWithPending : this._prepareCooldownTimeNoPending;
+        // Check if prepare is being called too soon
+        if (timeSinceLastPrepare < coolDownTime) {
+            return false;
+        }
+        // Log actually start prepare
+        console.log('Actually start prepare remainder hint, timeSinceLastPrepare:', timeSinceLastPrepare, 'with pending:', this._pendingTransactions.size > 0);
+        return await this._actualPrepareRemainderHint();
+    }
+    // _actualPrepareRemainderHint
+    async _actualPrepareRemainderHint() {
         try {
-            const currentTime = Date.now();
-            const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
-
-            const coolDownTime = hasPending ? this._prepareCooldownTimeWithPending : this._prepareCooldownTimeNoPending;
-            // Check if prepare is being called too soon
-            if (timeSinceLastPrepare < coolDownTime) {
-                return false;
-            }
-
-            // Log actually start prepare
-            console.log('Actually start prepare remainder hint, timeSinceLastPrepare:', timeSinceLastPrepare, 'with pending:', this._pendingTransactions.size > 0);
-    
+            
             console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
 
             try {
@@ -414,7 +417,6 @@ export class GroupfiSdkClient {
             return false;
         }
     }
-
     async consolidateIfNeeded() {
         try {
             this._isCashDataInited = true;
@@ -2381,8 +2383,8 @@ export class GroupfiSdkClient {
         // Log entry into the function
         console.log('Attempting to get cash from remainder hint');
     
-        const maxRetries = 10;       // Maximum number of retry attempts
-        const delayMs = 2000;        // Delay between retries in milliseconds (2 seconds)
+        const maxRetries = 5;       // Maximum number of retry attempts
+        const delayMs = 5000;        // Delay between retries in milliseconds (2 seconds)
         let attempt = 0;             // Current attempt count
     
         // Retry mechanism for checking UTXOs
@@ -2396,6 +2398,7 @@ export class GroupfiSdkClient {
                 }
                 console.log(`No UTXOs available. Attempt ${attempt} of ${maxRetries}. Waiting for ${delayMs / 1000} seconds before retrying...`);
                 await sleep(delayMs);
+                await this._actualPrepareRemainderHint();
             } else {
                 // UTXOs are available, exit the retry loop
                 break;
