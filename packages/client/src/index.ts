@@ -2312,15 +2312,6 @@ export class GroupfiSdkClient {
             // Remove inputs from pending spent outputs and re-add to UTXO pool if applicable
             pendingTx.inputs.forEach((outputId) => {
                 this._pendingSpentOutputIdToTxId.delete(outputId);
-    
-                // Re-add the UTXO to the pool if it still exists
-                const output = this._remainderHintSet.find((hint) => hint.outputId === outputId)?.output;
-                if (output) {
-                    this._remainderHintSet.push({ output, outputId, timestamp: Date.now() });
-                } else {
-                    // If the output is not in the pool, it might have been already spent or never existed
-                    console.warn(`Output ID ${outputId} for transaction ${txId} not found in UTXO pool.`);
-                }
             });
     
             // Remove all outputs from pending created outputs
