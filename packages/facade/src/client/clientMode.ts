@@ -342,7 +342,7 @@ export class DelegationModeRequestAdapter
       body
     );
 
-    const { outputId, remainderOutputId } =
+    const { outputIds } =
       GroupfiWalletEmbedded.getMetadataFromTransactionId(
         transactionId,
         essenceOutputsLength
@@ -351,8 +351,7 @@ export class DelegationModeRequestAdapter
     return {
       blockId,
       transactionId,
-      outputId,
-      remainderOutputId,
+      outputIds
     };
   }
 }

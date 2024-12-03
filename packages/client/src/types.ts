@@ -1,4 +1,4 @@
-import { IKeyPair, INftOutput } from '@iota/iota.js';
+import { IKeyPair, INftOutput, OutputTypes } from '@iota/iota.js';
 
 export const ShimmerMode = 1;
 export const ImpersonationMode = 2;
@@ -15,9 +15,8 @@ export interface PairX {
 
 export interface SendTransationRes {
   blockId: string;
-  outputId: string;
+  outputIds: string[];
   transactionId: string;
-  remainderOutputId?: string | undefined;
 }
 
 export interface IRequestAdapterDecryptParams {
@@ -38,6 +37,15 @@ export interface IRequestAdapter {
   sendTransaction: (
     params: IRequestAdapterSendTransationParams
   ) => Promise<SendTransationRes>;
+}
+export interface OutputIdOutputResponse {
+  outputIdHex: string;
+  output: OutputTypes;
+  milestoneTimestamp: number;
+}
+export interface CashOutputResponse {
+  createdCashOutputIds: string[];
+  recentConsumedOutputIds: string[];
 }
 
 export interface IProxyModeRequest {

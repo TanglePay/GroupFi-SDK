@@ -62,10 +62,10 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     MessageTypePrivate,
     INodeProvider
 } from "groupfi-sdk-core";
-import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions } from 'groupfi-sdk-utils';
+import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions, sleep } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import nameMappingCache from './nameMappingCache';
-import { IRequestAdapter, PairX, IProxyModeRequestAdapter } from './types'
+import { IRequestAdapter, PairX, IProxyModeRequestAdapter, CashOutputResponse, OutputIdOutputResponse } from './types'
 export * from './types'
 export { AddressMappingStore, nameMappingCache}
 type IntermediateResult = {
@@ -77,6 +77,11 @@ type IntermediateResult = {
     data: Uint8Array;
     milestoneTimestamp: number
 };
+interface PendingTransaction {
+    inputs: string[];
+    outputs: string[];
+    timestamp: number;
+  }
 //TODO tune concurrency
 const httpCallLimit = 5;
 const consolidateBatchSize = 29;
@@ -134,6 +139,10 @@ type OutputWrapper = {
     output: OutputTypes;
     outputId: string;
 }
+type NftOutputWrapper = {
+    output: INftOutput,
+    outputId: string
+}
 type MessageResponseItem = {
     type: typeof ImInboxEventTypeNewMessage
     outputId: string;
@@ -180,7 +189,11 @@ type NftItemReponse = {
 
 export const SharedNotFoundLaterRecoveredMessageKey = 'SharedNotFoundLaterRecovered'
 type Constructor<T> = new () => T;
+
 export class GroupfiSdkClient {
+    private readonly PENDING_TX_KEY = 'pendingTransactions';
+    private readonly PENDING_SPENT_KEY = 'pendingSpentOutputs';
+    private readonly PENDING_CREATE_KEY = 'pendingCreateOutputs';
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
     // _nodeInfo?: INodeInfo;
@@ -207,6 +220,7 @@ export class GroupfiSdkClient {
     _requestAdapter?: IRequestAdapter
     _mode?: Mode
     _pairX?: PairX
+    _evmAdderss?: string
     _updateNodeProtocolInfoInterval:NodeJS.Timeout|undefined
     private _nodeManager: INodeProvider | null = null;
     private _currentUrlUsing: string | null = null;
@@ -259,8 +273,9 @@ export class GroupfiSdkClient {
         return this._requestAdapter
     }
 
-    async switchAddress(bech32Address: string, pairX?: PairX){
+    async switchAddress({bech32Address, pairX, evmAddress}:{bech32Address: string, pairX?: PairX, evmAddress?: string}){
         this._pairX = pairX
+        this._evmAdderss = evmAddress
         this._accountBech32Address = bech32Address
         // const res = Bech32Helper.fromBech32(bech32Address, this._nodeInfo!.protocol.bech32Hrp)
         const res = Bech32Helper.fromBech32(bech32Address, this._protocolInfo!.bech32Hrp)
@@ -355,34 +370,63 @@ export class GroupfiSdkClient {
         this._prepareRemainderHintSwitch = false
     }
     private _lastActualPrepareTimestamp: number = 0; // New property to track last prepare time
-    private _prepareCooldownTime: number = 45 * 1000; // Example: 25 sec cooldown
-    
+    private _prepareCooldownTimeNoPending: number = 60 * 1000;
+    private _prepareCooldownTimeWithPending: number = 5 * 1000;
+    async cashInit(){
+        if (this._isCashDataInited) return false;
+
+        await this.prepareRemainderHint();
+        await this.consolidateIfNeeded();
+        return true;
+    }    
     async prepareRemainderHint() {
-        if (!this._prepareRemainderHintSwitch) return false;
+        const hasPending = this._pendingTransactions.size > 0;
+        if (!hasPending && this._isCashDataInited && !this._prepareRemainderHintSwitch) return false;
+        if (this._cashDataDirty) {
+            // await this.persistCashData();
+        }
+        const currentTime = Date.now();
+        const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
+
+        const coolDownTime = hasPending ? this._prepareCooldownTimeWithPending : this._prepareCooldownTimeNoPending;
+        // Check if prepare is being called too soon
+        if (timeSinceLastPrepare < coolDownTime) {
+            return false;
+        }
+        // Log actually start prepare
+        console.log('Actually start prepare remainder hint, timeSinceLastPrepare:', timeSinceLastPrepare, 'with pending:', this._pendingTransactions.size > 0);
+        return await this._actualPrepareRemainderHint();
+    }
+    // _actualPrepareRemainderHint
+    async _actualPrepareRemainderHint() {
         try {
-            const currentTime = Date.now();
-            const timeSinceLastPrepare = currentTime - this._lastActualPrepareTimestamp;
-
-            // Check if prepare is being called too soon
-            if (timeSinceLastPrepare < this._prepareCooldownTime) {
-                return false;
-            }
-
-            const timeElapsed = currentTime - this._lastSendTimestamp;
-            if (
-                timeElapsed < this._remainderHintOutdatedTimeperiod &&
-                this._remainderHintSet.length > 0
-            ) {
-                return false;
-            }
-
-            // Log actually start prepare
-            console.log('Actually start prepare remainder hint, timeSinceLastPrepare:', timeSinceLastPrepare, 'timeElapsed:', timeElapsed);
-            // Record the last actual prepare time
-            this._lastActualPrepareTimestamp = currentTime;
+            
             console.log('Recorded last actual prepare time:', this._lastActualPrepareTimestamp);
 
-            // Fetch current unspent outputs
+            try {
+                await this.synchronizeUTXOPool();
+                this.checkForStaleTransactions(); // Check for stale transactions after synchronization
+            } catch (error) {
+                console.error('Periodic synchronization failed:', error);
+            }
+            // Record the last actual prepare time
+            this._lastActualPrepareTimestamp = Date.now();
+            return true;
+        } catch (error) {
+            console.log('prepareRemainderHint error', error);
+            return false;
+        }
+    }
+    async consolidateIfNeeded() {
+        try {
+            this._isCashDataInited = true;
+            if (this._pendingTransactions.size > 0) {
+                console.log('Pending transactions exist. Skipping consolidation.');
+                return;
+            }
+            // Log actually start prepare
+            console.log('start consolidate remainder hint');
+            
             const currentUnspentOutputs = await this._getUnSpentOutputs({ numbersWanted: 100 });
             // Log current unspent outputs
             console.log('currentUnspentOutputs', currentUnspentOutputs);
@@ -395,8 +439,8 @@ export class GroupfiSdkClient {
             const areSetsIdentical =
                 currentUnspentOutputIds.size === remainderHintOutputIds.size &&
                 [...currentUnspentOutputIds].every(id => remainderHintOutputIds.has(id));
-    
-            if (areSetsIdentical) {
+            const cashOutputNum = remainderHintOutputIds.size;
+            if (areSetsIdentical && cashOutputNum >= cashSplitNums) {
                 // Log that the remainder set is identical to current unspent outputs and abort
                 console.log('Remainder hint set is identical to current unspent outputs. Aborting preparation.');
                 return false;
@@ -406,8 +450,6 @@ export class GroupfiSdkClient {
             if (outputs.length === 0) return false;
     
             let amount = outputs.reduce((acc, output) => acc.add(bigInt(output.output.amount)), bigInt(0));
-            // Log amount
-            console.log('amount', amount);
             const amountPerOutput = amount.divide(cashSplitNums);
             const outputsToSend: IBasicOutput[] = [];
             for (let i = 0; i < cashSplitNums - 1; i++) {
@@ -420,26 +462,127 @@ export class GroupfiSdkClient {
             if (amountPerOutput.compare(depositOfFirstOutput) < 0) {
                 // Log then return
                 console.log('First output is not enough for deposit');
-                this._remainderHintSet = [];
                 return false;
             }
             // Log outputsToSend and outputs in one line
             console.log('outputsToSend', outputsToSend, 'outputs', outputs);
     
-            const { transactionId } = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs, outputsToSend);
-            const newRemainderHints: BasicOutputWrapper[] = [];
-            for (let idx = 0; idx < outputsToSend.length; idx++) {
-                const output = outputsToSend[idx];
-                newRemainderHints.push({ output, outputId: TransactionHelper.outputIdFromTransactionData(transactionId, idx) });
-            }
-            newRemainderHints.reverse();
-            this.resetAllRemainderHints(newRemainderHints);
+            const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(outputs, outputsToSend);
+            console.log('===> send transaction res', res)
+            const {blockId,outputIds,transactionId } = res
+            const {outputs:filteredOutputs} = this._filterOutputWrapperByTag(outputs, GROUPFICASHTAG)
+            const filteredOutputIds = filteredOutputs.map(output=>output.outputId)
+            // Add transaction to pending transactions
+            this._addPendingTransaction(transactionId, filteredOutputIds, outputIds);
+            // empty remainder hint set
+            this._remainderHintSet = [];
 
             return true;
         } catch (error) {
             console.log('prepareRemainderHint error', error);
             return false;
         }
+    }
+    _isCashDataInited:boolean = false
+    private async loadPersistedData(): Promise<void> {
+        try {
+            // Load pending transactions
+            const pendingTxData = await this._storage!.get(this.PENDING_TX_KEY);
+            if (pendingTxData) {
+                // Define the expected structure with outputs
+                const txMap = JSON.parse(pendingTxData) as Record<string, { inputs: string[]; outputs: string[]; timestamp: number }>;
+    
+                // Iterate and set pending transactions
+                Object.entries(txMap).forEach(([txId, tx]) => {
+                    // Optional: Validate the transaction structure
+                    if (tx.inputs && Array.isArray(tx.inputs) && Array.isArray(tx.outputs) && typeof tx.timestamp === 'number') {
+                        this._pendingTransactions.set(txId, tx);
+                    } else {
+                        console.warn(`Invalid transaction structure for txId ${txId}. Skipping.`);
+                    }
+                });
+                console.log('Loaded persisted pending transactions.');
+            } else {
+                console.log('No persisted pending transactions found.');
+            }
+    
+            // Load pending spent outputs
+            const pendingSpentData = await this._storage!.get(this.PENDING_SPENT_KEY);
+            if (pendingSpentData) {
+                const spentOutputIdToTxIdMap = JSON.parse(pendingSpentData) as Record<string, string>;
+    
+                Object.entries(spentOutputIdToTxIdMap).forEach(([outputId, txId]) => {
+                    this._pendingSpentOutputIdToTxId.set(outputId, txId);
+                });
+                console.log('Loaded persisted pending spent outputs.');
+            } else {
+                console.log('No persisted pending spent outputs found.');
+            }
+    
+            // Load pending create outputs
+            const pendingCreateData = await this._storage!.get(this.PENDING_CREATE_KEY);
+            if (pendingCreateData) {
+                const createOutputIdToTxIdMap = JSON.parse(pendingCreateData) as Record<string, string>;
+    
+                Object.entries(createOutputIdToTxIdMap).forEach(([outputId, txId]) => {
+                    this._pendingCreatedOutputToTxId.set(outputId, txId);
+                });
+                console.log('Loaded persisted pending create outputs.');
+            } else {
+                console.log('No persisted pending create outputs found.');
+            }
+        } catch (error) {
+            console.error('Failed to load persisted data:', error);
+        }
+    }
+    
+
+    /**
+     * Persists pending transactions and spent outputs to storage.
+     */
+    private async persistCashData(): Promise<void> {
+        this._cashDataDirty = false;
+        try {
+            // Persist pending transactions
+            const txMap: Record<string, { inputs: string[]; outputs: string[]; timestamp: number }> = {};
+            this._pendingTransactions.forEach((tx, txId) => {
+                txMap[txId] = tx;
+            });
+            await this._storage!.set(this.PENDING_TX_KEY, JSON.stringify(txMap, null, 2));
+            console.log('Persisted pending transactions.');
+    
+            // Persist pending spent outputs
+            const spentOutputIdToTxIdMap: Record<string, string> = {};
+            this._pendingSpentOutputIdToTxId.forEach((txId, outputId) => {
+                spentOutputIdToTxIdMap[outputId] = txId;
+            });
+            await this._storage!.set(this.PENDING_SPENT_KEY, JSON.stringify(spentOutputIdToTxIdMap, null, 2));
+            console.log('Persisted pending spent outputs.');
+    
+            // Persist pending create outputs
+            const createOutputIdToTxIdMap: Record<string, string> = {};
+            this._pendingCreatedOutputToTxId.forEach((txId, outputId) => {
+                createOutputIdToTxIdMap[outputId] = txId;
+            });
+            await this._storage!.set(this.PENDING_CREATE_KEY, JSON.stringify(createOutputIdToTxIdMap, null, 2));
+            console.log('Persisted pending create outputs.');
+        } catch (error) {
+            console.error('Failed to persist data:', error);
+        }
+    }
+    
+
+    private checkForStaleTransactions() {
+        const now = Date.now();
+        const timeout = 5 * 60 * 1000; // 5 minutes
+    
+        this._pendingTransactions.forEach((tx, txId) => {
+            if (now - tx.timestamp > timeout) {
+                console.warn(`Transaction ${txId} is stale. Handling as failed.`);
+                // Handle as failed transaction
+                this.handleTransactionFailure(txId);
+            }
+        });
     }
     async _getDltShimmer(){
         const url = 'https://dlt.green/api?dns=shimmer&id=tanglepay&token=egm9jvee56sfjrohylvs0tkc6quwghyo'
@@ -544,6 +687,32 @@ export class GroupfiSdkClient {
             ]
         };
         return basicOutput
+    }
+    // filter output by tag
+    _filterOutputByTag(outputs:(IBasicOutput | INftOutput)[],tag:string):{outputs:OutputTypes[],idxs:number[]}{
+        const hexTag = Converter.utf8ToHex(tag,true)
+        const outputsWithTag:OutputTypes[] = []
+        const idxs:number[] = []
+        outputs.forEach((output,idx)=>{
+            const is = output.features?.find((feature)=>feature.type == 3 && feature.tag == hexTag)
+            if (is) {
+                outputsWithTag.push(output)
+                idxs.push(idx)
+            }
+        })
+        return {outputs:outputsWithTag,idxs}
+    }
+    // filter output wrapper by tag
+    _filterOutputWrapperByTag(outputs:(BasicOutputWrapper|NftOutputWrapper)[],tag:string):{outputs:OutputWrapper[]}{
+        const hexTag = Converter.utf8ToHex(tag,true)
+        const outputsWithTag:OutputWrapper[] = []
+        outputs.forEach((output,idx)=>{
+            const is = output.output.features?.find((feature)=>feature.type == 3 && feature.tag == hexTag)
+            if (is) {
+                outputsWithTag.push(output)
+            }
+        })
+        return {outputs:outputsWithTag}
     }
     async _tryGetSharedOutputIdForGroup(groupId:string):Promise<{outputId:string}|undefined>{
         this._ensureClientInited()
@@ -1294,7 +1463,6 @@ export class GroupfiSdkClient {
         const res = await this._consolidateOutputIdsFromApiResult(outputIds)
         return {
             message:'ok',
-            outputIds,
             ...res
         }
     }
@@ -1325,9 +1493,44 @@ export class GroupfiSdkClient {
             },
             body:JSON.stringify(outputIds)
         })
-        const data = await res.json() as {outputIdHex:string,output:OutputTypes,milestoneTimestamp:number}[]
+        const data = await res.json() as OutputIdOutputResponse[]
         return data
     }
+    async getAddressCashOutputs(): Promise<CashOutputResponse> {
+        const url = `${this.getUrl()}/api/groupfi/v1/addresscashoutputs?address=${this._evmAdderss!}`;
+    
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    // Add other headers if necessary, e.g., Authorization
+                },
+            });
+    
+            if (!response.ok) {
+                // Handle HTTP errors
+                const errorText = await response.text();
+                throw new Error(`Error fetching address cash outputs: ${response.status} ${response.statusText} - ${errorText}`);
+            }
+    
+            const data = await response.json();
+    
+            // Ensure `createdCashOutputIds` and `recentConsumedOutputIds` are arrays
+            const createdCashOutputIds = Array.isArray(data.createdCashOutputIds) ? data.createdCashOutputIds : [];
+            const recentConsumedOutputIds = Array.isArray(data.recentConsumedOutputIds) ? data.recentConsumedOutputIds : [];
+    
+            return {
+                createdCashOutputIds,
+                recentConsumedOutputIds,
+            };
+        } catch (error) {
+            // Handle network or parsing errors
+            console.error('Failed to fetch address cash outputs:', error);
+            throw error;
+        }
+    }
+    
     // check then consolidate shared
     async checkThenConsolidateShared(){
         this._ensureClientInited()
@@ -1338,7 +1541,6 @@ export class GroupfiSdkClient {
         const res = await this._consolidateOutputIdsFromApiResult(outputIds)
         return {
             message:'ok',
-            outputIds,
             ...res
         }
     }
@@ -1582,7 +1784,8 @@ export class GroupfiSdkClient {
             if (isHA) {
                 // log ha and groupid and memberList
                 console.log('isHA and groupId and memberList', isHA, groupId, memberList);
-                const {outputId:outputIdFromHA} = await this._sendBasicOutput(outputs!);
+                const {outputIds:outputIdsFromHA} = await this._sendBasicOutput(outputs!);
+                const outputIdFromHA = outputIdsFromHA[0]
                 // set shared id and salt to cache
                 this._setSharedIdAndSaltToCache(outputIdFromHA,salt)
             }
@@ -1607,7 +1810,7 @@ export class GroupfiSdkClient {
     :Promise<
     {
         sentMessagePromise:Promise<IMessage>,
-        sendBasicOutputPromise:Promise<{blockId:string,outputId:string}>
+        sendBasicOutputPromise:Promise<{blockId:string,outputIds:string[]}>
     }|undefined>
     {
         this._ensureClientInited()
@@ -1635,7 +1838,8 @@ export class GroupfiSdkClient {
                         
                         const {salt, outputId,outputs,isHA} = await this._getSaltForGroup(groupId,senderAddr,memberList)
                         if (isHA) {
-                            const {outputId:outputIdFromHA} = await this._sendBasicOutput(outputs!);
+                            const {outputIds:outputIdsFromHA} = await this._sendBasicOutput(outputs!);
+                            const outputIdFromHA = outputIdsFromHA[0]
                             // set shared id and salt to cache
                             this._setSharedIdAndSaltToCache(outputIdFromHA,salt)
                             message.recipientOutputid = outputIdFromHA
@@ -1944,6 +2148,8 @@ export class GroupfiSdkClient {
         const cashNeeded = amountToSend.subtract(depositFromExtraOutputs)
         console.log('cashNeeded', cashNeeded);
         let remainderBasicOutput:IBasicOutput|undefined
+        let consumedCashOutputId:string|undefined
+        let remainderIndex = -1;
         if (cashNeeded.lesser(bigInt('0'))) {
             // add diff to first created output, diff is -1 * cashNeeded
             createdOutputs[0].amount = bigInt(createdOutputs[0].amount).subtract(cashNeeded).toString()
@@ -1951,16 +2157,20 @@ export class GroupfiSdkClient {
             const threshold = cashNeeded.multiply(2)
             let consumedOutputWrapper:BasicOutputWrapper|undefined
             // first try get cash from remainder hint
-            const remainderBasicOutputWrapperFromHint = this._tryGetCashFromRemainderHint()
-            if (remainderBasicOutputWrapperFromHint) {
-                const amount = bigInt(remainderBasicOutputWrapperFromHint.output.amount)
-                if (amount.greaterOrEquals(threshold)) {
-                    consumedOutputWrapper = remainderBasicOutputWrapperFromHint
-                    // log get cash from remainder hint
-                    console.log('get cash from remainder hint', remainderBasicOutputWrapperFromHint);
+            const remainderRes = await this._tryGetCashFromRemainderHint()
+            
+            if (remainderRes) {
+                const {output:remainderBasicOutputWrapperFromHint, index}  = remainderRes
+                if (remainderBasicOutputWrapperFromHint) {
+                    const amount = bigInt(remainderBasicOutputWrapperFromHint.output.amount)
+                    if (amount.greaterOrEquals(threshold)) {
+                        consumedOutputWrapper = remainderBasicOutputWrapperFromHint
+                        // log get cash from remainder hint
+                        console.log('get cash from remainder hint', remainderBasicOutputWrapperFromHint);
+                    }
+                    remainderIndex = index
                 }
-            } 
-        
+            }
             if (!consumedOutputWrapper ) {
                 // log get cash from unspent outputs on the fly
                 console.log('get cash from unspent outputs on the fly');
@@ -1974,32 +2184,170 @@ export class GroupfiSdkClient {
             if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
             extraOutputsToBeConsumed.push(consumedOutputWrapper)
             const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
+            consumedCashOutputId = consumedOutputId
             console.log('ConsumedOutput', consumedOutput);
-            remainderBasicOutput = {
-                type: BASIC_OUTPUT_TYPE,
-                amount: bigInt(consumedOutput.amount).minus(cashNeeded).toString(),
-                nativeTokens: [],
-                unlockConditions: [
-                    {
-                        type: ADDRESS_UNLOCK_CONDITION_TYPE,
-                        address: {
-                            type: ED25519_ADDRESS_TYPE,
-                            pubKeyHash: this._accountHexAddress!
-                        }
-                    }
-                ],
-                features: []
-            };
+            remainderBasicOutput = this._makeCashBasicOutput(bigInt(consumedOutput.amount).minus(cashNeeded))
             createdOutputs.push(remainderBasicOutput)
             console.log("Remainder Basic Output: ", remainderBasicOutput);
         }
         const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(extraOutputsToBeConsumed, createdOutputs)
         console.log('===> send transaction res', res)
-        const {blockId,outputId,transactionId,remainderOutputId} = res
-        this._setRemainderHint(remainderBasicOutput,remainderOutputId)
+        const {blockId,outputIds,transactionId } = res
+        // Add transaction to pending transactions
+        const {idxs} = this._filterOutputByTag(createdOutputs, GROUPFICASHTAG)
+        const filteredOutputIds = idxs.map(idx=>outputIds[idx])
+        const consumedOutputIds = consumedCashOutputId ? [consumedCashOutputId] : []
+        this._addPendingTransaction(transactionId, consumedOutputIds, filteredOutputIds);
+        
+        
+    
+        // Remove the spent UTXO from _remainderHintSet using the index
+        if (remainderIndex !== -1) {
+            this._remainderHintSet.splice(remainderIndex, 1);
+        }
         return res
     }
     _remainderHintSet:{output:IBasicOutput,outputId:string,timestamp:number}[] = []
+    private _pendingSpentOutputIdToTxId: Map<string, string> = new Map();
+    
+      
+    private _pendingTransactions: Map<string, PendingTransaction> = new Map();
+    private _pendingCreatedOutputToTxId: Map<string, string> = new Map();
+    
+    _cashDataDirty = false
+    async synchronizeUTXOPool(): Promise<void> {
+        try {
+            const cashOutputs: CashOutputResponse = await this.getAddressCashOutputs();
+
+            // Collect outputIds to batch process
+            const outputIdsToPush: string[] = [];
+
+            // Process created cash outputs
+            cashOutputs.createdCashOutputIds.forEach((outputIdHex) => {
+                // **Check if this UTXO is already being spent in a pending transaction**
+                if (this._pendingSpentOutputIdToTxId.has(outputIdHex)) {
+                    console.log(`UTXO ${outputIdHex} is already spent in a pending transaction. Skipping addition to remainder hints.`);
+                    return; // Skip processing
+                }
+
+                // Check existence in remainder hints
+                const existingHint = this._remainderHintSet.find((hint) => hint.outputId === outputIdHex);
+                if (!existingHint) {
+                    // Add to batch for later processing
+                    outputIdsToPush.push(outputIdHex);
+                }
+
+                if (this._pendingCreatedOutputToTxId.has(outputIdHex)) {
+                    // pending created output is confirmed
+                    this.handleTransactionConfirmation(this._pendingCreatedOutputToTxId.get(outputIdHex)!);
+                    this._cashDataDirty = true;
+                }
+            });
+
+            // Process the batched outputIds
+            if (outputIdsToPush.length > 0) {
+                const outputIdsResp = await this.batchOutputIdToOutput(outputIdsToPush);
+                outputIdsResp.forEach(({ outputIdHex, output, milestoneTimestamp }) => {
+                    this._remainderHintSet.push({ output:output as IBasicOutput, outputId: outputIdHex, timestamp: milestoneTimestamp });
+                    console.log(`Added UTXO ${outputIdHex} to remainder hints.`);
+                });
+                this._cashDataDirty = true;
+            }
+
+            // Process recently consumed output IDs
+            cashOutputs.recentConsumedOutputIds.forEach((outputId) => {
+                // Remove from _remainderHintSet if present
+                const initialLength = this._remainderHintSet.length;
+                this._remainderHintSet = this._remainderHintSet.filter(
+                    (hint) => hint.outputId !== outputId
+                );
+                if (this._remainderHintSet.length < initialLength) {
+                    this._cashDataDirty = true;
+                    console.log(`Removed consumed UTXO ${outputId} from remainder hints.`);
+                }
+
+                // Check if this output ID is associated with any pending transaction
+                const txId = this._pendingSpentOutputIdToTxId.get(outputId);
+                if (txId) {
+                    this._cashDataDirty = true;
+                    this.handleTransactionConfirmation(txId);
+                }
+
+                console.log(`Removed UTXO ${outputId} from pending spent outputs.`);
+            });
+
+            console.log('UTXO pool synchronized successfully.');
+        } catch (error) {
+            console.error('Failed to synchronize UTXO pool:', error);
+            // Optionally implement retry logic or alerting mechanisms
+        }
+    }
+    private async handleTransactionConfirmation(txId: string): Promise<void> {
+        const pendingTx = this._pendingTransactions.get(txId);
+        if (pendingTx) {
+            // Remove inputs from pending spent outputs
+            pendingTx.inputs.forEach((outputId) => {
+                this._pendingSpentOutputIdToTxId.delete(outputId);
+                // Optionally, add to _spentOutputSet if needed
+            });
+    
+            // Remove all outputs from pending created outputs
+            pendingTx.outputs.forEach((outputId) => {
+                this._pendingCreatedOutputToTxId.delete(outputId);
+            });
+    
+            // Remove from pending transactions
+            this._pendingTransactions.delete(txId);
+            console.log(`Transaction ${txId} confirmed and removed from pending transactions.`);
+        }
+    }
+    
+    /**
+     * Handles failed transactions by removing them from pending sets and re-adding UTXOs to the pool.
+     * @param txId The transaction ID to handle.
+     */
+    private async handleTransactionFailure(txId: string): Promise<void> {
+        const pendingTx = this._pendingTransactions.get(txId);
+        if (pendingTx) {
+            // Remove inputs from pending spent outputs and re-add to UTXO pool if applicable
+            pendingTx.inputs.forEach((outputId) => {
+                this._pendingSpentOutputIdToTxId.delete(outputId);
+            });
+    
+            // Remove all outputs from pending created outputs
+            pendingTx.outputs.forEach((outputId) => {
+                this._pendingCreatedOutputToTxId.delete(outputId);
+            });
+    
+            // Remove the transaction from pending transactions
+            this._pendingTransactions.delete(txId);
+    
+            console.log(`Transaction ${txId} marked as failed and removed from pending transactions.`);
+        }
+    }
+    
+    private _addPendingTransaction(txId: string, inputs: string[], outputs: string[] = []) {
+        // Create and set the pending transaction with multiple outputs
+        this._pendingTransactions.set(txId, {
+            inputs,
+            outputs,
+            timestamp: Date.now(),
+        });
+    
+        // Mark inputs as pending spent
+        for (const input of inputs) {
+            this._pendingSpentOutputIdToTxId.set(input, txId);
+        }
+    
+        // Mark each output as pending creation
+        for (const output of outputs) {
+            this._pendingCreatedOutputToTxId.set(output, txId);
+        }
+    
+        // Flag that cash data has changed
+        this._cashDataDirty = true;
+    }
+    
     _isRemainderHintSetDirty = false
     _setRemainderHint(output?:IBasicOutput,outputId?:string){
         // log set remainder hint, outputId and output
@@ -2012,48 +2360,71 @@ export class GroupfiSdkClient {
 
         this._remainderHintSet.push({output,outputId,timestamp:Date.now()})
     }
-    resetAllRemainderHints(remainderHints:BasicOutputWrapper[]){
-        // remove old hints
-        this._remainderHintSet = []
-        // log reset all remainder hints
-        console.log('reset all remainder hints');
-        for (const {output,outputId} of remainderHints) {
-            this._setRemainderHint(output,outputId)
-        }
+    resetAllRemainderHints(transactionId:string, outputIds:string[], outputs:IBasicOutput[]) {
+        this._addPendingTransaction(transactionId, [], outputIds);
+        const remainderHints = outputIds.map((outputId, idx) => {
+            return { outputId, output: outputs[idx], timestamp: Date.now() };
+        });
+        this._remainderHintSet = remainderHints;
         // log reset all remainder hints done
         console.log('reset all remainder hints done');
         this._lastSendTimestamp = Date.now()
     }
-    _tryGetCashFromRemainderHint():BasicOutputWrapper|undefined{
-        // log enter try get cash from remainder hint
-        console.log('try get cash from remainder hint');
-        if (this._remainderHintSet.length === 0) return undefined
-        // find then remove the one with oldest timestamp
-        let oldest = this._remainderHintSet[0]
-        let oldestIdx = 0
-        for (let i = 1; i < this._remainderHintSet.length; i++) {
-            const hint = this._remainderHintSet[i]
-            if (hint.timestamp < oldest.timestamp) {
-                oldest = hint
-                oldestIdx = i
+    async _tryGetCashFromRemainderHint(): Promise<{ output: BasicOutputWrapper; index: number } | undefined> {
+        // Log entry into the function
+        console.log('Attempting to get cash from remainder hint');
+    
+        const maxRetries = 5;       // Maximum number of retry attempts
+        const delayMs = 5000;        // Delay between retries in milliseconds (2 seconds)
+        let attempt = 0;             // Current attempt count
+    
+        // Retry mechanism for checking UTXOs
+        while (attempt < maxRetries) {
+            // Check if there are any UTXOs available
+            if (this._remainderHintSet.length === 0) {
+                attempt++;
+                if (attempt === maxRetries) {
+                    console.log(`No UTXOs available after ${maxRetries} attempts. Failing.`);
+                    return undefined;
+                }
+                console.log(`No UTXOs available. Attempt ${attempt} of ${maxRetries}. Waiting for ${delayMs / 1000} seconds before retrying...`);
+                await sleep(delayMs);
+                await this._actualPrepareRemainderHint();
+            } else {
+                // UTXOs are available, exit the retry loop
+                break;
             }
         }
-        this._remainderHintSet.splice(oldestIdx,1)
-        // log oldest remainder hint
-        console.log('oldest remainder hint', oldest);
-        // return undefined if the oldest is too old
-        /*
-        if (Date.now() - oldest.timestamp > this._remainderHintOutdatedTimeperiod) {
-            // log oldest remainder hint too old
-            console.log('oldest remainder hint too old', Date.now() - oldest.timestamp)
-            return undefined
+    
+        // If no UTXOs are available after retries, the function has already returned undefined
+        // Proceed only if UTXOs are available
+    
+        // Initialize variables to track the oldest UTXO
+        let oldest = this._remainderHintSet[0];
+        let oldestIdx = 0;
+    
+        // Iterate through the remainder hint set to find the oldest UTXO based on timestamp
+        for (let i = 1; i < this._remainderHintSet.length; i++) {
+            const hint = this._remainderHintSet[i];
+            if (hint.timestamp < oldest.timestamp) {
+                oldest = hint;
+                oldestIdx = i;
+            }
         }
-        */
-        const {output,outputId} = oldest
-        // log get cash from remainder hint, got, lefted
-        console.log('get cash from remainder hint, got:', outputId, 'lefted:', this._remainderHintSet.map(hint=>hint.outputId));
-        return {output,outputId}
+    
+        // Log the selected oldest UTXO
+        console.log('Selected oldest remainder hint:', oldest);
+    
+        const { outputId } = oldest;
+    
+        // Log the retrieval details
+        console.log('Retrieved UTXO from remainder hint set:', outputId);
+    
+        // Return the output and its index in the remainder hint set
+        return { output: oldest, index: oldestIdx };
     }
+    
+    
     // sendTransactionWithConsumedOutputsAndCreatedOutputs
     async _sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs:OutputWrapper[],createdOutputs:OutputTypes[]){
         this._ensureClientInited()
@@ -2608,7 +2979,7 @@ export class GroupfiSdkClient {
         return basicOutput
     }
     //TODO
-    async _signAndSendTransactionEssence({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<{blockId:string,outputId:string,transactionId:string,remainderOutputId?:string}>{
+    async _signAndSendTransactionEssence({transactionEssence}:{transactionEssence:ITransactionEssence}):Promise<{blockId:string,outputIds:string[],transactionId:string}>{
         // log enter _signAndSendTransactionEssence
         // console.log('===> enter _signAndSendTransactionEssence',transactionEssence);
         const writeStream = new WriteStream();
