@@ -578,12 +578,12 @@ class GroupfiWalletEmbedded {
 
     // Before figuring out the relationship between getTransactionPayloadHash and transactionId, keep this function.
     getMetadataFromTransactionId(transactionId: string, essenceOutputsLength: number) {
-        const messageOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,0)
-        let remainderOutputId:string|undefined
-        if (essenceOutputsLength > 1) {
-            remainderOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,essenceOutputsLength-1)
+        const outputIds = [] as string[]
+        for (let i = 0; i < essenceOutputsLength; i++) {
+            const outputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,i)
+            outputIds.push(outputId)
         }
-        return {outputId:messageOutputId,remainderOutputId}
+        return {outputIds}
     }
 
     ethDecrypt(encryptedData: string): string | undefined {

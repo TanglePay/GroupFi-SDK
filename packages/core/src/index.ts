@@ -1225,7 +1225,7 @@ class GroupFiSDK {
             else if (groupConfig.qualifyType === 'metadata'){
                 let erctype = groupConfig.contractType??'erc721'
                 erctype = erctype.toLowerCase()
-                const erc = erctype === 'erc1159' ? 115900 : 72100
+                const erc = erctype === 'erc1155' ? 115500 : 72100
                 filterParam = Object.assign(filterParam,{
                     erc,
                     uriContains: groupConfig.uriContains

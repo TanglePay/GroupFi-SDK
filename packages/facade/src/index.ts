@@ -4,11 +4,9 @@ import {
   ShimmerBech32Addr,
   Address,
   IMessage,
-  MessageGroupMeta,
   IMMessage,
   IGroupUserReputation,
   IMUserMuteGroupMember,
-  EventGroupMemberChanged,
   PushedNewMessage,
   PushedValue,
   EventItemFromFacade,
@@ -29,39 +27,32 @@ import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
 import {
   SimpleDataExtended,
-  strToBytes,
   objectId,
-  sleep,
   generateSMRPair,
   bytesToHex,
-  concatBytes,
   getCurrentEpochInSeconds,
   tracer,
-  logAllMethods,
 } from 'groupfi-sdk-utils';
 import {
   GroupfiSdkClient,
   IProxyModeRequestAdapter,
-  MessageBody,
   AddressMappingStore,
   nameMappingCache,
   StorageFacade
 } from 'groupfi-sdk-client';
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
-import { EthEncrypt, utf8ToHex } from 'groupfi-sdk-utils';
+import { utf8ToHex } from 'groupfi-sdk-utils';
 
 import {
   WalletType,
   TransactionRes,
-  RecommendGroup,
   Mode,
   ShimmerMode,
   ImpersonationMode,
   TanglePayWallet,
   MetaMaskWallet,
   DelegationMode,
-  RegisteredInfo,
   ModeInfo,
   PairX,
   Profile
@@ -80,8 +71,8 @@ export { SimpleDataExtended };
 export * from './types';
 
 const TP_SHIMMER_MAINNET_ID = 102;
-const TP_EVM_CHAIN_ID = 5;
 
+// Prefix text displayed to the user during the pairx signing process.
 const PAIRX_SIGN_PREFIX_TEXT = 'Creating account... '
 
 class GroupFiSDKFacade {
@@ -96,10 +87,13 @@ class GroupFiSDKFacade {
   private _lastTimeSdkRequestResultSent: number = 0;
   private _lastTimeSdkRequestResultReceived: number = 0;
 
+  // Instance of the AuxiliaryService class
   private _auxiliaryService = new AuxiliaryService();
 
+  // A storage solution like browser localStorage or other custom storage mechanisms.
   private _storage: StorageFacade | null = null
 
+  // Returns the current mode if it is defined.
   get currentMode() {
     if (this._mode === undefined) {
       throw new Error('Mode is undefined.');
@@ -107,36 +101,51 @@ class GroupFiSDKFacade {
     return this._mode;
   }
 
+  
+  // Generates a unique identifier for an object.
+  // - This method uses the `objectId` function to compute a deterministic hash for the given object.
+  // - The resulting identifier ensures consistency across objects with the same key-value pairs,
+  //   regardless of their order in the input.
   getObjectId(obj: Record<string, SimpleDataExtended>) {
     return objectId(obj);
   }
 
+  // Cache for storing information about which users are muted by a specific user, organized by group.
   private _muteMap:
     | {
         [groupId: string]: string[];
       }
     | undefined = undefined;
 
+  // A promise that resolves to the mute map.
+  // - This is used for lazy initialization or when fetching the mute information asynchronously.
+  // - If the data is not yet available in `_muteMap`, this promise ensures it can be retrieved.
   private _muteMapPromise: Promise<{
     [groupId: string]: string[];
   }> | null = null
 
+  // Updates the _muteMap for a specific group and user.
   async _updateMuteMap(groupId: string, addressHash: string) {
+    // Ensure `_muteMap` is initialized.
     await this._ensureMuteMap()
+    // Retrieve the list of muted members for the specified group.
     const groupMutedMembers = this._muteMap![groupId];
+    // If no mute list exists for the group, create a new one with the given `addressHash`.
     if (groupMutedMembers === undefined) {
       this._muteMap![groupId] = [addressHash];
       return;
     }
+    // If the user is already muted, remove them from the mute list.
     if (groupMutedMembers.includes(addressHash)) {
       this._muteMap![groupId] = groupMutedMembers.filter(
         (member) => member !== addressHash
       );
-    } else {
+    } else { // Otherwise, add the user to the mute list.
       this._muteMap![groupId].push(addressHash);
     }
   }
 
+  // Retrieves and constructs the mute map asynchronously.
   async _getMuteMapPromise() {
     return this.getAllUserMuteGroupMembers().then(allUserMuteGroupMembers => allUserMuteGroupMembers.reduce(
       (acc: { [groupId: string]: string[] }, { groupId, addrSha256Hash }) => {
@@ -147,6 +156,7 @@ class GroupFiSDKFacade {
     ))
   }
 
+  // Ensures that the `_muteMap` is initialized and ready for use.
   async _ensureMuteMap() {
     if (this._muteMap !== undefined) {
       return
@@ -158,31 +168,24 @@ class GroupFiSDKFacade {
     this._muteMapPromise = null
   }
 
+  // Checks if a specific user is muted in a given group based on the mute map.
   async getIsMutedFromMuteMap(groupId: string, address: string) {
     groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
     await this._ensureMuteMap()
-    // if (this._muteMap === undefined) {
-    //   const allUserMuteGroupMembers = await this.getAllUserMuteGroupMembers();
-    //   this._muteMap = allUserMuteGroupMembers.reduce(
-    //     (acc: { [groupId: string]: string[] }, { groupId, addrSha256Hash }) => {
-    //       acc[groupId] = [...(acc[groupId] ?? []), addrSha256Hash];
-    //       return acc;
-    //     },
-    //     {}
-    //   );
-    // }
     const addressHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(address)
     );
     const mutedAddressHash = this._muteMap![groupId] ?? [];
     return mutedAddressHash.includes(addressHash);
   }
-  
+
+  // Fetches all group members liked by the current user, organized by group.
   async getAllUserLikeGroupMembers() {
     this._ensureWalletConnected();
     return await this._client!.getAllUserLikeGroupMembers(this._address!)
   }
 
+  // Determines if a message from a specific sender in a group should be filtered (muted).
   async filterMutedMessage(groupId: string, sender: string) {
     return await this.getIsMutedFromMuteMap(groupId, sender);
   }
@@ -266,6 +269,7 @@ class GroupFiSDKFacade {
     return undefined;
   }
 
+  // Retrieves a user's profile from the name mapping cache based on their address.
   async getProfileFromNameMappingCache(address: string): Promise<{name: string, avatar?: string}|null> {
     try {
       const profileRes = await nameMappingCache.getRes(address)
@@ -275,6 +279,7 @@ class GroupFiSDKFacade {
     }
   }
 
+  // Batch retrieve profile information for multiple addresses from the name mapping cache.
   async batchGetProfileFromNameMappingCache(addressList: string[]) {
     try {
       return await nameMappingCache.batchGetRes(addressList)
@@ -283,6 +288,7 @@ class GroupFiSDKFacade {
     }
   }
 
+  // Listens for new event items pushed from the MQTT and triggers a callback when an event is received
   listenningNewEventItem(
     callback: (message: EventItemFromFacade) => void
   ): () => void {
@@ -315,6 +321,7 @@ class GroupFiSDKFacade {
     return () => GroupFiSDKObj.off('inbox', listener);
   }
 
+  // Set up the MQTT connection
   async setupMqttConnection(connect: any) {
     if (!connect) return
     GroupFiSDKObj.setupMqttConnection(connect);
@@ -348,7 +355,7 @@ class GroupFiSDKFacade {
 
       const newMode = this.getTPMode(nodeId);
 
-      // 第一次连接钱包，也会触发这个函数, 这样避免第一次连接时处罚
+      // 第一次连接钱包，也会触发这个函数, 这样避免第一次连接时触发
       if (
         this._address === address &&
         this._mode === newMode &&
@@ -366,9 +373,6 @@ class GroupFiSDKFacade {
           },
         });
       }
-
-      console.log('===> this._address', this._address);
-      console.log('===> address', address);
 
       const res = {
         address,
@@ -388,6 +392,7 @@ class GroupFiSDKFacade {
     return () => IotaSDK.removeListener('accountsChanged', listener);
   }
 
+  // Handle account change events and update the state accordingly.
   async _onAccountChanged({
     mode,
     isAddressChanged,
@@ -397,12 +402,15 @@ class GroupFiSDKFacade {
     mode: Mode;
     isAddressChanged: boolean;
   }) {
+    // Switch the client adapter based on the new mode
     this.switchClientAdapter(mode);
+    // If the address has changed, reinitialize the address-related configurations.
     if (isAddressChanged) {
       await this.initialAddress();
     }
   }
 
+  // Fetch a list of inbox messages based on the continuation token.
   async fetchMessageOutputList(
     continuationToken?: string,
     limit = 3
@@ -413,10 +421,23 @@ class GroupFiSDKFacade {
       limit
     )) as InboxItemResponse;
   }
+
   // prepareRemainderHint
   async prepareRemainderHint() {
     this._ensureWalletConnected();
     const res = await this._client!.prepareRemainderHint();
+    return res;
+  }
+  // consolidateIfNeeded
+  async consolidateIfNeeded() {
+    this._ensureWalletConnected();
+    const res = await this._client!.consolidateIfNeeded()
+    return res;
+  }
+  // async cashInit(){
+  async cashInit() {
+    this._ensureWalletConnected();
+    const res = await this._client!.cashInit();
     return res;
   }
   // enablePreparedRemainderHint
@@ -830,7 +851,7 @@ class GroupFiSDKFacade {
     // shimmer mode, setup normally
     if (this._mode === ShimmerMode) {
       this._proxyAddress = this._address;
-      this._client!.switchAddress(this._address!);
+      this._client!.switchAddress({bech32Address: this._address!});
     } else if (this._mode === ImpersonationMode) {
       const proxy = await this.getSMRProxyAccount();
       if (proxy) {
@@ -856,7 +877,11 @@ class GroupFiSDKFacade {
       return;
     }
     this._proxyAddress = modeInfo.detail.account;
-    this._client!.switchAddress(this._proxyAddress, modeInfo.pairX);
+    this._client!.switchAddress({
+      bech32Address: this._proxyAddress, 
+      pairX: modeInfo.pairX, 
+      evmAddress: this._address
+    });
     this._pairX = modeInfo.pairX;
   }
 
@@ -938,7 +963,7 @@ class GroupFiSDKFacade {
       const { bech32Address } = await (
         adapter as ImpersonationModeRequestAdapter
       ).getProxyAccount();
-      await this._client!.switchAddress(bech32Address, pairX);
+      await this._client!.switchAddress({bech32Address, pairX, evmAddress: this._address});
       await this._client!.registerTanglePayPairX({
         pairX,
         metadataObjWithSignature,
@@ -952,17 +977,12 @@ class GroupFiSDKFacade {
       this._proxyAddress = smrAddress
       this._pairX = pairX
       if (outputids.length) {
-        const outputsAsWrapper = outputids.map((outputIdHex, index) => {
-          return {
-            outputId: outputIdHex,
-            output: outputs[index]
-          }
-        })
-        this._client!.resetAllRemainderHints(outputsAsWrapper)
+        this._client!.resetAllRemainderHints('register', outputids, outputs)
       }
     }
   }
 
+  // Retrieve SMR proxy account details, applicable only in `ImpersonationMode`.
   async getSMRProxyAccount(): Promise<
     { bech32Address: string; hexAddress: string } | undefined
   > {

@@ -403,7 +403,7 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                     this._events.emit(MessageSentEventKey,{status:0, obj:{messageSent:sentMessage}})
                     tracer.endStep('sendMessageToGroup', 'OutputSendingDomain poll, sendMessageToGroup, sentMessagePromise end await')
                     console.log(tracer.getLogs())
-                    const {blockId,outputId} = await sendBasicOutputPromise;
+                    const {blockId,outputIds} = await sendBasicOutputPromise;
                     console.log('OutputSendingDomain poll, sendMessageToGroup, blockId:', blockId);
                 }
                 await sleep(sleepAfterFinishInMs);
@@ -516,7 +516,8 @@ export class OutputSendingDomain implements ICycle, IRunnable {
 
         const isDelegationModeOk = this.checkDelegationMode()
         if (!isDelegationModeOk) return true
-        
+        const isCashInitDoingSomeWork = await this.groupFiService.cashInit()
+        if (isCashInitDoingSomeWork) return false
         const isCashEnough = await this.checkBalance()
         if (!isCashEnough) return true
 
@@ -529,13 +530,12 @@ export class OutputSendingDomain implements ICycle, IRunnable {
         this._tryStoreRegiserInfo()
 
         // this._tryGetDelegationModeNameNft()
-        
+        const isPrepareRemainderHintDoingSomeWork = await this.groupFiService.prepareRemainderHint();
+        if (isPrepareRemainderHintDoingSomeWork) return false;
         const isHasDelegationModeNameNft = await this.checkDelegationModeNameNft()
         if (!isHasDelegationModeNameNft) return true
 
         this._isReadyToChat = true
-        const isPrepareRemainderHint = await this.groupFiService.prepareRemainderHint();
-        if (!isPrepareRemainderHint) return true;
         return true
     }
 
