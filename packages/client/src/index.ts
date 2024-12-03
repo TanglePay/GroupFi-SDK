@@ -295,6 +295,8 @@ export class GroupfiSdkClient {
         }
         this._lastSendTimestamp = 0;
         this._sharedSaltCache = {}
+        this._isCashDataInited = false
+        this.resetCashData()
     }
     
     _queuePromise:Promise<any>|undefined;
@@ -379,6 +381,14 @@ export class GroupfiSdkClient {
         await this.consolidateIfNeeded();
         return true;
     }    
+    // reset cash related data
+    resetCashData(){
+        this._isCashDataInited = false;
+        this._remainderHintSet = [];
+        this._pendingTransactions = new Map();
+        this._pendingSpentOutputIdToTxId = new Map();
+        this._pendingCreatedOutputToTxId = new Map();
+    }
     async prepareRemainderHint() {
         const hasPending = this._pendingTransactions.size > 0;
         if (!hasPending && this._isCashDataInited && !this._prepareRemainderHintSwitch) return false;
