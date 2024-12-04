@@ -376,7 +376,8 @@ export class GroupfiSdkClient {
     private _prepareCooldownTimeWithPending: number = 5 * 1000;
     async cashInit(){
         if (this._isCashDataInited) return false;
-
+        // log 
+        console.log('Actually start cash init');
         await this.prepareRemainderHint();
         await this.consolidateIfNeeded();
         return true;
@@ -385,6 +386,7 @@ export class GroupfiSdkClient {
     resetCashData(){
         this._isCashDataInited = false;
         this._remainderHintSet = [];
+        this._lastActualPrepareTimestamp = 0;
         this._pendingTransactions = new Map();
         this._pendingSpentOutputIdToTxId = new Map();
         this._pendingCreatedOutputToTxId = new Map();
