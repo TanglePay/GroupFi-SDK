@@ -1,7 +1,7 @@
 
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'groupfi-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion, MessageGroupMetaKeyOmited, INodeProvider } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion, MessageGroupMetaKeyOmited, INodeProvider, ERC1155TokenRule } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -1114,7 +1114,8 @@ class GroupFiSDK {
             chain: number,
             contract: string,
             threshold?: string,
-            erc: 20 | 721 | 0 | 1 | 10000
+            tokenRules?: ERC1155TokenRule[]
+            erc: 20 | 721 | 0 | 1 | 10000 | 115500 | 72100 | 1155
         }>,
         ts: number,
     }):Promise<{addressList:string[],signature:string}>
@@ -1183,7 +1184,7 @@ class GroupFiSDK {
         return addressList.length > 0
     }
     _getActualThresholdValue(groupConfig:MessageGroupMeta):string{
-        if (['nft','event', 'metadata'].includes(groupConfig.qualifyType)) return '1'
+        if (['nft','event', 'metadata', 'erc1155'].includes(groupConfig.qualifyType)) return '1'
         const humanReadable = groupConfig.tokenThresValue!
         const decimal = parseInt(groupConfig.tokenDecimals!)
         return ethers.parseUnits(humanReadable,decimal).toString()
@@ -1205,8 +1206,9 @@ class GroupFiSDK {
                 contract:groupConfig.contractAddress,
                 threshold: '0',
                 uriContains: '',
+                tokenRules: undefined,
                 // chainId 518, spl token, erc = 1
-                erc:20 as 20|721|0|1,
+                erc:20 as 20|721|0|1|10000|115500|72100|1155,
                 ts:getCurrentEpochInSeconds()
             }
             const thresValue = this._getActualThresholdValue(groupConfig)
@@ -1231,7 +1233,13 @@ class GroupFiSDK {
                     uriContains: groupConfig.uriContains
                 })
             }
-             else if (groupConfig.qualifyType === 'nft'){
+            else if (groupConfig.qualifyType === 'erc1155') {
+                filterParam = Object.assign(filterParam, {
+                    erc: 1155, 
+                    tokenRules: groupConfig.tokenRules
+                })
+            }
+            else if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
                     erc:721,
                     threshold: thresValue
@@ -1250,7 +1258,8 @@ class GroupFiSDK {
                         contract: filterParam.contract,
                         erc: filterParam.erc,
                         uriContains: filterParam.uriContains,
-                        threshold: filterParam.threshold?.toString() // Ensure threshold is a string
+                        threshold: filterParam.threshold?.toString(), // Ensure threshold is a string
+                        tokenRules: filterParam.tokenRules
                     },
                     ...groupConfig.extraChains?.map(extraChain => ({
                         chain: extraChain.chainId,

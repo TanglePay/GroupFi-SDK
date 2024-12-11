@@ -112,6 +112,11 @@ export interface CustomField {
     key: string
     value: string
 }
+export interface ERC1155TokenRule {
+    type: number,
+    tokenId: string,
+    thresholdValue: string
+}
 export interface MessageGroupMeta {
     dappGroupId: string
     groupName: string
@@ -132,6 +137,7 @@ export interface MessageGroupMeta {
     extraChains?: ExtraChain[] // Adding the new property
     icon?: string
     customFields?: CustomField[]
+    tokenRules?: ERC1155TokenRule[]
 }
 export type GroupConfig = MessageGroupMeta & { groupId: string }
 export type MessageGroupMetaPlus = MessageGroupMeta & { isPublic: boolean }
