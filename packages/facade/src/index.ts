@@ -21,7 +21,8 @@ import {
   getEvmOrSolanaAddressType,
   ImInboxEventTypeProfileChangedEvent,
   GroupConfigPlus,
-  NodeManager
+  NodeManager,
+  prefixedGroupIdToGroupId
 } from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -170,7 +171,7 @@ class GroupFiSDKFacade {
 
   // Checks if a specific user is muted in a given group based on the mute map.
   async getIsMutedFromMuteMap(groupId: string, address: string) {
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     await this._ensureMuteMap()
     const addressHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(address)
@@ -687,7 +688,7 @@ class GroupFiSDKFacade {
       })
     }
 
-    return evmGroupConfigsWithIsMember
+    return evmGroupConfigsWithIsMember.map(GroupFiSDKObj.processGroupConfigBeforeReturn)
   }
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
@@ -1081,12 +1082,13 @@ class GroupFiSDKFacade {
     memberCount: number;
   }> {
     this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     return await GroupFiSDKObj.fetchGroupVotesCount(groupId);
   }
 
   async voteGroup(groupId: string, vote: number) {
     this._ensureWalletConnected();
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     const res = (await this._client!.voteGroup(
       groupId,
       vote,
@@ -1101,7 +1103,7 @@ class GroupFiSDKFacade {
 
   async unvoteGroup(groupId: string) {
     this._ensureWalletConnected();
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     const res = (await this._client!.unvoteGroup(groupId, this._address!)) as
       | TransactionRes
       | undefined;
@@ -1117,6 +1119,7 @@ class GroupFiSDKFacade {
   }
   // get user group
   async getUserGroupReputation(groupId: string): Promise<IGroupUserReputation> {
+    groupId = prefixedGroupIdToGroupId(groupId);
     const allUserGroup = await GroupFiSDKObj.fetchUserGroupReputation(
       groupId,
       this._address!
@@ -1125,7 +1128,7 @@ class GroupFiSDKFacade {
   }
   async getGroupVoteRes(groupId: string) {
     this._ensureWalletConnected();
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     const allGroupVotes = (await this._client!.getAllGroupVotes(
       this._address!
     )) as Array<{
@@ -1137,7 +1140,7 @@ class GroupFiSDKFacade {
   }
 
   async markGroup(groupId: string) {
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     this._ensureWalletConnected();
     const res = (await this._client!.markGroup({
       groupId,
@@ -1159,7 +1162,7 @@ class GroupFiSDKFacade {
     isGroupPublic: boolean;
     qualifyList?: { addr: string; publicKey: string }[];
   }) {
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     this._ensureWalletConnected();
     const isAlreadyInMemberList = memberList.find(
       (o) => o.addr === this._address!
@@ -1184,6 +1187,7 @@ class GroupFiSDKFacade {
   // getGroupEvmQualifiedList
   async getGroupEvmQualifiedList(groupId: string) {
     this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const memberSelf = {
       addr: this._address!,
       publicKey: this._client!.getPairXPublicKey()!,
@@ -1197,7 +1201,7 @@ class GroupFiSDKFacade {
   }
   // getPluginGroupEvmQualifiedList
   async getPluginGroupEvmQualifiedList(groupId: string) {
-    // this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     return await this._client!.getPluginEvmQualifyList(groupId);
   }
   // async _getEvmQualify(groupId:string,addressList:string[],signature:string):Promise<IBasicOutput>{
@@ -1208,11 +1212,12 @@ class GroupFiSDKFacade {
     timestamp: number
   ): Promise<IBasicOutput> {
     this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const addressType = getEvmOrSolanaAddressType(this._address!);
     return await this._client!._getEvmQualify(groupId, addressList, signature, addressType,timestamp);
   }
   async leaveOrUnMarkGroup(groupId: string) {
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     this._ensureWalletConnected();
     const res = (await this._client!.unmarkGroup(groupId, this._address!)) as
       | TransactionRes
@@ -1235,6 +1240,7 @@ class GroupFiSDKFacade {
       if (!this._address) {
         return false
       }
+      groupId = prefixedGroupIdToGroupId(groupId);
       const groupMemberAddressList = await this.loadGroupMemberAddresses(groupId)
       const isMember = groupMemberAddressList.find(({ownerAddress}) => ownerAddress === this._address!) 
       return isMember !== undefined
@@ -1244,6 +1250,7 @@ class GroupFiSDKFacade {
   }
   async isQualified(groupId: string) {
     this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const isEvm = this._isEvm();
     if (isEvm) {
       return await this._isEvmQualified(groupId);
@@ -1259,6 +1266,7 @@ class GroupFiSDKFacade {
     );
   }
   async _isEvmQualified(groupId: string) {
+    groupId = prefixedGroupIdToGroupId(groupId);
     const address = this._address!;
     return await GroupFiSDKObj.isEvmAddressQualifiedForGroup(address, groupId);
   }
@@ -1299,6 +1307,7 @@ class GroupFiSDKFacade {
 
   async marked(groupId: string) {
     this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const markedGroupIds = await this.fetchAddressMarkedGroups();
     // log markedGroupIds
     console.log('markedGroupIds', markedGroupIds, groupId);
@@ -1314,10 +1323,12 @@ class GroupFiSDKFacade {
   }
 
   getGroupMetaByGroupId(groupId: string) {
+    groupId = prefixedGroupIdToGroupId(groupId);
     return GroupFiSDKObj._groupIdToGroupMeta(groupId);
   }
 
   async isGroupPublic(groupId: string) {
+    groupId = prefixedGroupIdToGroupId(groupId);
     return await GroupFiSDKObj.checkIsGroupPublicFromSharedApiCall(groupId!);
   }
 
@@ -1333,7 +1344,7 @@ class GroupFiSDKFacade {
   }
   
   async loadGroupMemberAddresses(groupId: string) {
-    // this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     return await GroupFiSDKObj.fetchGroupMemberAddresses(groupId);
   }
 
@@ -1357,6 +1368,7 @@ class GroupFiSDKFacade {
   }
   async isBlackListed(groupId: string) {
     this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const blackListedAddresseHashs = await GroupFiSDKObj.fetchGroupBlacklist(
       groupId
     );
@@ -1368,7 +1380,7 @@ class GroupFiSDKFacade {
 
   async muteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(memberAddress)
     );
@@ -1388,7 +1400,7 @@ class GroupFiSDKFacade {
   // likeGroupMember
   async likeGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(memberAddress)
     );
@@ -1406,7 +1418,7 @@ class GroupFiSDKFacade {
   // unlikeGroupMember
   async unlikeGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(memberAddress)
     );
@@ -1423,7 +1435,7 @@ class GroupFiSDKFacade {
   
   async unMuteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
-    groupId = GroupFiSDKObj._addHexPrefixIfAbsent(groupId);
+    groupId = prefixedGroupIdToGroupId(groupId);
     const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256HashAddress(memberAddress)
     );
@@ -1453,6 +1465,7 @@ class GroupFiSDKFacade {
     muted: boolean;
   }> {
     this._ensureWalletConnected();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const [isGroupPublic, isQualified, marked, muted] = await Promise.all([
       this.isGroupPublic(groupId),
       this.isQualified(groupId),
@@ -1480,6 +1493,7 @@ class GroupFiSDKFacade {
   }
 
   groupIdToGroupName(groupId: string) {
+    groupId = prefixedGroupIdToGroupId(groupId);
     return GroupFiSDKObj.groupIdToGroupName(groupId);
   }
 
@@ -1506,6 +1520,7 @@ class GroupFiSDKFacade {
     endToken?: string,
     size = 10
   ) {
+    groupId = prefixedGroupIdToGroupId(groupId);
     const res = await GroupFiSDKObj.fetchPublicMessageOutputList(
       groupId,
       direction,

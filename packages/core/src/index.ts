@@ -1,4 +1,3 @@
-
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'groupfi-sdk-utils';
 import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion, MessageGroupMetaKeyOmited, INodeProvider } from './types';
@@ -12,6 +11,7 @@ import LZString from 'lz-string'
 import { deserializePushed } from './codec_event';
 import { ethers } from 'ethers';
 import { isSolanaChain, isSolanaAddress, isEvmAddress } from './address_check'
+import { prefixedGroupIdToGroupId } from './groupId';
 export * from './types';
 export * from './codec_mark';
 export * from './codec_like';
@@ -20,6 +20,7 @@ export * from './codec_vote';
 export * from './codec_evm_qualify';
 export * from './address_check';
 export * from './nodeManager';
+export * from './groupId';
 const SHA256_LEN = 32
 export type ProfileResponse = {
     address: string;
@@ -602,24 +603,33 @@ class GroupFiSDK {
                 },
                 body: JSON.stringify(body)
             });
-            const json = await res.json() as MessageGroupMetaPlus[];
-            const resultList = this._ensureList(json)
-            const groupConfig = this._inxApiResultToGroupConfig(resultList.map(group => {
-                const {isPublic,...meta} = group;
-                return meta;
-            }));
+            const json = await res.json() as GroupConfigPlus[];
+            const resultList = this._ensureList(json) as GroupConfigPlus[]
+            const groupConfigList = resultList.map(this._processGroupConfigFromInxApi)
+            const groupConfig = groupConfigList.reduce((acc: Record<string, GroupConfig>, group: GroupConfigPlus) => {
+                const {isPublic, ...meta} = group;
+                acc[group.groupId] = meta;
+                return acc;
+            }, {} as Record<string, GroupConfig>);
             // merge groupConfig with this._groupConfigMap
             this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
-            const configPlusList = resultList.map(group => {
-                const {isPublic, ...meta} = group;
-                const config = this._messageGroupMetaToGroupConfig(meta);
-                return {...config, isPublic};
-            })
-            return configPlusList;
+            return groupConfigList;
         } catch (error) {
             console.log('fetchForMeGroupConfigs error',error)
             throw error
         }
+    }
+    // process group config from inx api,
+    _processGroupConfigFromInxApi<T extends GroupConfig | GroupConfigPlus>(config: T): T {
+        config.dappGroupId = config.groupId
+        config.groupId = prefixedGroupIdToGroupId(config.groupId)
+        return config
+    }
+    // process group config before return to user
+    processGroupConfigBeforeReturn<T extends GroupConfig | GroupConfigPlus>(config: T): T {
+        config.groupId = config.dappGroupId
+        config.dappGroupId = ''
+        return config
     }
 // fetch address marked group configs
     async fetchAddressMarkedGroupConfigs(address:string):Promise<GroupConfig[]>{
@@ -632,11 +642,15 @@ class GroupFiSDK {
                 }
             })
             let json = await res.json()
-            json = this._ensureList(json)
-            const groupConfig = this._inxApiResultToGroupConfig(json);
+            json = this._ensureList(json) as GroupConfig[]
+            const groupConfigList = json.map(this._processGroupConfigFromInxApi)
+            const groupConfig = groupConfigList.reduce((acc: Record<string, GroupConfig>, group: GroupConfig) => {
+                acc[group.groupId] = group;
+                return acc;
+            }, {} as Record<string, GroupConfig>);
             // merge groupConfig with this._groupConfigMap
             this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
-            return json.map((group:MessageGroupMeta) => this._messageGroupMetaToGroupConfig(group))
+            return groupConfigList
         } catch (error) {
             console.log('fetchAddressMarkedGroupConfigs error',error)
             throw error
