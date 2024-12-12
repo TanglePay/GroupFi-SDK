@@ -12,7 +12,8 @@ import {
   MessageResponseItem,
   PublicItemsResponse,
   IIncludesAndExcludes,
-  MessageResponseItemPlus
+  MessageResponseItemPlus,
+  GroupConfigPlus
 } from 'groupfi-sdk-core'
 // IMMessage <-> UInt8Array
 // IRecipient <-> UInt8Array
@@ -52,6 +53,10 @@ export class GroupFiService {
   async browseModeSetupClient() {
     await GroupFiSDKFacade.browseModeSetupClient()
   }
+  // fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn
+  async fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
+    return await GroupFiSDKFacade.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes})
+  } 
   // async initialAddress() {
   //   await GroupFiSDKFacade.initialAddress()
   // }
