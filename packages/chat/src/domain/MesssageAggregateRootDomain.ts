@@ -390,6 +390,11 @@ export class MessageAggregateRootDomain implements ICycle {
 
     // get for me group Configs
     getForMeGroupConfigs() {
+        // When forMeGroupConfigs is undefined, it must return undefined
+        // This indicates that forMeGroupConfigs has not started loading yet
+        if (this.groupMemberDomain.forMeGroupConfigs === undefined) {
+            return undefined
+        }
         const forMeGroupConfigs = this.groupMemberDomain.forMeGroupConfigs??[]
         const forMeGroupConfigsProcessed = forMeGroupConfigs.map(GroupFiSDKObj.processGroupConfigBeforeReturn)      
         console.log('getForMeGroupConfigs before processed', forMeGroupConfigs, 'after processed', forMeGroupConfigsProcessed)  
