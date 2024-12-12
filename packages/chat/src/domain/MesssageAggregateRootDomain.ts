@@ -390,7 +390,10 @@ export class MessageAggregateRootDomain implements ICycle {
 
     // get for me group Configs
     getForMeGroupConfigs() {
-        return (this.groupMemberDomain.forMeGroupConfigs??[]).map(GroupFiSDKObj.processGroupConfigBeforeReturn)   
+        const forMeGroupConfigs = this.groupMemberDomain.forMeGroupConfigs??[]
+        const forMeGroupConfigsProcessed = forMeGroupConfigs.map(GroupFiSDKObj.processGroupConfigBeforeReturn)      
+        console.log('getForMeGroupConfigs before processed', forMeGroupConfigs, 'after processed', forMeGroupConfigsProcessed)  
+        return forMeGroupConfigsProcessed
     }
     
     onRegisterStatusChanged(callback: () => void) {

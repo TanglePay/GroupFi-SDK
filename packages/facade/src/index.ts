@@ -650,8 +650,8 @@ class GroupFiSDKFacade {
       fileObj});
   }
   
-  // fetchForMeGroupConfigs
-  async fetchForMeGroupConfigs({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
+  // fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn
+  async fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
     const res = await GroupFiSDKObj.fetchForMeGroupConfigs({address: this._address!, includes})
     if (!this._address) {
       return res
@@ -688,8 +688,13 @@ class GroupFiSDKFacade {
       })
     }
 
-    return evmGroupConfigsWithIsMember.map(GroupFiSDKObj.processGroupConfigBeforeReturn)
+    return evmGroupConfigsWithIsMember
   }
+  // fetchForMeGroupConfigs
+  async fetchForMeGroupConfigs({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
+    const res = await this.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes})
+    return res.map(GroupFiSDKObj.processGroupConfigBeforeReturn)
+  } 
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
     this._ensureWalletConnected();
