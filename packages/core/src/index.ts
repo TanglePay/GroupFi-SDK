@@ -613,6 +613,8 @@ class GroupFiSDK {
             }, {} as Record<string, GroupConfig>);
             // merge groupConfig with this._groupConfigMap
             this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
+            // log method groupConfigList _groupConfigMap
+            console.log('fetchForMeGroupConfigs groupConfigList _groupConfigMap',groupConfigList,this._groupConfigMap)
             return groupConfigList;
         } catch (error) {
             console.log('fetchForMeGroupConfigs error',error)
@@ -620,13 +622,17 @@ class GroupFiSDK {
         }
     }
     // process group config from inx api,
-    _processGroupConfigFromInxApi<T extends GroupConfig | GroupConfigPlus>(config: T): T {
+    _processGroupConfigFromInxApi<T extends GroupConfig | GroupConfigPlus>(rawConfig: T): T {
+        const config = {...rawConfig}
         config.dappGroupId = config.groupId
+        // log method config
+        console.log('processGroupConfigFromInxApi config',config)
         config.groupId = prefixedGroupIdToGroupId(config.groupId)
         return config
     }
     // process group config before return to user
-    processGroupConfigBeforeReturn<T extends GroupConfig | GroupConfigPlus>(config: T): T {
+    processGroupConfigBeforeReturn<T extends GroupConfig | GroupConfigPlus>(rawConfig: T): T {
+        const config = {...rawConfig}
         config.groupId = config.dappGroupId
         config.dappGroupId = ''
         return config
@@ -648,8 +654,6 @@ class GroupFiSDK {
                 acc[group.groupId] = group;
                 return acc;
             }, {} as Record<string, GroupConfig>);
-            // merge groupConfig with this._groupConfigMap
-            this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
             return groupConfigList
         } catch (error) {
             console.log('fetchAddressMarkedGroupConfigs error',error)
