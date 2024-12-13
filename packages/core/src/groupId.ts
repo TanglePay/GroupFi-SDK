@@ -1,3 +1,5 @@
+import CryptoJS from 'crypto-js';
+
 export const prefixedGroupIdToGroupId = (prefixedGroupId: string) => {
     // prefixedGroupId is like prefixString + sha256Hash
     // get sha256Hash from prefixedGroupId, then add 0x prefix to the hash
@@ -12,7 +14,7 @@ export const isGroupIdEqual = (groupIdCouldBeLegacy: string, groupIdFromApi: str
     if (groupIdCouldBeLegacyWithoutPrefixString === groupIdFromApiWithoutPrefixString) {
         return true;
     }
-    const sha256HashOfGroupIdCurrent = CryptoJS.SHA256(groupIdCouldBeLegacy).toString(CryptoJS.enc.Hex)
+    const sha256HashOfGroupIdCurrent = CryptoJS.SHA256(groupIdFromApiWithoutPrefixString).toString(CryptoJS.enc.Hex)
     const sha256HashOfGroupIdCurrentWithPrefix = sha256HashOfGroupIdCurrent.startsWith('0x') ? sha256HashOfGroupIdCurrent : `0x${sha256HashOfGroupIdCurrent}`
     return sha256HashOfGroupIdCurrentWithPrefix === groupIdFromApiWithoutPrefixString;
 }

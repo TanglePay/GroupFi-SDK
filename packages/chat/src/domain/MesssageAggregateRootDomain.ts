@@ -434,7 +434,10 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     // get marked group Configs
     getMarkedGroupConfigs() {
-        return this.groupMemberDomain.markedGroupConfigs;
+        if (this.groupMemberDomain.markedGroupConfigs === undefined) {
+            return undefined
+        }
+        return this.groupMemberDomain.markedGroupConfigs.map(GroupFiSDKObj.processGroupConfigBeforeReturn)
     }
     getIsHasPairX() {
         return this.outputSendingDomain.isHasPairX
