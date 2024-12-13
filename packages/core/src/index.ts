@@ -654,6 +654,8 @@ class GroupFiSDK {
                 acc[group.groupId] = group;
                 return acc;
             }, {} as Record<string, GroupConfig>);
+            // merge groupConfig with this._groupConfigMap
+            this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
             return groupConfigList
         } catch (error) {
             console.log('fetchAddressMarkedGroupConfigs error',error)
