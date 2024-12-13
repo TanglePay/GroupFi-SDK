@@ -9,7 +9,7 @@ import { ProxyModeDomain } from "./ProxyModeDomain";
 import { ICycle, IFetchPublicGroupMessageCommand, StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
-import { EventGroupMemberChanged, GroupFiSDKObj, IMessage } from "groupfi-sdk-core";
+import { EventGroupMemberChanged, GroupFiSDKObj, IMessage, isGroupIdEqual } from "groupfi-sdk-core";
 import { EventItemFromFacade } from "groupfi-sdk-core";
 import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey } from "./GroupMemberDomain";
 import { AquiringPublicKeyEventKey, DelegationModeNameNftChangedEventKey, NotEnoughCashTokenEventKey, OutputSendingDomain, PairXChangedEventKey, PublicKeyChangedEventKey, VoteOrUnVoteGroupLiteEventKey } from "./OutputSendingDomain";
@@ -94,7 +94,8 @@ export class MessageAggregateRootDomain implements ICycle {
                 console.log(EventGroupMemberChangedLiteKey, 'in callback',{groupId:groupIdFromEvent,isNewMember,address}, groupId)
 
                 const fn = async () => {
-                    if(groupIdFromEvent === this.groupFiService.addHexPrefixIfAbsent(groupId) && isNewMember) {
+                    // if(groupIdFromEvent === this.groupFiService.addHexPrefixIfAbsent(groupId) && isNewMember) {
+                    if(isGroupIdEqual(groupId, groupIdFromEvent) && isNewMember) {
                         const currentAddress = this.groupFiService.getCurrentAddress()
                         if (this.groupFiService.addHexPrefixIfAbsent(currentAddress) === this.groupFiService.addHexPrefixIfAbsent(address)) {
                             this.groupMemberDomain.off(EventGroupMemberChangedLiteKey,this._groupMemberChangedCallback)
@@ -113,7 +114,8 @@ export class MessageAggregateRootDomain implements ICycle {
         return new Promise((resolve, reject) => {
             this._groupMemberChangedCallback = ({groupId: groupIdFromEvent, isNewMember, address}) => {
                 const currentAddress = this.groupFiService.getCurrentAddress()
-                if(this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMember && address === currentAddress) {
+                // if(this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMember && address === currentAddress) {
+                if(isGroupIdEqual(groupId, groupIdFromEvent) && !isNewMember && address === currentAddress) {
                     this.groupMemberDomain.off(EventGroupMemberChangedLiteKey, this._groupMemberChangedCallback)
                     resolve({})
                 }
@@ -127,7 +129,8 @@ export class MessageAggregateRootDomain implements ICycle {
         this.outputSendingDomain.markGroup(groupId)
         return new Promise((resolve, reject) => {
             this._groupMarkChangedCallback = ({groupId: groupIdFromEvent, isNewMark}) => {
-                if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && isNewMark) {
+                // if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && isNewMark) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent) && isNewMark) {
                     this.groupMemberDomain.off(EventGroupMarkChangedLiteKey, this._groupMarkChangedCallback)
                     resolve({})
                 }
@@ -140,7 +143,8 @@ export class MessageAggregateRootDomain implements ICycle {
         this.outputSendingDomain.leaveGroup(groupId, true)
         return new Promise((resolve, reject) => {
             this._groupMarkChangedCallback = ({groupId: groupIdFromEvent, isNewMark}) => {
-                if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMark) {
+                // if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMark) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent) && !isNewMark) {
                     this.groupMemberDomain.off(EventGroupMarkChangedLiteKey, this._groupMarkChangedCallback)
                     resolve({})
                 }
@@ -154,7 +158,8 @@ export class MessageAggregateRootDomain implements ICycle {
         this.outputSendingDomain.voteOrUnvoteGroup(groupId, vote)
         return new Promise((resolve, reject) => {
             this._voteOrUnVoteGroupChangedCallback = ({outputId, groupId: groupIdFromEvent}) => {
-                if (groupIdFromEvent === groupId) {
+                // if (groupIdFromEvent === groupId) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent)) {
                     this.outputSendingDomain.off(VoteOrUnVoteGroupLiteEventKey, this._voteOrUnVoteGroupChangedCallback)
                     resolve({
                         outputId
@@ -170,7 +175,8 @@ export class MessageAggregateRootDomain implements ICycle {
         this.outputSendingDomain.muteOrUnmuteGroupMember(groupId, address, isMuteOperation)
         return new Promise((resolve, reject) => {
             this._muteOrUnMuteGroupMemberChangedCallback = ({groupId: groupIdFromEvent, isMuted}) => {
-                if (groupId === groupIdFromEvent && isMuteOperation === isMuted) {
+                // if (groupId === groupIdFromEvent && isMuteOperation === isMuted) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent) && isMuteOperation === isMuted) {
                     this.groupMemberDomain.off(EventGroupMuteChangedLiteKey, this._muteOrUnMuteGroupMemberChangedCallback)
                     resolve({})
                 }
@@ -184,7 +190,8 @@ export class MessageAggregateRootDomain implements ICycle {
         this.outputSendingDomain.likeOrUnLikeGroupMember(groupId, address, isLikeOperation)
         return new Promise((resolve, reject) => {
             this._likeOrUnLikeGroupMemberChangedCallback = ({groupId: groupIdFromEvent, isLiked}) => {
-                if (groupId === groupIdFromEvent && isLikeOperation === isLiked) {
+                // if (groupId === groupIdFromEvent && isLikeOperation === isLiked) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent) && isLikeOperation === isLiked) {
                     this.groupMemberDomain.off(EventGroupLikeChangedLiteKey, this._likeOrUnLikeGroupMemberChangedCallback)
                     resolve({})
                 }
@@ -333,9 +340,11 @@ export class MessageAggregateRootDomain implements ICycle {
         this.inboxDomain.offInboxLoaded(callback);
     }
     onConversationDataChanged(groupId: string, callback: () => void) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.conversationDomain.onGroupDataUpdated(groupId, callback);
     }
     offConversationDataChanged(groupId: string, callback: () => void) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.conversationDomain.offGroupDataUpdated(groupId, callback);
     }
     getInbox() {

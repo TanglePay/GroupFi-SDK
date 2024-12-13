@@ -322,6 +322,7 @@ export class ConversationDomain implements ICycle, IRunnable {
         this._events.on(eventKey, callback);
     }
     offGroupDataUpdated(groupId: string, callback: () => void) {
+        groupId = stripHexPrefix(groupId)
         const eventKey = `${EventConversationGroupDataUpdated}.${groupId}`;
         this._events.off(eventKey, callback);
     }
@@ -354,7 +355,8 @@ export class ConversationDomain implements ICycle, IRunnable {
         if (message) {
             // log message received
             console.log('ConversationDomain message received', message);
-            const { groupId, messageId, timestamp} = message;
+            let { groupId, messageId, timestamp} = message;
+            groupId = stripHexPrefix(groupId)
             await this.handleNewMessageToFirstPartGroupMessageList(groupId, messageId, timestamp);
             return false;
         } else {
