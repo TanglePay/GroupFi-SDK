@@ -30,7 +30,7 @@ export class InboxDomain implements ICycle, IRunnable {
 
     @Inject
     private localStorageRepository: LocalStorageRepository;
-    private _events: DebouncedEventEmitter = new DebouncedEventEmitter(100);
+    private _events: EventEmitter = new EventEmitter();
     private _groupIdsList: string[] = [];
     private _groups: LRUCache<IInboxGroup>;
     private _pendingGroupIdsListUpdate: boolean = false;
@@ -268,7 +268,7 @@ export class InboxDomain implements ICycle, IRunnable {
     
     private _inChannel: Channel<IMessage>;
     async bootstrap() {
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'InboxDomain', 1000);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'InboxDomain', 500);
         this._inChannel = this.messageHubDomain.outChannelToInbox;
         this._groups = new LRUCache<IInboxGroup>(100);
         console.log('InboxDomain bootstraped')
