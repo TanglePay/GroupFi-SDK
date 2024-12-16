@@ -18,6 +18,8 @@ import { Mode, IIncludesAndExcludes, Profile } from '../types'
 import { SharedContext } from "./SharedContext";
 import { prefixedGroupIdToGroupId } from "groupfi-sdk-core";
 
+import { stripHexPrefix } from 'groupfi-sdk-utils'
+
 // serving as a facade for all message related domain, also in charge of bootstraping
 // after bootstraping, each domain should subscribe to the event, then push event into array for buffering, and 
 // triggering a handle function call to drain the array when there isn't any such function call in progress
@@ -352,10 +354,12 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     async clearUnreadCount(groupId: string) {
         groupId = prefixedGroupIdToGroupId(groupId)
+        groupId = stripHexPrefix(groupId)
         this.inboxDomain.clearUnreadCount(groupId)
     }
     async setUnreadCount(groupId: string, unreadCount: number, lastTimeReadLatestMessageTimestamp: number) {
         groupId = prefixedGroupIdToGroupId(groupId)
+        groupId = groupId = stripHexPrefix(groupId)
         this.inboxDomain.setUnreadCount(groupId, unreadCount, lastTimeReadLatestMessageTimestamp)
     }
     async enteringGroupByGroupId(groupId: string) {

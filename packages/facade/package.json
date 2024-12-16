@@ -28,7 +28,7 @@
   },
   "scripts": {
     "clean": "rimraf dist",
-    "remove_deps": "find . -name \"node_modules\" -type d -prune -exec rm -rf '{}' +", 
+    "remove_deps": "find . -name \"node_modules\" -type d -prune -exec rm -rf '{}' +",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
@@ -43,7 +43,7 @@
   },
   "dependencies": {
     "@ethereumjs/util": "^9.0.3",
-    "@iota/crypto.js": "^1.8.6",
+    "@iota/crypto.js": "2.0.0-rc.2",
     "@iota/iota.js": "2.0.0-rc.4",
     "@metamask/sdk": "^0.18.1",
     "ethers": "^6.11.1",

@@ -11,6 +11,9 @@ import { CombinedStorageService } from "../service/CombinedStorageService";
 // maintain <messageId, message> kv store, with in memory lru cache, plus local storage backup
 // only message id should be passed around other domains, message should be retrieved from this domain
 export const MessageStorePrefix = 'MessageHubDomain.message.';
+
+import { stripHexPrefix } from 'groupfi-sdk-utils'
+
 @Singleton
 export class MessageHubDomain implements ICycle, IRunnable {
 
@@ -49,6 +52,10 @@ export class MessageHubDomain implements ICycle, IRunnable {
         if (message) {
             // log message received
             console.log('MessageHubDomain message received', message);
+
+            // Due to historical reasons, sometimes the groupId has a prefix, and sometimes it doesn’t have the 0x prefix.
+            message.groupId = stripHexPrefix(message.groupId)
+
             // check if message already exists
             const messageInStore = await this.getMessage(message.messageId);
             if (messageInStore) {
