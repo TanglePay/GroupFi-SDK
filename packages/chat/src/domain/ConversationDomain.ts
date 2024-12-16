@@ -368,7 +368,7 @@ export class ConversationDomain implements ICycle, IRunnable {
     @Inject
     private messageHubDomain: MessageHubDomain;
     async bootstrap() {
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'ConversationDomain', 500);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'ConversationDomain', 200);
         this._inChannel = this.messageHubDomain.outChannelToConversation;
         this.eventSourceDomain.conversationDomainCmdChannel = this._cmdChannel;
         this.groupMemberDomain.conversationDomainCmdChannel = this._cmdChannel;
