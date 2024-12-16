@@ -8,6 +8,7 @@ import { IContext, ThreadHandler } from "../util/thread";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
 import { CombinedStorageService } from "../service/CombinedStorageService";
+import { sleepYield } from "groupfi-sdk-utils";
 // maintain <messageId, message> kv store, with in memory lru cache, plus local storage backup
 // only message id should be passed around other domains, message should be retrieved from this domain
 export const MessageStorePrefix = 'MessageHubDomain.message.';
@@ -60,7 +61,7 @@ export class MessageHubDomain implements ICycle, IRunnable {
 
             this._outChannelToInbox.push({...message});
             this._outChannelToConversation.push({...message});
-            
+            await sleepYield(); 
             return false;
         } else {
             return true;

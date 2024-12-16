@@ -10,6 +10,7 @@ import { LRUCache } from "../util/lru";
 import { CombinedStorageService } from "../service/CombinedStorageService";
 import { IInboxGroup, IInboxRecommendGroup } from "../types";
 import { DebouncedEventEmitter } from "../util/debounced";
+import { sleepYield } from "groupfi-sdk-utils";
 // maintain list of groupid, order matters
 // maintain state of each group, including group name, last message, unread count, etc
 // restore from local storage on start, then update on new message from inbox message hub domain
@@ -215,7 +216,10 @@ export class InboxDomain implements ICycle, IRunnable {
             }
             if (isDataChanged) {
                 this._events.emit(EventInboxUpdated);
+                // log event
+                console.log('InboxDomain event emitted' );
             }
+            await sleepYield(); 
             return false;
         } else {
             let dataChanged = false;

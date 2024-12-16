@@ -1,7 +1,7 @@
 import { Inject, Singleton } from "typescript-ioc";
 import { IAddPendingMessageToFrontCommand, ICommandBase, ICycle, IRunnable } from "../types";
 import { IMessage } from 'groupfi-sdk-core'
-import { bytesToHex, stripHexPrefix } from 'groupfi-sdk-utils'
+import { bytesToHex, sleepYield, stripHexPrefix } from 'groupfi-sdk-utils'
 import { ThreadHandler } from "../util/thread";
 import { Channel } from "../util/channel";
 import { MessageHubDomain } from "./MessageHubDomain";
@@ -356,6 +356,7 @@ export class ConversationDomain implements ICycle, IRunnable {
             console.log('ConversationDomain message received', message);
             const { groupId, messageId, timestamp} = message;
             await this.handleNewMessageToFirstPartGroupMessageList(groupId, messageId, timestamp);
+            await sleepYield(); 
             return false;
         } else {
             return true;
