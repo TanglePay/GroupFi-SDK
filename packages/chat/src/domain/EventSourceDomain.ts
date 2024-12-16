@@ -383,7 +383,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
         if(this._pendingMessageList.length === 0) {
             return true
         }
-        const messageOutputIds = this._pendingMessageList.map((item) => {
+        const messageOutputIds = this._pendingMessageList.slice(-50).map((item) => {
             return item.outputId
         })
         const cb = this.onMessageCompleted.bind(this)
