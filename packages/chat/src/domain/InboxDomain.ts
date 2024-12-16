@@ -197,23 +197,25 @@ export class InboxDomain implements ICycle, IRunnable {
                 timestamp,
                 name
             }
-
+            let isDataChanged = false;
             const isNewMessageEarlierThanCurrentLatestMessage = group.latestMessage !== undefined && timestamp < group.latestMessage.timestamp
             if(!isNewMessageEarlierThanCurrentLatestMessage) {
                 group.latestMessage = latestMessage
                 // this._moveGroupIdToFront(groupId)
                 this._adjustGroupIdsList(groupId, timestamp)
                 this._pendingGroupsUpdateGroupIds.add(groupId);
+                isDataChanged = true;
             }
             // update unread count if unread count is less than max and message's timestamp is later than last time read
             if (group.unreadCount <= MaxUnReadInInbox && timestamp > (group.lastTimeReadLatestMessageTimestamp??0)) {
                 // log unread count increase, timestamp, lastTimeReadLatestMessageTimestamp
                 group.unreadCount++
                 this._pendingGroupsUpdateGroupIds.add(groupId);
+                isDataChanged = true;
             }
-
-            // log message received
-            console.log('InboxDomain message received', messageStruct,group,this._groupIdsList);
+            if (isDataChanged) {
+                this._events.emit(EventInboxUpdated);
+            }
             return false;
         } else {
             let dataChanged = false;

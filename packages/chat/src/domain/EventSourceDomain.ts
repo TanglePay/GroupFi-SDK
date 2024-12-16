@@ -399,59 +399,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
         return false
     }
     _messageToBeConsumed: {message?:IMessage,outputId:string}[] = []
-    // process message to be consumed
-    async _processMessageToBeConsumed() {
-        if(this._messageToBeConsumed.length === 0) {
-            // log
-            return true
-        }
-        const payload = this._messageToBeConsumed.pop()
-        if(payload === undefined) {
-            return true
-        }
-        // log
-        console.log('EventSourceDomain _processMessageToBeConsumed', payload);
-        const {message,outputId} = payload
-        // filter muted message
-        const filteredMessagesToBeConsumed = []
-        if (message) {
-            const isWalletConnected = this._context.isWalletConnected
-            const filtered = isWalletConnected && await this.groupFiService.filterMutedMessage(message.groupId, message.sender)
-            if (!filtered) {
-                filteredMessagesToBeConsumed.push(message)
-            }
-        }
-        // update pending message group ids set
-        const groupIdsSize = this._pendingMessageGroupIdsSet.size
-        for (const message of filteredMessagesToBeConsumed) {
-            this._pendingMessageGroupIdsSet.add(message.groupId)
-        }
-        // if group ids size changed, persist
-        if(groupIdsSize !== this._pendingMessageGroupIdsSet.size) {
-            this._pendingMessageGroupIdsSetChanged = true
-        }
-        this.handleIncommingMessage(filteredMessagesToBeConsumed, false)
-        // remove message from pending
-        this._removeMessageFromPending(outputId)
 
-        // if no more pending message, persist
-        if (this._pendingMessageList.length === 0) {
-            await this._persistPendingMessageList()
-            // iterate pending message group ids set, and send command to ConversationDomain
-            for (const groupId of this._pendingMessageGroupIdsSet) {
-                const cmd = {
-                    type: 1,
-                    groupId
-                } as IConversationDomainCmdTrySplit
-                this._conversationDomainCmdChannel.push(cmd)
-            }
-            this._pendingMessageGroupIdsSet.clear()
-            await this._persistPendingMessageGroupIdsSet()
-        } else if((Date.now() - this._lastPersistPendingMessageListTime) > 3000) {
-            await this._persistPendingMessageList()
-        }
-        return false
-    }
 
     private async _attemptPersistPendingMessageList(): Promise<boolean> {
         let didPersist = false;
