@@ -227,6 +227,10 @@ export function sleep(ms: number) {
   }
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+// add sleep 0 for yield
+export function sleepYield() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+} 
 export function createBlobURLFromUint8Array(data: Uint8Array): string {
   // Convert Uint8Array to Blob
   const blob = new Blob([data], { type: 'application/octet-stream' });

@@ -19,7 +19,7 @@ import { MessageResponseItem,
 import { IConversationDomainCmdTrySplit } from "./ConversationDomain";
 import { OutputSendingDomain } from "./OutputSendingDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
-import { bytesToHex,objectId } from "groupfi-sdk-utils";
+import { bytesToHex,objectId, sleepYield } from "groupfi-sdk-utils";
 import { SharedContext } from "./SharedContext";
 import { IBasicOutput } from '@iota/iota.js'
 // act as a source of new message, notice message is write model, and there is only one source which is one addresse's inbox message
@@ -354,7 +354,6 @@ export class EventSourceDomain implements ICycle,IRunnable{
             }
 
 
-            // await this.handleIncommingMessage(messageList, false);
             this.handleIncommingEvent(eventList);
 
             if (nextToken) {
@@ -460,6 +459,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
     
                 // Handle the incoming message
                 this.handleIncommingMessage([message], false);
+                await sleepYield()  
             }
         }
     
