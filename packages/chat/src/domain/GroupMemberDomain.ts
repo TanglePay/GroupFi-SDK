@@ -4,7 +4,7 @@ import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageComman
 import { ThreadHandler } from "../util/thread";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
-import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged} from "groupfi-sdk-core";
+import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual} from "groupfi-sdk-core";
 import { objectId, bytesToHex, compareHex } from "groupfi-sdk-utils";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
@@ -153,7 +153,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             console.log('entering _actualRefreshForMeGroupConfigs', includesAndExcludes);
             let configs: GroupConfigPlus[] = []
             if (includesAndExcludes.length > 0) {
-                configs = await this.groupFiService.fetchForMeGroupConfigs({includes:includesAndExcludes});
+                configs = await this.groupFiService.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes:includesAndExcludes});
             }
             // const configs = await this.groupFiService.fetchForMeGroupConfigs({includes:includesAndExcludes});
             this._forMeGroupConfigs = configs;
@@ -745,13 +745,17 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
     isAnnouncementGroup(groupId: string) {
         groupId = this._gid(groupId);
-        const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => formeGroup.groupId === groupId)
+        // const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => formeGroup.groupId === groupId)
+        const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => isGroupIdEqual(groupId, formeGroup.groupId))
         if (isForMeGroup === undefined) {
             return false
         }
         const announcement = this._context._getProperty<IIncludesAndExcludes[]>('announcement')
         for (const group of announcement) {
-            if (isForMeGroup.dappGroupId === group.groupId) {
+            // if (isForMeGroup.dappGroupId === group.groupId) {
+            //     return true
+            // }
+            if (isGroupIdEqual(group.groupId, isForMeGroup.groupId)) {
                 return true
             }
         }
