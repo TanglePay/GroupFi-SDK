@@ -365,37 +365,26 @@ export class ConversationDomain implements ICycle, IRunnable {
                     
                     const batchResults = await this.groupFiService.fetchPublicMessageOutputListBatch(batchParams);
                     
-                    // Merge results in round-robin fashion from old to new
+                    // Merge results and add groupId to each item
                     const mergedItems: any[] = [];
-                    const resultPointers = batchResults.map(result => ({
-                        items: result ? result.items : [],
-                        index: result ? result.items.length - 1 : -1
-                    }));
-                    
-                    let hasMoreItems = true;
-                    while (hasMoreItems) {
-                        hasMoreItems = false;
-                        for (let i = 0; i < resultPointers.length; i++) {
-                            const pointer = resultPointers[i];
-                            if (pointer.index >= 0) {
-                                mergedItems.unshift(pointer.items[pointer.index]);
-                                pointer.index--;
-                                hasMoreItems = true;
-                            }
-                        }
-                    }
-
-                    // Process token updates for each group
                     batchResults.forEach((result, index) => {
                         if (!result) return;
                         const groupId = groupIds[index];
-                        const { startToken, endToken } = result;
                         
+                        // Add items with groupId
+                        result.items.forEach(item => {
+                            mergedItems.push({
+                                ...item,
+                                groupId
+                            });
+                        });
+
+                        // Update tokens for this group
+                        const { startToken, endToken } = result;
                         const updateTokenPair = {
                             max: startToken,
                             min: endToken
                         };
-                        
                         this.groupMemberDomain.tryUpdateGroupMaxMinToken(groupId, updateTokenPair);
                     });
 

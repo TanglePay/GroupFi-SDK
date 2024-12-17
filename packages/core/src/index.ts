@@ -336,7 +336,7 @@ class GroupFiSDK {
         size?: number
     }>): Promise<PublicMessageBatchResponse[]> {
         try {
-            const url = `${this.getUrl()}/api/groupfi/v1/publicitems/batch`
+            const url = `${this.getUrl()}/api/groupfi/v1/publicitemsbatch`
             
             // Prepare request params
             const requestParams = params.map(param => ({
