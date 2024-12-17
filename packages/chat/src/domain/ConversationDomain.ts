@@ -35,6 +35,10 @@ export interface IConversationDomainCmdTrySplit extends ICommandBase<1> {
 export interface IConversationDomainCmdFetchPublicGroupMessage extends ICommandBase<2> {
     groupId: string;
 }
+// Add new interface for batch command
+export interface IConversationDomainCmdFetchPublicGroupMessageBatch extends ICommandBase<3> {
+    groupIds: string[];
+}
 @Singleton
 export class ConversationDomain implements ICycle, IRunnable {
     @Inject
@@ -345,6 +349,52 @@ export class ConversationDomain implements ICycle, IRunnable {
                     // log max min
                     console.log('ConversationDomainCmdFetchPublicGroupMessage', {max,min});
                     await this._fetchPublicMessageOutputList({groupId,direction:'head',size:1000,endToken:max});
+                    break;
+                }
+                case 3: {
+                    const { groupIds } = cmd as IConversationDomainCmdFetchPublicGroupMessageBatch;
+                    const batchParams = await Promise.all(groupIds.map(async groupId => {
+                        const { max, min } = await this.groupMemberDomain.getGroupMaxMinToken(groupId) || {};
+                        return {
+                            groupId,
+                            direction: 'head' as const,
+                            size: 1000,
+                            endToken: max
+                        };
+                    }));
+                    
+                    const batchResults = await this.groupFiService.fetchPublicMessageOutputListBatch(batchParams);
+                    
+                    // Merge results and add groupId to each item
+                    const mergedItems: any[] = [];
+                    batchResults.forEach((result, index) => {
+                        if (!result) return;
+                        const groupId = groupIds[index];
+                        
+                        // Add items with groupId
+                        result.items.forEach(item => {
+                            mergedItems.push({
+                                ...item,
+                                groupId
+                            });
+                        });
+
+                        // Update tokens for this group
+                        const { startToken, endToken } = result;
+                        const updateTokenPair = {
+                            max: startToken,
+                            min: endToken
+                        };
+                        this.groupMemberDomain.tryUpdateGroupMaxMinToken(groupId, updateTokenPair);
+                    });
+
+                    // Send single command with merged results
+                    if (mergedItems.length > 0) {
+                        this.eventSourceDomain.eventSourceDomainCmdChannel.push({
+                            type: 'addPendingMessageToFront',
+                            oldToNew: mergedItems
+                        } as IAddPendingMessageToFrontCommand);
+                    }
                     break;
                 }
             }

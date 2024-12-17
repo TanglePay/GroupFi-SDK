@@ -1,6 +1,6 @@
 import CryptoJS from 'crypto-js';
 import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'groupfi-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion, MessageGroupMetaKeyOmited, INodeProvider } from './types';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion, MessageGroupMetaKeyOmited, INodeProvider, PublicMessageBatchResponse } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -310,7 +310,10 @@ class GroupFiSDK {
     // fetch publicitems output list
     async fetchPublicMessageOutputList(groupId:string, direction:'head'|'tail', startToken?:string, endToken?:string, size:number=10) {
         try {
-            const params = {groupId:this._addHexPrefixIfAbsent(groupId),direction, size,
+            const params = {
+                groupId: this._addHexPrefixIfAbsent(groupId),
+                direction, 
+                size,
                 startToken: startToken && this._addHexPrefixIfAbsent(startToken),
                 endToken: endToken && this._addHexPrefixIfAbsent(endToken)
             }
@@ -323,6 +326,47 @@ class GroupFiSDK {
             console.log('error',error)
         }
     }
+
+    // Add the new batch request function
+    async fetchPublicMessageOutputListBatch(params: Array<{
+        groupId: string
+        direction: 'head' | 'tail'
+        startToken?: string
+        endToken?: string
+        size?: number
+    }>): Promise<PublicMessageBatchResponse[]> {
+        try {
+            const url = `${this.getUrl()}/api/groupfi/v1/publicitemsbatch`
+            
+            // Prepare request params
+            const requestParams = params.map(param => ({
+                groupId: this._addHexPrefixIfAbsent(param.groupId),
+                direction: param.direction,
+                size: param.size || 10,
+                startToken: param.startToken && this._addHexPrefixIfAbsent(param.startToken),
+                endToken: param.endToken && this._addHexPrefixIfAbsent(param.endToken)
+            }))
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestParams)
+            })
+
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`)
+            }
+
+            const data = await res.json() as PublicMessageBatchResponse[]
+            return data
+        } catch (error) {
+            console.log('fetchPublicMessageOutputListBatch error', error)
+            throw error
+        }
+    }
+
     async fetchIpfsOrigins(address:string):Promise<string[]>{
         const url = `${NFT_CONFIG_URL}/nft.json?v=${new Date().getTime()}`
         const res = await fetch(url)

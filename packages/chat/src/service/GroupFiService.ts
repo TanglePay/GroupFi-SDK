@@ -13,7 +13,8 @@ import {
   PublicItemsResponse,
   IIncludesAndExcludes,
   MessageResponseItemPlus,
-  GroupConfigPlus
+  GroupConfigPlus,
+  PublicMessageBatchResponse
 } from 'groupfi-sdk-core'
 // IMMessage <-> UInt8Array
 // IRecipient <-> UInt8Array
@@ -26,7 +27,6 @@ import {
   StorageAdaptor,
   Profile
 } from '../types'
-import { logAllMethods } from 'groupfi-sdk-utils'
 
 @Singleton
 export class GroupFiService {
@@ -602,5 +602,15 @@ export class GroupFiService {
 
   async batchGetProfileFromNameMappingCache(addressList: string[]) {
     return await GroupFiSDKFacade.batchGetProfileFromNameMappingCache(addressList)
+  }
+
+  async fetchPublicMessageOutputListBatch(params: Array<{
+    groupId: string,
+    direction: 'head' | 'tail',
+    startToken?: string,
+    endToken?: string,
+    size?: number
+  }>): Promise<PublicMessageBatchResponse[]> {
+    return await GroupFiSDKFacade.fetchPublicMessageOutputListBatch(params)
   }
 }

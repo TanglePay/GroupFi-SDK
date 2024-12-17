@@ -83,6 +83,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
     private _pendingMessageGroupIdsSet: Set<string> = new Set<string>()
     // dirty flag for _pendingMessageGroupIdsSet
     private _pendingMessageGroupIdsSetChanged = false
+    private _isFirstConsume: boolean = true;
     async _loadPendingMessageList() {
         const pendingMessageList = await this.localStorageRepository.get(pendingMessageListKey)
         if(pendingMessageList !== null) {
@@ -218,13 +219,13 @@ export class EventSourceDomain implements ICycle,IRunnable{
         }
         const isCatchUpFromApi =  await this.catchUpFromApi();
         if (isCatchUpFromApi) return false;
+        const consumePendingRes = await this._consumeMessageFromPending()
+        if(!consumePendingRes) return false
         // _processMessageToBeConsumed
         const didPersist = await this._attemptPersistPendingMessageList()
         if (didPersist) return false;
         const isPersistPendingGroupIdsSet = await this._processPendingMessageGroupIdsSetChanged()
         if(isPersistPendingGroupIdsSet) return false
-        const consumePendingRes = await this._consumeMessageFromPending()
-        if(!consumePendingRes) return false
         return true;
     }
 
@@ -382,20 +383,65 @@ export class EventSourceDomain implements ICycle,IRunnable{
         if(this._pendingMessageList.length === 0) {
             return true
         }
-        const messageOutputIds = this._pendingMessageList.slice(-50).map((item) => {
-            return item.outputId
-        })
-        const cb = this.onMessageCompleted.bind(this)
-        const { failedMessageOutputIds } = await this.groupFiService.batchConvertOutputIdsToMessages(messageOutputIds, cb)
-        // log outputId that output not found in one batch, log count of messages as well
-        console.log('EventSourceDomain _consumeMessageFromPending missedMessageOutputIds', failedMessageOutputIds);
+        
+        const sliceSize = this._isFirstConsume ? 10 : 50;
+        
+        // Group messages by groupId
+        const groupedMessages: { [key: string]: MessageResponseItem[] } = {};
+        const noGroupIdMessages: MessageResponseItem[] = [];
+        
+        // Iterate through list from end to start to maintain order
+        for(let i = this._pendingMessageList.length - 1; i >= 0; i--) {
+            const item = this._pendingMessageList[i];
+            if(item.groupId) {
+                if(!groupedMessages[item.groupId]) {
+                    groupedMessages[item.groupId] = [];
+                }
+                groupedMessages[item.groupId].push(item);
+            } else {
+                noGroupIdMessages.push(item);
+            }
+        }
 
-        // log _pendingMessageList before remove
+        // Only shuffle no-groupId messages during first consume
+        if (this._isFirstConsume) {
+            for(let i = noGroupIdMessages.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [noGroupIdMessages[i], noGroupIdMessages[j]] = [noGroupIdMessages[j], noGroupIdMessages[i]];
+            }
+        }
+
+        // Round-robin selection
+        const mergedItems: MessageResponseItem[] = [];
+        const chunks = [...Object.values(groupedMessages), noGroupIdMessages].filter(chunk => chunk.length > 0);
+        
+        let currentIndex = 0;
+        while(mergedItems.length < sliceSize && chunks.some(chunk => chunk.length > 0)) {
+            // Use modulo for rotation instead of reset check
+            const chunkIndex = currentIndex % chunks.length;
+            
+            const currentChunk = chunks[chunkIndex];
+            if(currentChunk.length > 0) {
+                mergedItems.unshift(currentChunk.pop()!);
+            }
+            
+            currentIndex++;
+        }
+
+        const messageOutputIds = mergedItems.map(item => item.outputId);
+        
+        const cb = this.onMessageCompleted.bind(this);
+        const { failedMessageOutputIds } = await this.groupFiService.batchConvertOutputIdsToMessages(messageOutputIds, cb);
+        
+        this._isFirstConsume = false;
+        
+        console.log('EventSourceDomain _consumeMessageFromPending missedMessageOutputIds', failedMessageOutputIds);
         console.log('EventSourceDomain _consumeMessageFromPending _pendingMessageList before remove', this._pendingMessageList);
-        this._removeMessageFromPendingBatch(failedMessageOutputIds)
-        // log _pendingMessageList after remove
+        
+        this._removeMessageFromPendingBatch(failedMessageOutputIds);
+        
         console.log('EventSourceDomain _consumeMessageFromPending _pendingMessageList after remove', this._pendingMessageList);
-        return false
+        return false;
     }
     _messageToBeConsumed: {message?:IMessage,outputId:string}[] = []
 
@@ -491,8 +537,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
         })
     }
     async switchAddress() {
-        try{
-
+        try {
+            this._isFirstConsume = true; // Reset the marker on address switch
             const [anchor] = await Promise.all([
                 this.localStorageRepository.get(anchorKey), 
                 this._loadPendingMessageList(), 
@@ -501,7 +547,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
             if(anchor) {
                 this.anchor = anchor
             }
-        }catch(error) {
+        } catch(error) {
             console.log('EventSourceDomain switch address error:', error)
         }
     }
