@@ -9,7 +9,7 @@ import { objectId, bytesToHex, compareHex } from "groupfi-sdk-utils";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
 import EventEmitter from "events";
-import { IConversationDomainCmdFetchPublicGroupMessage } from "./ConversationDomain";
+import { IConversationDomainCmdFetchPublicGroupMessage, IConversationDomainCmdFetchPublicGroupMessageBatch } from "./ConversationDomain";
 import { SharedContext } from "./SharedContext";
 export const StoragePrefixGroupMinMaxToken = 'GroupMemberDomain.groupMinMaxToken';
 export interface IGroupMember {
@@ -527,23 +527,31 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
     async _checkForMeGroupIdsLastUpdateTimestamp() {
         const now = Date.now();
+        const groupIdsToUpdate: string[] = [];
+
         for (const groupId in this._forMeGroupIdsLastUpdateTimestamp) {
             if (now - this._forMeGroupIdsLastUpdateTimestamp[groupId] > 60 * 1000) {
                 const isGroupPublic = await this.isGroupPublic(groupId);
                 const isGroupMarked = this._markedGroupIds.has(groupId);
+                
                 // log groupId, isGroupPublic, isGroupMarked
-                console.log(groupId,isGroupPublic,isGroupMarked);
+                console.log(groupId, isGroupPublic, isGroupMarked);
+                
                 if (isGroupPublic && !isGroupMarked) {
-                    const cmd:IConversationDomainCmdFetchPublicGroupMessage = {
-                        type: 2,
-                        groupId
-                    };
-                    // log cmd
-                    console.log('_checkForMeGroupIdsLastUpdateTimestamp cmd',cmd);
-                    this._conversationDomainCmdChannel.push(cmd);
+                    groupIdsToUpdate.push(groupId);
                 }
                 this._forMeGroupIdsLastUpdateTimestamp[groupId] = now;
             }
+        }
+
+        if (groupIdsToUpdate.length > 0) {
+            const cmd: IConversationDomainCmdFetchPublicGroupMessageBatch = {
+                type: 3,
+                groupIds: groupIdsToUpdate
+            };
+            // log cmd
+            console.log('_checkForMeGroupIdsLastUpdateTimestamp batch cmd', cmd);
+            this._conversationDomainCmdChannel.push(cmd);
         }
     }
     on(key: string, callback: (event: any) => void) {

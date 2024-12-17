@@ -6,7 +6,7 @@ import { EventSourceDomain } from "./EventSourceDomain";
 import { UserProfileDomain } from "./UserProfileDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
 
-import { ICycle, IFetchPublicGroupMessageCommand, StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
+import { ICycle,  StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
 import { EventGroupMemberChanged, GroupFiSDKObj, IMessage, isGroupIdEqual } from "groupfi-sdk-core";

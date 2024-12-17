@@ -83,6 +83,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
     private _pendingMessageGroupIdsSet: Set<string> = new Set<string>()
     // dirty flag for _pendingMessageGroupIdsSet
     private _pendingMessageGroupIdsSetChanged = false
+    private _isFirstConsume: boolean = true;
     async _loadPendingMessageList() {
         const pendingMessageList = await this.localStorageRepository.get(pendingMessageListKey)
         if(pendingMessageList !== null) {
@@ -382,11 +383,19 @@ export class EventSourceDomain implements ICycle,IRunnable{
         if(this._pendingMessageList.length === 0) {
             return true
         }
-        const messageOutputIds = this._pendingMessageList.slice(-50).map((item) => {
+        
+        // Use -10 for first consume, -50 for subsequent consumes
+        const sliceSize = this._isFirstConsume ? -10 : -50;
+        const messageOutputIds = this._pendingMessageList.slice(sliceSize).map((item) => {
             return item.outputId
         })
+        
         const cb = this.onMessageCompleted.bind(this)
         const { failedMessageOutputIds } = await this.groupFiService.batchConvertOutputIdsToMessages(messageOutputIds, cb)
+        
+        // Set first consume flag to false after first execution
+        this._isFirstConsume = false;
+        
         // log outputId that output not found in one batch, log count of messages as well
         console.log('EventSourceDomain _consumeMessageFromPending missedMessageOutputIds', failedMessageOutputIds);
 
@@ -491,8 +500,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
         })
     }
     async switchAddress() {
-        try{
-
+        try {
+            this._isFirstConsume = true; // Reset the marker on address switch
             const [anchor] = await Promise.all([
                 this.localStorageRepository.get(anchorKey), 
                 this._loadPendingMessageList(), 
@@ -501,7 +510,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
             if(anchor) {
                 this.anchor = anchor
             }
-        }catch(error) {
+        } catch(error) {
             console.log('EventSourceDomain switch address error:', error)
         }
     }

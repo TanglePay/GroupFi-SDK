@@ -22,8 +22,10 @@ import {
   ImInboxEventTypeProfileChangedEvent,
   GroupConfigPlus,
   NodeManager,
-  prefixedGroupIdToGroupId
-} from 'groupfi-sdk-core';
+  prefixedGroupIdToGroupId,
+  PublicMessageBatchResponse,
+}   from 'groupfi-sdk-core';
+
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
 import {
@@ -1701,6 +1703,30 @@ class GroupFiSDKFacade {
       name: GroupFiSDKObj.formatProfileName(profile.chainId, profile.name)
     }))
     return {profileList: formatedProfileList, profileToBeUpdateOnChain }
+  }
+
+  async fetchPublicMessageOutputListBatch(params: Array<{
+    groupId: string,
+    direction: 'head' | 'tail',
+    startToken?: string,
+    endToken?: string, 
+    size?: number
+  }>): Promise<PublicMessageBatchResponse[]> {
+    try {
+      // Convert params to ensure groupIds have hex prefix
+      const formattedParams = params.map(param => ({
+        ...param,
+        groupId: GroupFiSDKObj._addHexPrefixIfAbsent(param.groupId),
+        startToken: param.startToken && GroupFiSDKObj._addHexPrefixIfAbsent(param.startToken),
+        endToken: param.endToken && GroupFiSDKObj._addHexPrefixIfAbsent(param.endToken)
+      }));
+
+      const res = await GroupFiSDKObj.fetchPublicMessageOutputListBatch(formattedParams);
+      return res;
+    } catch (error) {
+      console.log('fetchPublicMessageOutputListBatch error', error);
+      throw error;
+    }
   }
 }
 
