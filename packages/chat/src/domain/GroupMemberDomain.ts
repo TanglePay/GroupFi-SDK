@@ -151,9 +151,12 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             // log entering _actualRefreshForMeGroupConfigs
             const includesAndExcludes = this._context.includesAndExcludes;
             console.log('entering _actualRefreshForMeGroupConfigs', includesAndExcludes);
+            const start = Date.now()
+            console.log('===>test start _actualRefreshForMeGroupConfigs', start)
             let configs: GroupConfigPlus[] = []
             if (includesAndExcludes.length > 0) {
                 configs = await this.groupFiService.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes:includesAndExcludes});
+                console.log('===>test end _actualRefreshForMeGroupConfigs cost', Date.now(), Date.now() - start)
             }
             // const configs = await this.groupFiService.fetchForMeGroupConfigs({includes:includesAndExcludes});
             this._forMeGroupConfigs = configs;
