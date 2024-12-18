@@ -672,24 +672,25 @@ class GroupFiSDKFacade {
       return configs
     }
 
-    const evmGroupConfigsWithIsMember: Array<GroupConfigPlus & {isMember?: boolean}> = []
+    
+    let evmGroupConfigsWithIsMember: Array<GroupConfigPlus & {isMember?: boolean}> = configs
 
     const privateGroupConfigs = configs.filter(config => {
-      if (config.isPublic) {
-        evmGroupConfigsWithIsMember.push(config)
-      }
       return !config.isPublic
     })
 
     const isGroupMemberList = await Promise.all(privateGroupConfigs.map(config => this.isGroupMember(config.groupId)))
 
-    for(let i = 0; i< privateGroupConfigs.length;i++) {
-      evmGroupConfigsWithIsMember.push({
-        ...privateGroupConfigs[i],
-        isMember: isGroupMemberList[i]
-      })
-    }
-
+    let idx = 0
+    evmGroupConfigsWithIsMember = evmGroupConfigsWithIsMember.map(config => {
+      if(config.isPublic) {
+        return config
+      }
+      config.isMember = isGroupMemberList[idx]
+      idx++
+      return config
+    })
+    
     return evmGroupConfigsWithIsMember
   }
   // fetchForMeGroupConfigs
