@@ -486,9 +486,10 @@ export class EventSourceDomain implements ICycle,IRunnable{
     
             // Filter muted messages
             const isWalletConnected = this._context.isWalletConnected;
+            const isLoggedIn = this._context.isLoggedIn;
             let shouldProcessMessage = true;
     
-            if (isWalletConnected) {
+            if (isWalletConnected && isLoggedIn) {
                 const isMuted = await this.groupFiService.filterMutedMessage(message.groupId, message.sender);
                 shouldProcessMessage = !isMuted;
             }
