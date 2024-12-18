@@ -311,7 +311,7 @@ export type MessageResponseItem = {
     outputId: string
     token: string
     timestamp: number
-    groupId?: string
+    groupId: string
 }
 export type MessageResponseItemPlus = MessageResponseItem & { output?: IBasicOutput; address: string }
 export type PublicItemsResponse = {

@@ -388,46 +388,36 @@ export class EventSourceDomain implements ICycle,IRunnable{
         
         // Group messages by groupId
         const groupedMessages: { [key: string]: MessageResponseItem[] } = {};
-        const noGroupIdMessages: MessageResponseItem[] = [];
         
-        // Iterate through list from end to start to maintain order
+        // Iterate through list from end to start to get newest messages first
         for(let i = this._pendingMessageList.length - 1; i >= 0; i--) {
             const item = this._pendingMessageList[i];
-            if(item.groupId) {
-                if(!groupedMessages[item.groupId]) {
-                    groupedMessages[item.groupId] = [];
-                }
-                groupedMessages[item.groupId].push(item);
-            } else {
-                noGroupIdMessages.push(item);
+            if(!groupedMessages[item.groupId]) {
+                groupedMessages[item.groupId] = [];
             }
+            groupedMessages[item.groupId].push(item); // Newest messages will be at start of array
         }
 
-        // Only shuffle no-groupId messages during first consume
-        if (this._isFirstConsume) {
-            for(let i = noGroupIdMessages.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [noGroupIdMessages[i], noGroupIdMessages[j]] = [noGroupIdMessages[j], noGroupIdMessages[i]];
-            }
-        }
-
-        // Round-robin selection
+        // Round-robin selection from each group
         const mergedItems: MessageResponseItem[] = [];
-        const chunks = [...Object.values(groupedMessages), noGroupIdMessages].filter(chunk => chunk.length > 0);
+        const groups = Object.values(groupedMessages).filter(group => group.length > 0);
         
         let currentIndex = 0;
-        while(mergedItems.length < sliceSize && chunks.some(chunk => chunk.length > 0)) {
-            // Use modulo for rotation instead of reset check
-            const chunkIndex = currentIndex % chunks.length;
+        while(mergedItems.length < sliceSize && groups.some(group => group.length > 0)) {
+            const groupIndex = currentIndex % groups.length;
+            const currentGroup = groups[groupIndex];
             
-            const currentChunk = chunks[chunkIndex];
-            if(currentChunk.length > 0) {
-                mergedItems.unshift(currentChunk.pop()!);
+            if(currentGroup.length > 0) {
+                // Take from start of array where newest messages are
+                mergedItems.push(currentGroup.shift()!);
             }
             
             currentIndex++;
         }
-
+        // for first consume, log the groups and mergedItems in one console.log 
+        if(this._isFirstConsume) {
+            console.log('EventSourceDomain _consumeMessageFromPending groups', groups, 'mergedItems', mergedItems); 
+        }   
         const messageOutputIds = mergedItems.map(item => item.outputId);
         
         const cb = this.onMessageCompleted.bind(this);
