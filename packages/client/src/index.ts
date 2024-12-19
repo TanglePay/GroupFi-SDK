@@ -82,6 +82,12 @@ interface PendingTransaction {
     outputs: string[];
     timestamp: number;
   }
+// Add new interface for storing messages with their order
+interface OrderedMessage {
+    iMessage: IMessage;
+    messageOutputId: string;
+    originalIndex: number;
+}
 //TODO tune concurrency
 const httpCallLimit = 5;
 const consolidateBatchSize = 29;
@@ -1242,8 +1248,17 @@ export class GroupfiSdkClient {
         try {
             // Step 1: Batch convert outputIds to outputs
             const outputIdToOutput = await this.batchOutputIdToOutput(outputIds);
-            const foundOutputIds = outputIdToOutput.map(({ outputIdHex }) => outputIdHex);
-    
+
+            // Create a map for quick lookup of output data by outputId
+            const outputMap = new Map(outputIdToOutput.map(item => [item.outputIdHex, item]));
+
+            // Sort the outputs according to original outputIds order
+            const sortedOutputs = outputIds
+                .filter(outputId => outputMap.has(outputId))
+                .map(outputId => outputMap.get(outputId)!);
+
+            const foundOutputIds = sortedOutputs.map(({ outputIdHex }) => outputIdHex);
+
             // Calculate the diff to find the outputIds that were not found
             const initialMissedMessageOutputIds = outputIds.filter(outputId => !foundOutputIds.includes(outputId));
             failedMessageOutputIds.push(...initialMissedMessageOutputIds);
@@ -1252,14 +1267,27 @@ export class GroupfiSdkClient {
             console.log('batchConvertOutputIdsToMessages Step 1 counts, outputIds count:', outputIds.length, 'foundOutputIds count:', foundOutputIds.length, 'failedMessageOutputIds count:', failedMessageOutputIds.length);
     
             // Step 2: Loop through the outputs and attempt to deserialize each message without extra
-            const sharedOutputIdToMsgMap: { [sharedOutputId: string]: Array<{ imMessage: IMMessage, data: Uint8Array, senderAddressBytes: Uint8Array,name?:string, avatar?: string, messageId: string, messageOutputId: string, sender: string, milestoneTimestamp: number }> } = {};
+            const sharedOutputIdToMsgMap: { 
+                [sharedOutputId: string]: Array<{ 
+                    imMessage: IMMessage, 
+                    data: Uint8Array, 
+                    senderAddressBytes: Uint8Array,
+                    name?: string, 
+                    avatar?: string, 
+                    messageId: string, 
+                    messageOutputId: string, 
+                    sender: string, 
+                    milestoneTimestamp: number,
+                    originalIndex: number  // Add originalIndex to track order
+                }> 
+            } = {};
             let totalMessagesNeedingSharedOutput = 0;
             
             
             // Array to hold the intermediate results
             const intermediateResults: IntermediateResult[] = [];
             
-            for (const { outputIdHex, output, milestoneTimestamp } of outputIdToOutput) {
+            for (const { outputIdHex, output, milestoneTimestamp } of sortedOutputs) {
                 try {
                     // Cast the output to IBasicOutput
                     const basicOutput = output as IBasicOutput;
@@ -1306,7 +1334,7 @@ export class GroupfiSdkClient {
                 }
             }
 
-            for (const { outputIdHex, senderAddressBytes, name, avatar, data, senderAddress: sender, milestoneTimestamp } of intermediateResults) {
+            for (const [index, { outputIdHex, senderAddressBytes, name, avatar, data, senderAddress: sender, milestoneTimestamp }] of intermediateResults.entries()) {
                 try {
                     // Get the messageId
                     const messageId = GroupFiSDKObj.getMessageId(data, senderAddressBytes);
@@ -1319,7 +1347,18 @@ export class GroupfiSdkClient {
                         if (!sharedOutputIdToMsgMap[sharedOutputId]) {
                             sharedOutputIdToMsgMap[sharedOutputId] = [];
                         }
-                        sharedOutputIdToMsgMap[sharedOutputId].push({ imMessage, data, senderAddressBytes, name, avatar, messageId, messageOutputId: outputIdHex, sender, milestoneTimestamp});
+                        sharedOutputIdToMsgMap[sharedOutputId].push({ 
+                            imMessage, 
+                            data, 
+                            senderAddressBytes, 
+                            name, 
+                            avatar, 
+                            messageId, 
+                            messageOutputId: outputIdHex, 
+                            sender, 
+                            milestoneTimestamp,
+                            originalIndex: index  // Store the original index
+                        });
                         totalMessagesNeedingSharedOutput++;
                     } else {
                         const iMessage = this.convertIMMessageToIMessage({imMessage, messageId, sender, milestoneTimestamp, name, avatar});
@@ -1339,18 +1378,32 @@ export class GroupfiSdkClient {
             if (totalMessagesNeedingSharedOutput > 0) {
                 // Fetch salts from cache first
                 const { results, cacheMissedIds: stillMissingSaltSharedIds } = await this._batchFetchSaltFromCache(Object.keys(sharedOutputIdToMsgMap));
-                // Log step 3 counts, salts fetched from cache count, stillMissingSaltSharedIds count
-                console.log('batchConvertOutputIdsToMessages Step 3 counts, salts fetched from cache count:', results.length, 'stillMissingSaltSharedIds count:', stillMissingSaltSharedIds.length);
-    
+                
+                // Array to store ordered messages for each batch
+                let orderedMessages: OrderedMessage[] = [];
+
                 // Complete the messages using the cached salts
                 for (const { outputId, salt } of results) {
                     const messageList = sharedOutputIdToMsgMap[outputId];
-                    for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, avatar, sender, milestoneTimestamp} of messageList) {
+                    
+                    for (const { imMessage, messageId, messageOutputId, name, avatar, sender, milestoneTimestamp, originalIndex } of messageList) {
                         try {
                             const completedIMMessage = GroupFiSDKObj.completeMessageWithSalt(imMessage, salt);
-                            // const sender = ''; // You'll need to determine the sender value based on your context
-                            const iMessage = this.convertIMMessageToIMessage({imMessage: completedIMMessage, messageId, milestoneTimestamp, sender,name, avatar});
-                            await onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
+                            const iMessage = this.convertIMMessageToIMessage({
+                                imMessage: completedIMMessage, 
+                                messageId, 
+                                milestoneTimestamp, 
+                                sender,
+                                name, 
+                                avatar
+                            });
+                            
+                            // Store message with its order instead of immediate processing
+                            orderedMessages.push({
+                                iMessage,
+                                messageOutputId,
+                                originalIndex
+                            });
                         } catch (error) {
                             console.log('Error converting completed message to IMessage:', error);
                             failedMessageOutputIds.push(messageOutputId);
@@ -1358,17 +1411,20 @@ export class GroupfiSdkClient {
                         }
                     }
                 }
-    
-                // Log step 3 counts, completedMessages count after using cache, stillMissingSaltSharedIds count
-                console.log('batchConvertOutputIdsToMessages Step 3 counts, completedMessages count after using cache:', stillMissingSaltSharedIds.length);
-    
-                // Fetch missing shared outputs and then the salts
+                // Sort all collected messages by original index
+                orderedMessages.sort((a, b) => a.originalIndex - b.originalIndex);
+
+                // Process messages in order
+                for (const { iMessage, messageOutputId } of orderedMessages) {
+                    await onMessageCompleted(iMessage, messageOutputId);
+                }
+                orderedMessages = []    
+                // Process missing shared outputs
                 if (stillMissingSaltSharedIds.length > 0) {
                     const sharedOutputResults = await this.batchOutputIdToOutput(stillMissingSaltSharedIds);
                     const sharedOutputIdsFound = sharedOutputResults.map(({ outputIdHex }) => outputIdHex);
-    
                     const sharedNotFoundIds = stillMissingSaltSharedIds.filter(id => !sharedOutputIdsFound.includes(id));
-    
+
                     for (const { outputIdHex, output } of sharedOutputResults) {
                         const basicOutput = output as IBasicOutput;
                         let salt = '';
@@ -1383,13 +1439,26 @@ export class GroupfiSdkClient {
                             });
                             continue;
                         }
+
                         const messageList = sharedOutputIdToMsgMap[outputIdHex];
-                        for (const { imMessage, messageId, senderAddressBytes, messageOutputId, name, avatar, sender, milestoneTimestamp } of messageList) {
+                        for (const { imMessage, messageId, messageOutputId, name, avatar, sender, milestoneTimestamp, originalIndex } of messageList) {
                             try {
                                 const completedIMMessage = GroupFiSDKObj.completeMessageWithSalt(imMessage, salt);
-                                // const sender = ''; // You'll need to determine the sender value based on your context
-                                const iMessage = this.convertIMMessageToIMessage({imMessage: completedIMMessage, messageId, milestoneTimestamp, sender, name, avatar});
-                                await onMessageCompleted(iMessage, messageOutputId); // Trigger the callback immediately
+                                const iMessage = this.convertIMMessageToIMessage({
+                                    imMessage: completedIMMessage, 
+                                    messageId, 
+                                    milestoneTimestamp, 
+                                    sender,
+                                    name, 
+                                    avatar
+                                });
+                                
+                                // Store message with its order
+                                orderedMessages.push({
+                                    iMessage,
+                                    messageOutputId,
+                                    originalIndex
+                                });
                             } catch (error) {
                                 console.log('Error converting completed message to IMessage:', error);
                                 failedMessageOutputIds.push(messageOutputId);
@@ -1397,10 +1466,7 @@ export class GroupfiSdkClient {
                             }
                         }
                     }
-    
-                    // Log step 3 counts, completedMessages count after fetching missing shared outputs, sharedNotFoundIds count
-                    console.log('batchConvertOutputIdsToMessages Step 3 counts, completedMessages count after fetching missing shared outputs:', sharedNotFoundIds.length);
-    
+                    // Handle not found shared outputs
                     for (const sharedOutputId of sharedNotFoundIds) {
                         console.log(`Shared output not found for sharedOutputId: ${sharedOutputId}`);
                         const messageList = sharedOutputIdToMsgMap[sharedOutputId];
@@ -1408,6 +1474,14 @@ export class GroupfiSdkClient {
                             failedMessageOutputIds.push(messageOutputId);
                         });
                     }
+                }
+
+                // Sort all collected messages by original index
+                orderedMessages.sort((a, b) => a.originalIndex - b.originalIndex);
+
+                // Process messages in order
+                for (const { iMessage, messageOutputId } of orderedMessages) {
+                    await onMessageCompleted(iMessage, messageOutputId);
                 }
             }
         } catch (error) {
