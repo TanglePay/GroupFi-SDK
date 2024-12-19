@@ -372,8 +372,8 @@ export class ConversationDomain implements ICycle, IRunnable {
                         const groupId = groupIds[index];
                         
                         // Add items with groupId
-                        
-                        result.items.reverse().forEach(item => {
+                        // sort by timestamp, old to new    
+                        result.items.sort((a, b) => a.timestamp - b.timestamp).forEach(item => {
                             mergedItems.push({
                                 ...item,
                                 groupId
