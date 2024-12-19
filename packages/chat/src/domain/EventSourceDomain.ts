@@ -416,7 +416,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
         }
         // for first consume, log the groups and mergedItems in one console.log 
         if(this._isFirstConsume) {
-            console.log('EventSourceDomain _consumeMessageFromPending groups', groups, 'mergedItems', mergedItems); 
+            console.log('EventSourceDomain _consumeMessageFromPending groups', groups, 'mergedItems', mergedItems, 'groupedMessages', groupedMessages);     
         }   
         const messageOutputIds = mergedItems.map(item => item.outputId);
         
