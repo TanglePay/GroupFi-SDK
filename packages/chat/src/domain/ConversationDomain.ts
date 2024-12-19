@@ -39,6 +39,14 @@ export interface IConversationDomainCmdFetchPublicGroupMessage extends ICommandB
 export interface IConversationDomainCmdFetchPublicGroupMessageBatch extends ICommandBase<3> {
     groupIds: string[];
 }
+// Add this interface near the top with other interfaces
+interface IPublicMessageOutputWithGroup {
+    groupId: string;
+    type: number;
+    outputId: string;
+    timestamp: number;
+    token: string;
+}
 @Singleton
 export class ConversationDomain implements ICycle, IRunnable {
     @Inject
@@ -365,15 +373,13 @@ export class ConversationDomain implements ICycle, IRunnable {
                     
                     const batchResults = await this.groupFiService.fetchPublicMessageOutputListBatch(batchParams);
                     
-                    // Merge results and add groupId to each item
-                    const mergedItems: any[] = [];
+                    // Update mergedItems with proper typing
+                    const mergedItems: IPublicMessageOutputWithGroup[] = [];
                     batchResults.forEach((result, index) => {
                         if (!result) return;
                         const groupId = groupIds[index];
                         
-                        // Add items with groupId
-                        // sort by timestamp, old to new    
-                        result.items.sort((a, b) => a.timestamp - b.timestamp).forEach(item => {
+                        result.items.forEach(item => {
                             mergedItems.push({
                                 ...item,
                                 groupId
@@ -391,6 +397,8 @@ export class ConversationDomain implements ICycle, IRunnable {
 
                     // Send single command with merged results
                     if (mergedItems.length > 0) {
+                        // sort by timestamp, old to new
+                        mergedItems.sort((a, b) => a.timestamp - b.timestamp);  
                         this.eventSourceDomain.eventSourceDomainCmdChannel.push({
                             type: 'addPendingMessageToFront',
                             oldToNew: mergedItems
