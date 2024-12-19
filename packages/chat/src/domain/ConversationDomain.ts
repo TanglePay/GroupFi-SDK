@@ -372,7 +372,8 @@ export class ConversationDomain implements ICycle, IRunnable {
                         const groupId = groupIds[index];
                         
                         // Add items with groupId
-                        result.items.forEach(item => {
+                        
+                        result.items.reverse().forEach(item => {
                             mergedItems.push({
                                 ...item,
                                 groupId
