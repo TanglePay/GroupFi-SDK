@@ -21,7 +21,6 @@ import { OutputSendingDomain } from "./OutputSendingDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
 import { bytesToHex,objectId, sleepYield } from "groupfi-sdk-utils";
 import { SharedContext } from "./SharedContext";
-import { IBasicOutput } from '@iota/iota.js'
 // act as a source of new message, notice message is write model, and there is only one source which is one addresse's inbox message
 // maintain anchor of inbox message inx api call
 // fetch new message on requested(start or after new message pushed), update anchor
@@ -397,7 +396,10 @@ export class EventSourceDomain implements ICycle,IRunnable{
             }
             groupedMessages[item.groupId].push(item); // Newest messages will be at start of array
         }
-
+        // iterate groupedMessages, sort each group by item.timestamp to make sure newest message is at start of array
+        for (const groupId in groupedMessages) {
+            groupedMessages[groupId].sort((a, b) => b.timestamp - a.timestamp);
+        }   
         // Round-robin selection from each group
         const mergedItems: MessageResponseItem[] = [];
         const groups = Object.values(groupedMessages).filter(group => group.length > 0);
