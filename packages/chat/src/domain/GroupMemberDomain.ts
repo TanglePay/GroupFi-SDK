@@ -450,10 +450,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (isForMeConfigUpdated) {
             return false;
         }
+        const isMuteMapUpdated = await this.tryRefreshMuteMap();
+        if (isMuteMapUpdated) {
+            return false;
+        }
         const isMarkedConfigUpdated = await this.tryRefreshMarkedGroupConfigs();
         if (isMarkedConfigUpdated) {
             return false;
         }
+        
         const isAllGroupIdsUpdated = await this.tryUpdateAllGroupIdsWithinContext();
         if (isAllGroupIdsUpdated) {
             return false;
@@ -771,5 +776,35 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             }
         }
         return false
+    }
+
+    // Add these near the top with other private fields
+    private _lastTimeRefreshMuteMap: number = 0;
+    private _isStartRefreshMuteMap: boolean = false;
+
+    // Add these methods after other similar refresh methods
+    _isCanRefreshMuteMap(): boolean {
+        return this._context.isLoggedIn;
+    }
+
+    _isShouldRefreshMuteMap(): boolean {
+        return Date.now() - this._lastTimeRefreshMuteMap > 60 * 1000;
+    }
+
+    async tryRefreshMuteMap() {
+        if (!this._isCanRefreshMuteMap()) {
+            return false;
+        }
+        if (this._isShouldRefreshMuteMap()) {
+            try {
+                await this.groupFiService.tryRefreshUserMuteGroupAddresses();
+                this._lastTimeRefreshMuteMap = Date.now();
+                return true;
+            } catch (error) {
+                console.error('Error refreshing mute map:', error);
+                return false;
+            }
+        }
+        return false;
     }
 }

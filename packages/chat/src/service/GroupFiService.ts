@@ -422,6 +422,23 @@ export class GroupFiService {
     await GroupFiSDKFacade.unMuteGroupMember(groupId, memberAddress)
   }
 
+  async ensureMuteMap() {
+    return await GroupFiSDKFacade._ensureMuteMap()
+  }
+
+  async tryRefreshUserMuteGroupAddresses() {
+    if (this.getCurrentMode() === undefined) {
+      return false
+    }
+    try {
+      await this.ensureMuteMap()
+      return true
+    } catch (error) {
+      console.error('Error refreshing user mute group addresses:', error)
+      return false
+    }
+  }
+
   async getIsMutedFromMuteMap(groupId: string, address: string) {
     return await GroupFiSDKFacade.getIsMutedFromMuteMap(groupId, address)
   }
