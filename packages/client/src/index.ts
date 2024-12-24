@@ -2797,7 +2797,8 @@ export class GroupfiSdkClient {
                 console.log('already marked', groupId);
                 return
             }
-            list.push({groupId,timestamp:Date.now()})
+            const now = getCurrentEpochInSeconds()
+            list.push({groupId,timestamp:now})  
             console.log('new list', list)
             return await this._persistMarkedGroupIds({list,outputWrapper,extraOutputs})
         } catch (error) {
