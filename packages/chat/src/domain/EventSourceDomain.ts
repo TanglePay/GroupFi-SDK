@@ -45,7 +45,8 @@ const InboxApiEvents = [
     ImInboxEventTypeEvmQualifyChanged,
     ImInboxEventTypeMuteChanged,
     ImInboxEventTypeLikeChanged,
-    ImInboxEventTypeProfileChangedEvent
+    ImInboxEventTypeProfileChangedEvent,
+    ImInboxEventTypeGroupIsPublicChanged
 ]
 @Singleton
 export class EventSourceDomain implements ICycle,IRunnable{
@@ -566,6 +567,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
             this.handleIncommingEvent([item])
         } else if (item.type === ImInboxEventTypeProfileChangedEvent) {
             console.log('Get profile mqtt event', item)
+            this.handleIncommingEvent([item])
+        } else if (item.type === ImInboxEventTypeGroupIsPublicChanged) {
             this.handleIncommingEvent([item])
         }
     }

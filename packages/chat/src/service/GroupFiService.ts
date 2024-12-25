@@ -220,9 +220,9 @@ export class GroupFiService {
     }
   }
 
-  async waitOutput(outputId: string) {
-    await GroupFiSDKFacade.waitOutput(outputId)
-  }
+  // async waitOutput(outputId: string) {
+  //   await GroupFiSDKFacade.waitOutput(outputId)
+  // }
   async setupIotaMqttConnection(mqttClient: any) {
     return await GroupFiSDKFacade.setupIotaMqttConnection(mqttClient)
   }
