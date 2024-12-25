@@ -251,7 +251,7 @@ export type IMessage = {
     name?: string
     avatar?: string
 }
-export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged | EventGroupMuteChanged | EventGroupLikeChanged | ProfileChangedEvent
+export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged | EventGroupMuteChanged | EventGroupLikeChanged | ProfileChangedEvent | EventGroupIsPublicChanged
 export interface IGroupFiSDK {
     bootstrap(): Promise<void>
     getGroups(): Promise<{ groupId: string; groupName: string }[]>

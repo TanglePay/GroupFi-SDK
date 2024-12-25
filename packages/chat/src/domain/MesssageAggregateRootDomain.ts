@@ -11,7 +11,7 @@ import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
 import { EventGroupMemberChanged, GroupFiSDKObj, IMessage, isGroupIdEqual } from "groupfi-sdk-core";
 import { EventItemFromFacade } from "groupfi-sdk-core";
-import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey } from "./GroupMemberDomain";
+import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey, EventGroupIsPublicChangedKey } from "./GroupMemberDomain";
 import { AquiringPublicKeyEventKey, DelegationModeNameNftChangedEventKey, NotEnoughCashTokenEventKey, OutputSendingDomain, PairXChangedEventKey, PublicKeyChangedEventKey, VoteOrUnVoteGroupLiteEventKey } from "./OutputSendingDomain";
 
 import { Mode, IIncludesAndExcludes, Profile } from '../types'
@@ -632,5 +632,18 @@ export class MessageAggregateRootDomain implements ICycle {
     async getGroupMember(groupId: string) {
         groupId = prefixedGroupIdToGroupId(groupId)
         return await this.groupMemberDomain.getGroupMember(groupId)
+    }
+
+    async isGroupPublic(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        return await this.groupMemberDomain.isGroupPublic(groupId)
+    }
+
+    onGroupIsPublicChanged(callback:() => void) {
+        this.groupMemberDomain.on(EventGroupIsPublicChangedKey, callback)
+    }
+
+    offGroupIsPublicChanged(callback:() => void) {
+        this.groupMemberDomain.off(EventGroupIsPublicChangedKey, callback)
     }
 }

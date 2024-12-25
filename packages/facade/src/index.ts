@@ -20,6 +20,7 @@ import {
   isUniversalProfileAddress,
   getEvmOrSolanaAddressType,
   ImInboxEventTypeProfileChangedEvent,
+  ImInboxEventTypeGroupIsPublicChanged,
   GroupConfigPlus,
   NodeManager,
   prefixedGroupIdToGroupId,
@@ -314,6 +315,8 @@ class GroupFiSDKFacade {
       } else if (pushed.type === ImInboxEventTypeLikeChanged) {
         item = pushed
       } else if (pushed.type === ImInboxEventTypeProfileChangedEvent) {
+        item = pushed
+      } else if (pushed.type === ImInboxEventTypeGroupIsPublicChanged) {
         item = pushed
       }
       if (item) {
@@ -1123,9 +1126,11 @@ class GroupFiSDKFacade {
     return res;
   }
 
-  async waitOutput(outputId: string) {
-    await GroupFiSDKObj.waitOutput(outputId);
-  }
+  // 不需要使用 waitOutput
+  // async waitOutput(outputId: string) {
+  //   await GroupFiSDKObj.waitOutput(outputId);
+  // }
+
   // get user group
   async getUserGroupReputation(groupId: string): Promise<IGroupUserReputation> {
     groupId = prefixedGroupIdToGroupId(groupId);
