@@ -119,7 +119,7 @@ type NftItemReponse = {
 class GroupfiWalletEmbedded {
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
-    _nodeInfo?: INodeInfo;
+    // _nodeInfo?: INodeInfo;
     _protocolInfo?: INodeInfoProtocol;
     // _baseSeed?: Ed25519Seed;
     // _walletKeyPair?: IKeyPair;
@@ -237,12 +237,32 @@ class GroupfiWalletEmbedded {
         this._client = new SingleNodeClient(nodeUrlHint)
         this._currentNodeUrl = nodeUrlHint
         this._indexer = new IndexerPluginClient(this._client)
-        this._nodeInfo = await this._client.info();
-        this._protocolInfo = await this._client.protocolInfo();
+        // this._nodeInfo = await this._client.info();
+        // this._protocolInfo = await this._client.protocolInfo();
+        this._protocolInfo = await this.firstGetNodeProtocolInfo(this._client);
+        
         this._networkId = TransactionHelper.networkIdFromNetworkName(this._protocolInfo!.networkName)
         this._pubKeyCache = makeLRUCache<string>(200)
-        console.log('NodeInfo', this._nodeInfo);
+        // console.log('NodeInfo', this._nodeInfo);
         console.log('ProtocolInfo', this._protocolInfo);
+    }
+    getNodeProtocolInfoStorageKey() {
+        return `${this._storage?.prefix}.ProtocolInfo`
+    }
+    async firstGetNodeProtocolInfo(client: SingleNodeClient) {
+        this._ensureStorageInited()
+        try {
+            const key = this.getNodeProtocolInfoStorageKey()
+            const storageValue = await this._storage!.get(key)
+            if (storageValue !== null) {
+                return JSON.parse(storageValue)
+            }
+            const res = await client.protocolInfo()
+            this._storage!.set(key, JSON.stringify(res))
+            return res
+        } catch(error) {
+            console.log('getNodeProtocolInfo error: ', error)
+        }
     }
     setupStorage(storage:StorageFacade){
         this._storage = storage
@@ -279,7 +299,8 @@ class GroupfiWalletEmbedded {
         const genesisEd25519Address = new Ed25519Address(accountObj._walletKeyPair.publicKey);
         const genesisWalletAddress = genesisEd25519Address.toAddress();
         accountObj._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
-        accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
+        // accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
+        accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._protocolInfo!.bech32Hrp);
     }
     _getPair(baseSeed:Ed25519Seed, idx:number){
         const addressGeneratorAccountState = {
@@ -298,7 +319,8 @@ class GroupfiWalletEmbedded {
         return new Ed25519Seed(uint8arr);
     }
     _ensureClientInited(){
-        if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
+        // if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
+        if (!this._client || !this._indexer || !this._protocolInfo) throw new Error('Client not initialized')
     }
     _ensureWalletInited(){
         if (!this._SMRAccount._walletKeyPair) throw new Error('Wallet not initialized')

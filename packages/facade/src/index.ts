@@ -718,6 +718,7 @@ class GroupFiSDKFacade {
     this._client = new GroupfiSdkClient();
     if (this._storage) {
       this._client.setupStorage(this._storage)
+      GroupfiWalletEmbedded.setupStorage(this._storage)
     }
     const nodeManager = new NodeManager(process.env.AUXILIARY_SERVICE_DOMAIN!);
     await nodeManager.fetchUrlFromBackend();
