@@ -12,14 +12,11 @@ export const prefixedGroupIdToGroupId = (prefixedGroupId: string) => {
 export const isGroupIdEqual = (groupIdCouldBeLegacy: string, groupIdFromApi: string) => {
     const groupIdCouldBeLegacyWithoutPrefixString = prefixedGroupIdToGroupId(groupIdCouldBeLegacy);
     const groupIdFromApiWithoutPrefixString = prefixedGroupIdToGroupId(groupIdFromApi);
-    console.log('groupIdCouldBeLegacyWithoutPrefixString', groupIdCouldBeLegacyWithoutPrefixString);
-    console.log('groupIdFromApiWithoutPrefixString', groupIdFromApiWithoutPrefixString);    
     if (groupIdCouldBeLegacyWithoutPrefixString === groupIdFromApiWithoutPrefixString) {
         return true;
     }
     // groupIdFromApiWithoutPrefixString to bytes
     const sha256HashOfGroupIdCurrent = hashHexStringToSha256(groupIdFromApiWithoutPrefixString)
-    console.log('sha256HashOfGroupIdCurrent', sha256HashOfGroupIdCurrent);
     return sha256HashOfGroupIdCurrent === groupIdCouldBeLegacyWithoutPrefixString;
 }
 function hashHexStringToSha256(hexString:string) {
