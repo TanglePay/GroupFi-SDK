@@ -12,7 +12,9 @@ import {
   MessageResponseItem,
   PublicItemsResponse,
   IIncludesAndExcludes,
-  MessageResponseItemPlus
+  MessageResponseItemPlus,
+  GroupConfigPlus,
+  PublicMessageBatchResponse
 } from 'groupfi-sdk-core'
 // IMMessage <-> UInt8Array
 // IRecipient <-> UInt8Array
@@ -25,7 +27,6 @@ import {
   StorageAdaptor,
   Profile
 } from '../types'
-import { logAllMethods } from 'groupfi-sdk-utils'
 
 @Singleton
 export class GroupFiService {
@@ -52,6 +53,10 @@ export class GroupFiService {
   async browseModeSetupClient() {
     await GroupFiSDKFacade.browseModeSetupClient()
   }
+  // fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn
+  async fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
+    return await GroupFiSDKFacade.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes})
+  } 
   // async initialAddress() {
   //   await GroupFiSDKFacade.initialAddress()
   // }
@@ -215,9 +220,9 @@ export class GroupFiService {
     }
   }
 
-  async waitOutput(outputId: string) {
-    await GroupFiSDKFacade.waitOutput(outputId)
-  }
+  // async waitOutput(outputId: string) {
+  //   await GroupFiSDKFacade.waitOutput(outputId)
+  // }
   async setupIotaMqttConnection(mqttClient: any) {
     return await GroupFiSDKFacade.setupIotaMqttConnection(mqttClient)
   }
@@ -417,6 +422,23 @@ export class GroupFiService {
     await GroupFiSDKFacade.unMuteGroupMember(groupId, memberAddress)
   }
 
+  async ensureMuteMap() {
+    return await GroupFiSDKFacade._ensureMuteMap()
+  }
+
+  async tryRefreshUserMuteGroupAddresses() {
+    if (this.getCurrentMode() === undefined) {
+      return false
+    }
+    try {
+      await this.ensureMuteMap()
+      return true
+    } catch (error) {
+      console.error('Error refreshing user mute group addresses:', error)
+      return false
+    }
+  }
+
   async getIsMutedFromMuteMap(groupId: string, address: string) {
     return await GroupFiSDKFacade.getIsMutedFromMuteMap(groupId, address)
   }
@@ -597,5 +619,15 @@ export class GroupFiService {
 
   async batchGetProfileFromNameMappingCache(addressList: string[]) {
     return await GroupFiSDKFacade.batchGetProfileFromNameMappingCache(addressList)
+  }
+
+  async fetchPublicMessageOutputListBatch(params: Array<{
+    groupId: string,
+    direction: 'head' | 'tail',
+    startToken?: string,
+    endToken?: string,
+    size?: number
+  }>): Promise<PublicMessageBatchResponse[]> {
+    return await GroupFiSDKFacade.fetchPublicMessageOutputListBatch(params)
   }
 }

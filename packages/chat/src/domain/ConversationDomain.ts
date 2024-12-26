@@ -1,7 +1,7 @@
 import { Inject, Singleton } from "typescript-ioc";
 import { IAddPendingMessageToFrontCommand, ICommandBase, ICycle, IRunnable } from "../types";
 import { IMessage } from 'groupfi-sdk-core'
-import { bytesToHex, stripHexPrefix } from 'groupfi-sdk-utils'
+import { bytesToHex, sleepYield, stripHexPrefix } from 'groupfi-sdk-utils'
 import { ThreadHandler } from "../util/thread";
 import { Channel } from "../util/channel";
 import { MessageHubDomain } from "./MessageHubDomain";
@@ -34,6 +34,18 @@ export interface IConversationDomainCmdTrySplit extends ICommandBase<1> {
 // fetch public group message
 export interface IConversationDomainCmdFetchPublicGroupMessage extends ICommandBase<2> {
     groupId: string;
+}
+// Add new interface for batch command
+export interface IConversationDomainCmdFetchPublicGroupMessageBatch extends ICommandBase<3> {
+    groupIds: string[];
+}
+// Add this interface near the top with other interfaces
+interface IPublicMessageOutputWithGroup {
+    groupId: string;
+    type: number;
+    outputId: string;
+    timestamp: number;
+    token: string;
 }
 @Singleton
 export class ConversationDomain implements ICycle, IRunnable {
@@ -322,6 +334,7 @@ export class ConversationDomain implements ICycle, IRunnable {
         this._events.on(eventKey, callback);
     }
     offGroupDataUpdated(groupId: string, callback: () => void) {
+        groupId = stripHexPrefix(groupId)
         const eventKey = `${EventConversationGroupDataUpdated}.${groupId}`;
         this._events.off(eventKey, callback);
     }
@@ -346,6 +359,53 @@ export class ConversationDomain implements ICycle, IRunnable {
                     await this._fetchPublicMessageOutputList({groupId,direction:'head',size:1000,endToken:max});
                     break;
                 }
+                case 3: {
+                    const { groupIds } = cmd as IConversationDomainCmdFetchPublicGroupMessageBatch;
+                    const batchParams = await Promise.all(groupIds.map(async groupId => {
+                        const { max, min } = await this.groupMemberDomain.getGroupMaxMinToken(groupId) || {};
+                        return {
+                            groupId,
+                            direction: 'head' as const,
+                            size: 1000,
+                            endToken: max
+                        };
+                    }));
+                    
+                    const batchResults = await this.groupFiService.fetchPublicMessageOutputListBatch(batchParams);
+                    
+                    // Update mergedItems with proper typing
+                    const mergedItems: IPublicMessageOutputWithGroup[] = [];
+                    batchResults.forEach((result, index) => {
+                        if (!result) return;
+                        const groupId = groupIds[index];
+                        
+                        result.items.forEach(item => {
+                            mergedItems.push({
+                                ...item,
+                                groupId
+                            });
+                        });
+
+                        // Update tokens for this group
+                        const { startToken, endToken } = result;
+                        const updateTokenPair = {
+                            max: startToken,
+                            min: endToken
+                        };
+                        this.groupMemberDomain.tryUpdateGroupMaxMinToken(groupId, updateTokenPair);
+                    });
+
+                    // Send single command with merged results
+                    if (mergedItems.length > 0) {
+                        // sort by timestamp, old to new
+                        mergedItems.sort((a, b) => a.timestamp - b.timestamp);  
+                        this.eventSourceDomain.eventSourceDomainCmdChannel.push({
+                            type: 'addPendingMessageToFront',
+                            oldToNew: mergedItems
+                        } as IAddPendingMessageToFrontCommand);
+                    }
+                    break;
+                }
             }
             return false;
         }
@@ -354,8 +414,10 @@ export class ConversationDomain implements ICycle, IRunnable {
         if (message) {
             // log message received
             console.log('ConversationDomain message received', message);
-            const { groupId, messageId, timestamp} = message;
+            let { groupId, messageId, timestamp} = message;
+            groupId = stripHexPrefix(groupId)
             await this.handleNewMessageToFirstPartGroupMessageList(groupId, messageId, timestamp);
+            await sleepYield(); 
             return false;
         } else {
             return true;
@@ -367,7 +429,7 @@ export class ConversationDomain implements ICycle, IRunnable {
     @Inject
     private messageHubDomain: MessageHubDomain;
     async bootstrap() {
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'ConversationDomain', 100);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'ConversationDomain', 200);
         this._inChannel = this.messageHubDomain.outChannelToConversation;
         this.eventSourceDomain.conversationDomainCmdChannel = this._cmdChannel;
         this.groupMemberDomain.conversationDomainCmdChannel = this._cmdChannel;

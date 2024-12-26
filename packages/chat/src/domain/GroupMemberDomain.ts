@@ -4,12 +4,12 @@ import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageComman
 import { ThreadHandler } from "../util/thread";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
-import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged} from "groupfi-sdk-core";
+import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual} from "groupfi-sdk-core";
 import { objectId, bytesToHex, compareHex } from "groupfi-sdk-utils";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
 import EventEmitter from "events";
-import { IConversationDomainCmdFetchPublicGroupMessage } from "./ConversationDomain";
+import { IConversationDomainCmdFetchPublicGroupMessage, IConversationDomainCmdFetchPublicGroupMessageBatch } from "./ConversationDomain";
 import { SharedContext } from "./SharedContext";
 export const StoragePrefixGroupMinMaxToken = 'GroupMemberDomain.groupMinMaxToken';
 export interface IGroupMember {
@@ -151,9 +151,12 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             // log entering _actualRefreshForMeGroupConfigs
             const includesAndExcludes = this._context.includesAndExcludes;
             console.log('entering _actualRefreshForMeGroupConfigs', includesAndExcludes);
+            const start = Date.now()
+            console.log('===>test start _actualRefreshForMeGroupConfigs', start)
             let configs: GroupConfigPlus[] = []
             if (includesAndExcludes.length > 0) {
-                configs = await this.groupFiService.fetchForMeGroupConfigs({includes:includesAndExcludes});
+                configs = await this.groupFiService.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes:includesAndExcludes});
+                console.log('===>test end _actualRefreshForMeGroupConfigs cost', Date.now(), Date.now() - start)
             }
             // const configs = await this.groupFiService.fetchForMeGroupConfigs({includes:includesAndExcludes});
             this._forMeGroupConfigs = configs;
@@ -447,10 +450,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (isForMeConfigUpdated) {
             return false;
         }
+        const isMuteMapUpdated = await this.tryRefreshMuteMap();
+        if (isMuteMapUpdated) {
+            return false;
+        }
         const isMarkedConfigUpdated = await this.tryRefreshMarkedGroupConfigs();
         if (isMarkedConfigUpdated) {
             return false;
         }
+        
         const isAllGroupIdsUpdated = await this.tryUpdateAllGroupIdsWithinContext();
         if (isAllGroupIdsUpdated) {
             return false;
@@ -527,23 +535,31 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
     async _checkForMeGroupIdsLastUpdateTimestamp() {
         const now = Date.now();
+        const groupIdsToUpdate: string[] = [];
+
         for (const groupId in this._forMeGroupIdsLastUpdateTimestamp) {
             if (now - this._forMeGroupIdsLastUpdateTimestamp[groupId] > 60 * 1000) {
                 const isGroupPublic = await this.isGroupPublic(groupId);
                 const isGroupMarked = this._markedGroupIds.has(groupId);
+                
                 // log groupId, isGroupPublic, isGroupMarked
-                console.log(groupId,isGroupPublic,isGroupMarked);
+                console.log(groupId, isGroupPublic, isGroupMarked);
+                
                 if (isGroupPublic && !isGroupMarked) {
-                    const cmd:IConversationDomainCmdFetchPublicGroupMessage = {
-                        type: 2,
-                        groupId
-                    };
-                    // log cmd
-                    console.log('_checkForMeGroupIdsLastUpdateTimestamp cmd',cmd);
-                    this._conversationDomainCmdChannel.push(cmd);
+                    groupIdsToUpdate.push(groupId);
                 }
                 this._forMeGroupIdsLastUpdateTimestamp[groupId] = now;
             }
+        }
+
+        if (groupIdsToUpdate.length > 0) {
+            const cmd: IConversationDomainCmdFetchPublicGroupMessageBatch = {
+                type: 3,
+                groupIds: groupIdsToUpdate
+            };
+            // log cmd
+            console.log('_checkForMeGroupIdsLastUpdateTimestamp batch cmd', cmd);
+            this._conversationDomainCmdChannel.push(cmd);
         }
     }
     on(key: string, callback: (event: any) => void) {
@@ -745,16 +761,50 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
     isAnnouncementGroup(groupId: string) {
         groupId = this._gid(groupId);
-        const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => formeGroup.groupId === groupId)
+        // const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => formeGroup.groupId === groupId)
+        const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => isGroupIdEqual(groupId, formeGroup.groupId))
         if (isForMeGroup === undefined) {
             return false
         }
         const announcement = this._context._getProperty<IIncludesAndExcludes[]>('announcement')
         for (const group of announcement) {
-            if (isForMeGroup.dappGroupId === group.groupId) {
+            // if (isForMeGroup.dappGroupId === group.groupId) {
+            //     return true
+            // }
+            if (isGroupIdEqual(group.groupId, isForMeGroup.groupId)) {
                 return true
             }
         }
         return false
+    }
+
+    // Add these near the top with other private fields
+    private _lastTimeRefreshMuteMap: number = 0;
+    private _isStartRefreshMuteMap: boolean = false;
+
+    // Add these methods after other similar refresh methods
+    _isCanRefreshMuteMap(): boolean {
+        return this._context.isLoggedIn;
+    }
+
+    _isShouldRefreshMuteMap(): boolean {
+        return Date.now() - this._lastTimeRefreshMuteMap > 60 * 1000;
+    }
+
+    async tryRefreshMuteMap() {
+        if (!this._isCanRefreshMuteMap()) {
+            return false;
+        }
+        if (this._isShouldRefreshMuteMap()) {
+            try {
+                await this.groupFiService.tryRefreshUserMuteGroupAddresses();
+                this._lastTimeRefreshMuteMap = Date.now();
+                return true;
+            } catch (error) {
+                console.error('Error refreshing mute map:', error);
+                return false;
+            }
+        }
+        return false;
     }
 }
