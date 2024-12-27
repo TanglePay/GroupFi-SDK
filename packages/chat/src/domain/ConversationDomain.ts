@@ -302,7 +302,7 @@ export class ConversationDomain implements ICycle, IRunnable {
         let inserted = false;
         for (let i = 0; i < firstChunk.messageIds.length; i++) {
             // firstChunk.timestamps is asending order
-            if (!inserted && timestamp < firstChunk.timestamps[i]) {
+            if (!inserted && timestamp <= firstChunk.timestamps[i]) {
                 messageIds.push(messageId);
                 timestamps.push(timestamp);
                 inserted = true;
