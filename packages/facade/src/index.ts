@@ -25,6 +25,7 @@ import {
   NodeManager,
   prefixedGroupIdToGroupId,
   PublicMessageBatchResponse,
+  isGroupIdEqual,
 }   from 'groupfi-sdk-core';
 
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
@@ -1327,8 +1328,7 @@ class GroupFiSDKFacade {
     console.log('markedGroupIds', markedGroupIds, groupId);
     for (const markedGroupId of markedGroupIds) {
       if (
-        GroupFiSDKObj._addHexPrefixIfAbsent(markedGroupId) ==
-        GroupFiSDKObj._addHexPrefixIfAbsent(groupId)
+        isGroupIdEqual(groupId, markedGroupId)
       ) {
         return true;
       }
