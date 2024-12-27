@@ -61,8 +61,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (this._context.userBrowseMode) {
             return true
         }
-        return !!this._context.proxyAddress
-        // return this._context.isIncludeGroupNamesSet;
+        return !!this._context.walletAddress
+        // return !!this._context.proxyAddress
     }
 
     _lastTimeRefreshForMeGroupConfigs: number = 0;
@@ -152,7 +152,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             const includesAndExcludes = this._context.includesAndExcludes;
             console.log('entering _actualRefreshForMeGroupConfigs', includesAndExcludes);
             const start = Date.now()
-            console.log('===>test start _actualRefreshForMeGroupConfigs', start)
+            console.log('===>test start _actualRefreshForMeGroupConfigs', Date.now())
             let configs: GroupConfigPlus[] = []
             if (includesAndExcludes.length > 0) {
                 configs = await this.groupFiService.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes:includesAndExcludes});
