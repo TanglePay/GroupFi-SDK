@@ -24,6 +24,7 @@ export const EventMarkedGroupConfigChangedKey = 'GroupMemberDomain.markedGroupCo
 export const EventGroupMuteChangedLiteKey = 'GroupMemberDomain.groupMuteChangedLite'
 export const EventGroupLikeChangedLiteKey = 'GroupMemberDomain.groupLikeChangedLite'
 export const EventGroupIsPublicChangedKey = 'GroupMemberDomain.groupIsPublicChanged';
+
 @Singleton
 export class GroupMemberDomain implements ICycle, IRunnable {
     private _lruCache: LRUCache<IGroupMember>;
@@ -344,6 +345,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (this._markedGroupIds) {
             this._markedGroupIds.clear();
         }
+
+        if (this._addressStatusCache) {
+            Object.keys(this._addressStatusCache).forEach(type => {
+                this._addressStatusCache[type as keyof typeof this._addressStatusCache] = {};
+            });
+        }
+        
+        // Clear the refresh timestamps
+        this._lastTimeRefreshAddressStatusMap.clear();
     }
     async bootstrap(): Promise<void> {
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 1000);
@@ -464,6 +474,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             return false;
         }
 
+        const isAddressStatusUpdated = await this.tryRefreshAddressStatusForAll();
+        if (isAddressStatusUpdated) {
+            return false;
+        }
 
         const event = this._inChannel.poll();
         if (event) {
@@ -567,6 +581,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
     off(key: string, callback: (event: any) => void) {
         this._events.off(key, callback)
+    }
+    // Add generic once method
+    once(key: string, callback: (event: any) => void) {
+        this._events.once(key, callback)
     }
     _getGroupMemberKey(groupId: string) {
         return `GroupMemberDomain.groupMember.${groupId}`;
@@ -806,5 +824,140 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             }
         }
         return false;
+    }
+
+    // Add these near the top with other private fields
+    private _addressStatusCache: {
+        isGroupPublic: Record<string, boolean>;
+        muted: Record<string, boolean>;
+        isQualified: Record<string, boolean>;
+        marked: Record<string, boolean>;
+    } = {
+        isGroupPublic: {},
+        muted: {},
+        isQualified: {},
+        marked: {}
+    };
+
+    private _lastTimeRefreshAddressStatusMap: Map<string, number> = new Map();
+
+    // Update the _isShouldRefreshAddressStatus method to take groupId
+    private _isShouldRefreshAddressStatus(groupId: string): boolean {
+        const lastTime = this._lastTimeRefreshAddressStatusMap.get(groupId) || 0;
+        return Date.now() - lastTime > 60 * 1000;
+    }
+
+    _isCanRefreshAddressStatus(): boolean {
+        return this._context.isLoggedIn;
+    }
+
+    // Update to handle all groups
+    async tryRefreshAddressStatusForAll(): Promise<boolean> {
+        if (!this._isCanRefreshAddressStatus()) {
+            return false;
+        }
+
+        // Get all group IDs
+        const allGroupIds = this._getAllGroupIds();
+        let hasUpdates = false;
+
+        // Add any new group IDs to the timestamp map with time 0
+        for (const groupId of allGroupIds) {
+            if (!this._lastTimeRefreshAddressStatusMap.has(groupId)) {
+                this._lastTimeRefreshAddressStatusMap.set(groupId, 0);
+            }
+        }
+
+        // Check and refresh status for each group that needs updating
+        for (const groupId of allGroupIds) {
+            if (this._isShouldRefreshAddressStatus(groupId)) {
+                await this._actualRefreshAddressStatus(groupId);
+                // Emit event using groupId-specific key
+                this._events.emit(this.getAddressStatusChangedEventKey(groupId));
+                hasUpdates = true;
+            }
+        }
+
+        return hasUpdates;
+    }
+
+    private async _actualRefreshAddressStatus(groupId: string) {
+        const statusTypes = [
+            {
+                type: 'muted' as const,
+                func: () => this.groupFiService.isBlackListed(groupId)
+            },
+            {
+                type: 'isQualified' as const,
+                func: () => this.groupFiService.isQualified(groupId)
+            },
+            {
+                type: 'marked' as const,
+                func: () => this.groupFiService.marked(groupId)
+            }
+        ];
+
+        try {
+            const results = await Promise.all(statusTypes.map(item => item.func()));
+            
+            statusTypes.forEach((item, i) => {
+                this._addressStatusCache[item.type][groupId] = results[i];
+            });
+
+            // Update last refresh time for this specific group
+            this._lastTimeRefreshAddressStatusMap.set(groupId, Date.now());
+        } catch (error) {
+            console.error('Error refreshing address status:', error);
+            throw error;
+        }
+    }
+
+    getAddressStatusInGroup(groupId: string): {
+        muted: boolean;
+        isQualified: boolean;
+        marked: boolean;
+    } | undefined {
+        // Return undefined if any status is not in cache
+        if (!(groupId in this._addressStatusCache.muted) || 
+            !(groupId in this._addressStatusCache.isQualified) || 
+            !(groupId in this._addressStatusCache.marked)) {
+            return undefined;
+        }
+
+        return {
+            muted: this._addressStatusCache.muted[groupId],
+            isQualified: this._addressStatusCache.isQualified[groupId],
+            marked: this._addressStatusCache.marked[groupId]
+        };
+    }
+
+    // Reset last refresh time for address status for a specific group
+    resetAddressStatusLastTimeForGroup(groupId: string) {
+        this._lastTimeRefreshAddressStatusMap.set(groupId, 0);
+    }
+
+    // Add method to get the event key for a specific groupId
+    getAddressStatusChangedEventKey(groupId: string): string {
+        return `GroupMemberDomain.addressStatusChanged.${groupId}`;
+    }
+
+    // Add this method after the getAddressStatusInGroup method
+    setAddressStatusInGroup(groupId: string, type: keyof typeof this._addressStatusCache, newValue: boolean) {
+        // Validate the type parameter
+        if (!(type in this._addressStatusCache)) {
+            console.error(`Invalid status type: ${type}`);
+            return;
+        }
+
+        // Update the cache value
+        this._addressStatusCache[type][groupId] = newValue;
+
+        // Emit the status changed event for this group
+        this._events.emit(this.getAddressStatusChangedEventKey(groupId));
+    }
+
+    // Add this method
+    removeAllListeners(eventKey: string) {
+        this._events.removeAllListeners(eventKey);
     }
 }
