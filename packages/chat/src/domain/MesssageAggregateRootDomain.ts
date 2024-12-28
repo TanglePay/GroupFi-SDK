@@ -95,12 +95,12 @@ export class MessageAggregateRootDomain implements ICycle {
                 // log event key and params
                 console.log(EventGroupMemberChangedLiteKey, 'in callback',{groupId:groupIdFromEvent,isNewMember,address}, groupId)
 
-                const fn = async () => {
-                    // if(groupIdFromEvent === this.groupFiService.addHexPrefixIfAbsent(groupId) && isNewMember) {
+                const fn = () => {
                     if(isGroupIdEqual(groupId, groupIdFromEvent) && isNewMember) {
                         const currentAddress = this.groupFiService.getCurrentAddress()
                         if (this.groupFiService.addHexPrefixIfAbsent(currentAddress) === this.groupFiService.addHexPrefixIfAbsent(address)) {
                             this.groupMemberDomain.off(EventGroupMemberChangedLiteKey,this._groupMemberChangedCallback)
+                            this.groupMemberDomain.setAddressStatusInGroup(groupId, 'marked', true)
                             resolve({})
                         }
                     }
@@ -116,9 +116,9 @@ export class MessageAggregateRootDomain implements ICycle {
         return new Promise((resolve, reject) => {
             this._groupMemberChangedCallback = ({groupId: groupIdFromEvent, isNewMember, address}) => {
                 const currentAddress = this.groupFiService.getCurrentAddress()
-                // if(this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMember && address === currentAddress) {
                 if(isGroupIdEqual(groupId, groupIdFromEvent) && !isNewMember && address === currentAddress) {
                     this.groupMemberDomain.off(EventGroupMemberChangedLiteKey, this._groupMemberChangedCallback)
+                    this.groupMemberDomain.setAddressStatusInGroup(groupId, 'marked', false)
                     resolve({})
                 }
             }
@@ -134,6 +134,7 @@ export class MessageAggregateRootDomain implements ICycle {
                 // if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && isNewMark) {
                 if (isGroupIdEqual(groupId, groupIdFromEvent) && isNewMark) {
                     this.groupMemberDomain.off(EventGroupMarkChangedLiteKey, this._groupMarkChangedCallback)
+                    this.groupMemberDomain.resetAddressStatusLastTimeForGroup(groupId)
                     resolve({})
                 }
             }
@@ -148,6 +149,7 @@ export class MessageAggregateRootDomain implements ICycle {
                 // if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMark) {
                 if (isGroupIdEqual(groupId, groupIdFromEvent) && !isNewMark) {
                     this.groupMemberDomain.off(EventGroupMarkChangedLiteKey, this._groupMarkChangedCallback)
+                    this.groupMemberDomain.resetAddressStatusLastTimeForGroup(groupId)
                     resolve({})
                 }
             }
@@ -645,5 +647,27 @@ export class MessageAggregateRootDomain implements ICycle {
 
     offGroupIsPublicChanged(callback:() => void) {
         this.groupMemberDomain.off(EventGroupIsPublicChangedKey, callback)
+    }
+
+    getAddressStatusInGroup(groupId: string): {
+        muted: boolean;
+        isQualified: boolean;
+        marked: boolean;
+    } | undefined {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        return this.groupMemberDomain.getAddressStatusInGroup(groupId);
+    }
+
+    // Updated to use getAddressStatusChangedEventKey for specific group
+    onAddressStatusInGroupChangedOnce(groupId: string, callback: () => void) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        const eventKey = this.groupMemberDomain.getAddressStatusChangedEventKey(groupId)
+        this.groupMemberDomain.removeAllListeners(eventKey)
+        return this.groupMemberDomain.once(eventKey, callback)
+    }
+
+    setAddressStatusInGroup(groupId: string, type: 'muted' | 'isQualified' | 'marked', newValue: boolean) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        return this.groupMemberDomain.setAddressStatusInGroup(groupId, type, newValue);
     }
 }
