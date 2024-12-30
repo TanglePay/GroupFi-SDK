@@ -190,6 +190,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             this._isStartRefreshForMeGroupConfigs = true
             await this._actualRefreshForMeGroupConfigs();
             this._context.setIsForMeGroupsLoading(false, 'tryRefreshForMeGroupConfigs', 'forme groups loaded')
+            // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
+            if (this._lastTimeRefreshAddressStatusMap.size === 0) {
+                await this.tryRefreshAddressStatusForAll();
+            }   
             return true;
         }
         return false;
@@ -868,14 +872,14 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             }
         }
 
-        // Check and refresh status for each group that needs updating
-        for (const groupId of allGroupIds) {
-            if (this._isShouldRefreshAddressStatus(groupId)) {
+        // Filter groups that need updating and refresh them in parallel
+        const groupsToUpdate = allGroupIds.filter(groupId => this._isShouldRefreshAddressStatus(groupId));
+        if (groupsToUpdate.length > 0) {
+            await Promise.all(groupsToUpdate.map(async groupId => {
                 await this._actualRefreshAddressStatus(groupId);
-                // Emit event using groupId-specific key
                 this._events.emit(this.getAddressStatusChangedEventKey(groupId));
-                hasUpdates = true;
-            }
+            }));
+            hasUpdates = true;
         }
 
         return hasUpdates;
