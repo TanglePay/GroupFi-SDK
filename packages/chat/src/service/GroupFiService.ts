@@ -248,85 +248,6 @@ export class GroupFiService {
     return await GroupFiSDKFacade.filterMutedMessage(groupId, sender)
   }
 
-  _addressStatusDic: any = {
-    isGroupPublic: {},
-    muted: {},
-    isQualified: {},
-    marked: {}
-  }
-  checkAddressStatusByCache(
-    key: string,
-    // type: 'isGroupPublic' | 'muted' | 'isQualified' | 'marked'
-    type: string
-  ): boolean {
-    switch (type) {
-      case 'isGroupPublic':
-      case 'muted':
-        return !this._addressStatusDic[type]?.hasOwnProperty(key)
-      case 'isQualified':
-      case 'marked':
-        return !this._addressStatusDic[type]?.[key]
-      default:
-        break
-    }
-    return false
-  }
-  removeAddressStatusCache(groupId: string, type: string) {
-    const address = GroupFiSDKFacade.getCurrentAddress()
-    const key = `${address}_${groupId}`
-    if (this._addressStatusDic[type]) {
-      delete this._addressStatusDic[type][key]
-    }
-  }
-  async getAddressStatusInGroup(groupId: string): Promise<{
-    // isGroupPublic: boolean
-    muted: boolean
-    isQualified: boolean
-    marked: boolean
-  }> {
-    const address = GroupFiSDKFacade.getCurrentAddress()
-    const key = `${address}_${groupId}`
-    const requestAllList = [
-      // {
-      //   type: 'isGroupPublic',
-      //   func: () => GroupFiSDKFacade.isGroupPublic(groupId)
-      // },
-      {
-        type: 'muted',
-        func: () => GroupFiSDKFacade.isBlackListed(groupId)
-      },
-      {
-        type: 'isQualified',
-        func: () => GroupFiSDKFacade.isQualified(groupId)
-      },
-      {
-        type: 'marked',
-        func: () => GroupFiSDKFacade.marked(groupId)
-      }
-    ]
-
-    const requestList = requestAllList.filter((item) =>
-      this.checkAddressStatusByCache(key, item.type)
-    )
-    const result = await Promise.all(requestList.map((item) => item.func()))
-    requestList.forEach((item, i) => {
-      this._addressStatusDic[item.type][key] = result[i]
-    })
-    const backgroundRequest = requestAllList.filter(
-      (item) => !this.checkAddressStatusByCache(key, item.type)
-    )
-    Promise.all(backgroundRequest.map((item) => item.func())).then((result) => {
-      backgroundRequest.forEach((item, i) => {
-        this._addressStatusDic[item.type][key] = result[i]
-      })
-    })
-    const obj: any = {}
-    requestAllList.forEach((e) => {
-      obj[e.type] = this._addressStatusDic[e.type][key]
-    })
-    return obj
-  }
-
   async getGroupMarked(groupId: string) {
     return await GroupFiSDKFacade.marked(groupId)
   }
@@ -375,7 +296,6 @@ export class GroupFiService {
   }
 
   async leaveOrUnMarkGroup(groupId: string) {
-    this.removeAddressStatusCache(groupId, 'marked')
     await GroupFiSDKFacade.leaveOrUnMarkGroup(groupId)
   }
 
@@ -629,5 +549,17 @@ export class GroupFiService {
     size?: number
   }>): Promise<PublicMessageBatchResponse[]> {
     return await GroupFiSDKFacade.fetchPublicMessageOutputListBatch(params)
+  }
+
+  async isBlackListed(groupId: string) {
+    return await GroupFiSDKFacade.isBlackListed(groupId)
+  }
+
+  async isQualified(groupId: string) {
+    return await GroupFiSDKFacade.isQualified(groupId)
+  }
+
+  async marked(groupId: string) {
+    return await GroupFiSDKFacade.marked(groupId)
   }
 }

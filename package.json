@@ -1,6 +1,7 @@
 {
   "name": "root",
   "private": true,
+  "packageManager": "pnpm@9.4.0",
   "scripts": {
     "clean": "pnpm run -r clean",
     "build:staging": "turbo run build:staging && npm run syncdist",
@@ -41,14 +42,14 @@
     "pnpm": "^9.4.0",
     "prettier": "^2.8.4",
     "rimraf": "^4.1.2",
-    "rollup": "^3.29.5",
+    "rollup": "^3.29.2",
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-filesize": "^9.1.2",
     "rollup-plugin-polyfill-node": "^0.13.0",
     "ts-jest": "^29.0.5",
     "ts-node": "^10.9.1",
     "tslib": "^2.6.2",
-    "turbo": "^1.13.0",
+    "turbo": "^2.3.3",
     "typescript": "^5.2.2"
   },
   "dependencies": {
