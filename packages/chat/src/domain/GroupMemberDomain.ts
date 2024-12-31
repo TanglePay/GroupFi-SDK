@@ -360,7 +360,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         this._lastTimeRefreshAddressStatusMap.clear();
     }
     async bootstrap(): Promise<void> {
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 1000);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 100);
         this._lruCache = new LRUCache<IGroupMember>(100);
         this._evmQualifyCache = new LRUCache<{addr:string,publicKey:string}[]>(100);
         this._groupMaxMinTokenLruCache = new LRUCache<{max?:string,min?:string}>(100);
