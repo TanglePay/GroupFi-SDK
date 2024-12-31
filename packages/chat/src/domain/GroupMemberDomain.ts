@@ -209,12 +209,12 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         // log entering _actualRefreshMarkedGroupConfigs
         console.log('entering _actualRefreshMarkedGroupConfigs');
         
-        const [configs] = await Promise.all([
-            this.groupFiService.fetchAddressMarkedGroupConfigs(),
+        const [_, configs] = await Promise.all([
             // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
             this._lastTimeRefreshAddressStatusMap.size === 0 ? 
                 this.tryRefreshAddressStatusForAll() :
-                Promise.resolve()
+                Promise.resolve(),
+            this.groupFiService.fetchAddressMarkedGroupConfigs()
         ]);
 
         this._markedGroupConfigs = configs;
