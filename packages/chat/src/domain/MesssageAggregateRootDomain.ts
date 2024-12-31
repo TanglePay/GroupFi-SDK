@@ -216,7 +216,7 @@ export class MessageAggregateRootDomain implements ICycle {
         this.groupMemberDomain.off(EventGroupMemberChangedKey, callback)
     }
     async start(): Promise<void> {
-        this._cycleableDomains = [this.groupMemberDomain, this.outputSendingDomain, this.inboxDomain, this.conversationDomain, this.messageHubDomain, this.eventSourceDomain]
+        this._cycleableDomains = [this.outputSendingDomain, this.groupMemberDomain, this.inboxDomain, this.conversationDomain, this.messageHubDomain, this.eventSourceDomain]
         for (const domain of this._cycleableDomains) {
             await domain.start();
         }
