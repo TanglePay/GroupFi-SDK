@@ -268,7 +268,7 @@ export class InboxDomain implements ICycle, IRunnable {
     
     private _inChannel: Channel<IMessage>;
     async bootstrap() {
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'InboxDomain', 200);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'InboxDomain', 100);
         this._inChannel = this.messageHubDomain.outChannelToInbox;
         this._groups = new LRUCache<IInboxGroup>(100);
         console.log('InboxDomain bootstraped')
