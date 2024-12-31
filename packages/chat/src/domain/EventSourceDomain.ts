@@ -139,7 +139,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
 
     private _cmdChannel: Channel<IClearCommandBase<any>>
     async bootstrap() {        
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'EventSourceDomain', 1000);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'EventSourceDomain', 100);
         this._outChannel = new Channel<IMessage>();
         this._outChannelToGroupMemberDomain = new Channel<EventGroupMemberChanged>();
         this._cmdChannel = new Channel<IClearCommandBase<any>>()

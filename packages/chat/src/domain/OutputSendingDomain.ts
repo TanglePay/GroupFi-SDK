@@ -109,7 +109,7 @@ export class OutputSendingDomain implements ICycle, IRunnable {
     private _inChannel: Channel<IOutputCommandBase<number>>
     async bootstrap(): Promise<void> {
         this.eventSourceDomain.setOutputSendingDomain(this);
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'OutputSendingDomain', 1000);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'OutputSendingDomain', 100);
         this._inChannel = new Channel<IOutputCommandBase<number>>();
 
         // log

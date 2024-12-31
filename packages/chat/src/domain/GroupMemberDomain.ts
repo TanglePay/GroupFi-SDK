@@ -190,10 +190,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             this._isStartRefreshForMeGroupConfigs = true
             await this._actualRefreshForMeGroupConfigs();
             this._context.setIsForMeGroupsLoading(false, 'tryRefreshForMeGroupConfigs', 'forme groups loaded')
-            // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
-            if (this._lastTimeRefreshAddressStatusMap.size === 0) {
-                await this.tryRefreshAddressStatusForAll();
-            }   
             return true;
         }
         return false;
@@ -212,7 +208,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     async _actualRefreshMarkedGroupConfigs() {
         // log entering _actualRefreshMarkedGroupConfigs
         console.log('entering _actualRefreshMarkedGroupConfigs');
-        const configs = await this.groupFiService.fetchAddressMarkedGroupConfigs();
+        
+        const [_, configs] = await Promise.all([
+            // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
+            this._lastTimeRefreshAddressStatusMap.size === 0 ? 
+                this.tryRefreshAddressStatusForAll() :
+                Promise.resolve(),
+            this.groupFiService.fetchAddressMarkedGroupConfigs()
+        ]);
+
         this._markedGroupConfigs = configs;
         this._lastTimeRefreshMarkedGroupConfigs = Date.now();
         // emit event
@@ -360,7 +364,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         this._lastTimeRefreshAddressStatusMap.clear();
     }
     async bootstrap(): Promise<void> {
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 1000);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 100);
         this._lruCache = new LRUCache<IGroupMember>(100);
         this._evmQualifyCache = new LRUCache<{addr:string,publicKey:string}[]>(100);
         this._groupMaxMinTokenLruCache = new LRUCache<{max?:string,min?:string}>(100);
@@ -464,14 +468,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (isForMeConfigUpdated) {
             return false;
         }
-        const isMuteMapUpdated = await this.tryRefreshMuteMap();
-        if (isMuteMapUpdated) {
-            return false;
-        }
         const isMarkedConfigUpdated = await this.tryRefreshMarkedGroupConfigs();
         if (isMarkedConfigUpdated) {
             return false;
         }
+        const isMuteMapUpdated = await this.tryRefreshMuteMap();
+        if (isMuteMapUpdated) {
+            return false;
+        }
+        
         
         const isAllGroupIdsUpdated = await this.tryUpdateAllGroupIdsWithinContext();
         if (isAllGroupIdsUpdated) {
