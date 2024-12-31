@@ -190,10 +190,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             this._isStartRefreshForMeGroupConfigs = true
             await this._actualRefreshForMeGroupConfigs();
             this._context.setIsForMeGroupsLoading(false, 'tryRefreshForMeGroupConfigs', 'forme groups loaded')
-            // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
-            if (this._lastTimeRefreshAddressStatusMap.size === 0) {
-                await this.tryRefreshAddressStatusForAll();
-            }   
             return true;
         }
         return false;
@@ -212,6 +208,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     async _actualRefreshMarkedGroupConfigs() {
         // log entering _actualRefreshMarkedGroupConfigs
         console.log('entering _actualRefreshMarkedGroupConfigs');
+                    // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
+                    if (this._lastTimeRefreshAddressStatusMap.size === 0) {
+                        await this.tryRefreshAddressStatusForAll();
+                    }   
         const configs = await this.groupFiService.fetchAddressMarkedGroupConfigs();
         this._markedGroupConfigs = configs;
         this._lastTimeRefreshMarkedGroupConfigs = Date.now();
@@ -464,14 +464,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (isForMeConfigUpdated) {
             return false;
         }
-        const isMuteMapUpdated = await this.tryRefreshMuteMap();
-        if (isMuteMapUpdated) {
-            return false;
-        }
         const isMarkedConfigUpdated = await this.tryRefreshMarkedGroupConfigs();
         if (isMarkedConfigUpdated) {
             return false;
         }
+        const isMuteMapUpdated = await this.tryRefreshMuteMap();
+        if (isMuteMapUpdated) {
+            return false;
+        }
+        
         
         const isAllGroupIdsUpdated = await this.tryUpdateAllGroupIdsWithinContext();
         if (isAllGroupIdsUpdated) {
