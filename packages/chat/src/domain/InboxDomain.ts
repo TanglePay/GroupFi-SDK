@@ -10,6 +10,7 @@ import { LRUCache } from "../util/lru";
 import { CombinedStorageService } from "../service/CombinedStorageService";
 import { IInboxGroup, IInboxRecommendGroup } from "../types";
 import { DebouncedEventEmitter } from "../util/debounced";
+import { sleepYield } from "groupfi-sdk-utils";
 // maintain list of groupid, order matters
 // maintain state of each group, including group name, last message, unread count, etc
 // restore from local storage on start, then update on new message from inbox message hub domain
@@ -29,7 +30,7 @@ export class InboxDomain implements ICycle, IRunnable {
 
     @Inject
     private localStorageRepository: LocalStorageRepository;
-    private _events: DebouncedEventEmitter = new DebouncedEventEmitter(100);
+    private _events: EventEmitter = new EventEmitter();
     private _groupIdsList: string[] = [];
     private _groups: LRUCache<IInboxGroup>;
     private _pendingGroupIdsListUpdate: boolean = false;
@@ -197,23 +198,28 @@ export class InboxDomain implements ICycle, IRunnable {
                 timestamp,
                 name
             }
-
+            let isDataChanged = false;
             const isNewMessageEarlierThanCurrentLatestMessage = group.latestMessage !== undefined && timestamp < group.latestMessage.timestamp
             if(!isNewMessageEarlierThanCurrentLatestMessage) {
                 group.latestMessage = latestMessage
                 // this._moveGroupIdToFront(groupId)
                 this._adjustGroupIdsList(groupId, timestamp)
                 this._pendingGroupsUpdateGroupIds.add(groupId);
+                isDataChanged = true;
             }
             // update unread count if unread count is less than max and message's timestamp is later than last time read
             if (group.unreadCount <= MaxUnReadInInbox && timestamp > (group.lastTimeReadLatestMessageTimestamp??0)) {
                 // log unread count increase, timestamp, lastTimeReadLatestMessageTimestamp
                 group.unreadCount++
                 this._pendingGroupsUpdateGroupIds.add(groupId);
+                isDataChanged = true;
             }
-
-            // log message received
-            console.log('InboxDomain message received', messageStruct,group,this._groupIdsList);
+            if (isDataChanged) {
+                this._events.emit(EventInboxUpdated);
+                // log event
+                console.log('InboxDomain event emitted' );
+            }
+            await sleepYield(); 
             return false;
         } else {
             let dataChanged = false;
@@ -262,7 +268,7 @@ export class InboxDomain implements ICycle, IRunnable {
     
     private _inChannel: Channel<IMessage>;
     async bootstrap() {
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'InboxDomain', 1000);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'InboxDomain', 100);
         this._inChannel = this.messageHubDomain.outChannelToInbox;
         this._groups = new LRUCache<IInboxGroup>(100);
         console.log('InboxDomain bootstraped')

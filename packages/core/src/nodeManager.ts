@@ -34,7 +34,7 @@ export class NodeManager implements INodeProvider {
           this.currentUrl = data.rpc;
         } else {
           console.error("Unexpected response format:", data);
-          throw new Error("Invalid response from backend");
+          // throw new Error("Invalid response from backend");
         }
       } catch (error) {
         console.error("Failed to fetch URL from backend:", error);

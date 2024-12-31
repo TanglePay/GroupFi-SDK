@@ -19,9 +19,8 @@ import { MessageResponseItem,
 import { IConversationDomainCmdTrySplit } from "./ConversationDomain";
 import { OutputSendingDomain } from "./OutputSendingDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
-import { bytesToHex,objectId } from "groupfi-sdk-utils";
+import { bytesToHex,objectId, sleepYield } from "groupfi-sdk-utils";
 import { SharedContext } from "./SharedContext";
-import { IBasicOutput } from '@iota/iota.js'
 // act as a source of new message, notice message is write model, and there is only one source which is one addresse's inbox message
 // maintain anchor of inbox message inx api call
 // fetch new message on requested(start or after new message pushed), update anchor
@@ -46,7 +45,8 @@ const InboxApiEvents = [
     ImInboxEventTypeEvmQualifyChanged,
     ImInboxEventTypeMuteChanged,
     ImInboxEventTypeLikeChanged,
-    ImInboxEventTypeProfileChangedEvent
+    ImInboxEventTypeProfileChangedEvent,
+    ImInboxEventTypeGroupIsPublicChanged
 ]
 @Singleton
 export class EventSourceDomain implements ICycle,IRunnable{
@@ -83,6 +83,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
     private _pendingMessageGroupIdsSet: Set<string> = new Set<string>()
     // dirty flag for _pendingMessageGroupIdsSet
     private _pendingMessageGroupIdsSetChanged = false
+    private _isFirstConsume: boolean = true;
     async _loadPendingMessageList() {
         const pendingMessageList = await this.localStorageRepository.get(pendingMessageListKey)
         if(pendingMessageList !== null) {
@@ -138,7 +139,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
 
     private _cmdChannel: Channel<IClearCommandBase<any>>
     async bootstrap() {        
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'EventSourceDomain', 1000);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'EventSourceDomain', 100);
         this._outChannel = new Channel<IMessage>();
         this._outChannelToGroupMemberDomain = new Channel<EventGroupMemberChanged>();
         this._cmdChannel = new Channel<IClearCommandBase<any>>()
@@ -218,13 +219,13 @@ export class EventSourceDomain implements ICycle,IRunnable{
         }
         const isCatchUpFromApi =  await this.catchUpFromApi();
         if (isCatchUpFromApi) return false;
+        const consumePendingRes = await this._consumeMessageFromPending()
+        if(!consumePendingRes) return false
         // _processMessageToBeConsumed
         const didPersist = await this._attemptPersistPendingMessageList()
         if (didPersist) return false;
         const isPersistPendingGroupIdsSet = await this._processPendingMessageGroupIdsSetChanged()
         if(isPersistPendingGroupIdsSet) return false
-        const consumePendingRes = await this._consumeMessageFromPending()
-        if(!consumePendingRes) return false
         return true;
     }
 
@@ -354,7 +355,6 @@ export class EventSourceDomain implements ICycle,IRunnable{
             }
 
 
-            // await this.handleIncommingMessage(messageList, false);
             this.handleIncommingEvent(eventList);
 
             if (nextToken) {
@@ -383,75 +383,61 @@ export class EventSourceDomain implements ICycle,IRunnable{
         if(this._pendingMessageList.length === 0) {
             return true
         }
-        const messageOutputIds = this._pendingMessageList.map((item) => {
-            return item.outputId
-        })
-        const cb = this.onMessageCompleted.bind(this)
-        const { failedMessageOutputIds } = await this.groupFiService.batchConvertOutputIdsToMessages(messageOutputIds, cb)
-        // log outputId that output not found in one batch, log count of messages as well
+        
+        const sliceSize = this._isFirstConsume ? 10 : 50;
+        
+        // Group messages by groupId
+        const groupedMessages: { [key: string]: MessageResponseItem[] } = {};
+        
+        // Iterate through list from end to start to get newest messages first
+        for(let i = this._pendingMessageList.length - 1; i >= 0; i--) {
+            const item = this._pendingMessageList[i];
+            if(!groupedMessages[item.groupId]) {
+                groupedMessages[item.groupId] = [];
+            }
+            groupedMessages[item.groupId].push(item); // Newest messages will be at start of array
+        }
+        // iterate groupedMessages, sort each group by item.timestamp to make sure newest message is at start of array
+        for (const groupId in groupedMessages) {
+            groupedMessages[groupId].sort((a, b) => b.timestamp - a.timestamp);
+        }   
+        // Round-robin selection from each group
+        const mergedItems: MessageResponseItem[] = [];
+        const groups = Object.values(groupedMessages).filter(group => group.length > 0);
+        
+        let currentIndex = 0;
+        while(mergedItems.length < sliceSize && groups.some(group => group.length > 0)) {
+            const groupIndex = currentIndex % groups.length;
+            const currentGroup = groups[groupIndex];
+            
+            if(currentGroup.length > 0) {
+                // Take from start of array where newest messages are
+                mergedItems.push(currentGroup.shift()!);
+            }
+            
+            currentIndex++;
+        }
+        // for first consume, log the groups and mergedItems in one console.log 
+        if(this._isFirstConsume) {
+            console.log('EventSourceDomain _consumeMessageFromPending groups', groups, 'mergedItems', mergedItems, 'groupedMessages', groupedMessages);     
+        }   
+        const messageOutputIds = mergedItems.map(item => item.outputId);
+        
+        const cb = this.onMessageCompleted.bind(this);
+        const { failedMessageOutputIds } = await this.groupFiService.batchConvertOutputIdsToMessages(messageOutputIds, cb);
+        
+        this._isFirstConsume = false;
+        
         console.log('EventSourceDomain _consumeMessageFromPending missedMessageOutputIds', failedMessageOutputIds);
-
-        // log _pendingMessageList before remove
         console.log('EventSourceDomain _consumeMessageFromPending _pendingMessageList before remove', this._pendingMessageList);
-        this._removeMessageFromPendingBatch(failedMessageOutputIds)
-        // log _pendingMessageList after remove
+        
+        this._removeMessageFromPendingBatch(failedMessageOutputIds);
+        
         console.log('EventSourceDomain _consumeMessageFromPending _pendingMessageList after remove', this._pendingMessageList);
-        return false
+        return false;
     }
     _messageToBeConsumed: {message?:IMessage,outputId:string}[] = []
-    // process message to be consumed
-    async _processMessageToBeConsumed() {
-        if(this._messageToBeConsumed.length === 0) {
-            // log
-            return true
-        }
-        const payload = this._messageToBeConsumed.pop()
-        if(payload === undefined) {
-            return true
-        }
-        // log
-        console.log('EventSourceDomain _processMessageToBeConsumed', payload);
-        const {message,outputId} = payload
-        // filter muted message
-        const filteredMessagesToBeConsumed = []
-        if (message) {
-            const isWalletConnected = this._context.isWalletConnected
-            const filtered = isWalletConnected && await this.groupFiService.filterMutedMessage(message.groupId, message.sender)
-            if (!filtered) {
-                filteredMessagesToBeConsumed.push(message)
-            }
-        }
-        // update pending message group ids set
-        const groupIdsSize = this._pendingMessageGroupIdsSet.size
-        for (const message of filteredMessagesToBeConsumed) {
-            this._pendingMessageGroupIdsSet.add(message.groupId)
-        }
-        // if group ids size changed, persist
-        if(groupIdsSize !== this._pendingMessageGroupIdsSet.size) {
-            this._pendingMessageGroupIdsSetChanged = true
-        }
-        this.handleIncommingMessage(filteredMessagesToBeConsumed, false)
-        // remove message from pending
-        this._removeMessageFromPending(outputId)
 
-        // if no more pending message, persist
-        if (this._pendingMessageList.length === 0) {
-            await this._persistPendingMessageList()
-            // iterate pending message group ids set, and send command to ConversationDomain
-            for (const groupId of this._pendingMessageGroupIdsSet) {
-                const cmd = {
-                    type: 1,
-                    groupId
-                } as IConversationDomainCmdTrySplit
-                this._conversationDomainCmdChannel.push(cmd)
-            }
-            this._pendingMessageGroupIdsSet.clear()
-            await this._persistPendingMessageGroupIdsSet()
-        } else if((Date.now() - this._lastPersistPendingMessageListTime) > 3000) {
-            await this._persistPendingMessageList()
-        }
-        return false
-    }
 
     private async _attemptPersistPendingMessageList(): Promise<boolean> {
         let didPersist = false;
@@ -493,9 +479,10 @@ export class EventSourceDomain implements ICycle,IRunnable{
     
             // Filter muted messages
             const isWalletConnected = this._context.isWalletConnected;
+            const isLoggedIn = this._context.isLoggedIn;
             let shouldProcessMessage = true;
     
-            if (isWalletConnected) {
+            if (isWalletConnected && isLoggedIn) {
                 const isMuted = await this.groupFiService.filterMutedMessage(message.groupId, message.sender);
                 shouldProcessMessage = !isMuted;
             }
@@ -512,6 +499,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
     
                 // Handle the incoming message
                 this.handleIncommingMessage([message], false);
+                await sleepYield()  
             }
         }
     
@@ -543,8 +531,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
         })
     }
     async switchAddress() {
-        try{
-
+        try {
+            this._isFirstConsume = true; // Reset the marker on address switch
             const [anchor] = await Promise.all([
                 this.localStorageRepository.get(anchorKey), 
                 this._loadPendingMessageList(), 
@@ -553,7 +541,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
             if(anchor) {
                 this.anchor = anchor
             }
-        }catch(error) {
+        } catch(error) {
             console.log('EventSourceDomain switch address error:', error)
         }
     }
@@ -579,6 +567,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
             this.handleIncommingEvent([item])
         } else if (item.type === ImInboxEventTypeProfileChangedEvent) {
             console.log('Get profile mqtt event', item)
+            this.handleIncommingEvent([item])
+        } else if (item.type === ImInboxEventTypeGroupIsPublicChanged) {
             this.handleIncommingEvent([item])
         }
     }

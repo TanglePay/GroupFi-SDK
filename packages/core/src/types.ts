@@ -251,7 +251,7 @@ export type IMessage = {
     name?: string
     avatar?: string
 }
-export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged | EventGroupMuteChanged | EventGroupLikeChanged | ProfileChangedEvent
+export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged | EventGroupMuteChanged | EventGroupLikeChanged | ProfileChangedEvent | EventGroupIsPublicChanged
 export interface IGroupFiSDK {
     bootstrap(): Promise<void>
     getGroups(): Promise<{ groupId: string; groupName: string }[]>
@@ -311,6 +311,7 @@ export type MessageResponseItem = {
     outputId: string
     token: string
     timestamp: number
+    groupId: string
 }
 export type MessageResponseItemPlus = MessageResponseItem & { output?: IBasicOutput; address: string }
 export type PublicItemsResponse = {
@@ -329,5 +330,20 @@ export interface IIncludesAndExcludes {
 export interface INodeProvider {
     getUrl(): string;
     reportFailure(): void;
+}
+
+export interface PublicMessageRequestParam {
+    groupId: string
+    direction: 'head' | 'tail'
+    startToken?: string
+    endToken?: string
+    size?: number
+}
+
+export interface PublicMessageBatchResponse {
+    groupId: string
+    items: MessageResponseItem[]
+    startToken: string
+    endToken: string
 }
   

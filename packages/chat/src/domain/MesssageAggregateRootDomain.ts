@@ -6,16 +6,19 @@ import { EventSourceDomain } from "./EventSourceDomain";
 import { UserProfileDomain } from "./UserProfileDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
 
-import { ICycle, IFetchPublicGroupMessageCommand, StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
+import { ICycle,  StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
-import { EventGroupMemberChanged, IMessage } from "groupfi-sdk-core";
+import { EventGroupMemberChanged, GroupFiSDKObj, IMessage, isGroupIdEqual } from "groupfi-sdk-core";
 import { EventItemFromFacade } from "groupfi-sdk-core";
-import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey } from "./GroupMemberDomain";
+import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey, EventGroupIsPublicChangedKey } from "./GroupMemberDomain";
 import { AquiringPublicKeyEventKey, DelegationModeNameNftChangedEventKey, NotEnoughCashTokenEventKey, OutputSendingDomain, PairXChangedEventKey, PublicKeyChangedEventKey, VoteOrUnVoteGroupLiteEventKey } from "./OutputSendingDomain";
 
 import { Mode, IIncludesAndExcludes, Profile } from '../types'
 import { SharedContext } from "./SharedContext";
+import { prefixedGroupIdToGroupId } from "groupfi-sdk-core";
+
+import { stripHexPrefix } from 'groupfi-sdk-utils'
 
 // serving as a facade for all message related domain, also in charge of bootstraping
 // after bootstraping, each domain should subscribe to the event, then push event into array for buffering, and 
@@ -85,17 +88,19 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     _groupMemberChangedCallback: (param:{groupId: string,isNewMember:boolean,address:string}) => void
     async joinGroup(groupId:string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.outputSendingDomain.joinGroup(groupId)
         return new Promise((resolve,reject)=>{
             this._groupMemberChangedCallback = ({groupId:groupIdFromEvent,isNewMember,address}:{groupId:string,isNewMember:boolean,address:string}) => {
                 // log event key and params
                 console.log(EventGroupMemberChangedLiteKey, 'in callback',{groupId:groupIdFromEvent,isNewMember,address}, groupId)
 
-                const fn = async () => {
-                    if(groupIdFromEvent === this.groupFiService.addHexPrefixIfAbsent(groupId) && isNewMember) {
+                const fn = () => {
+                    if(isGroupIdEqual(groupId, groupIdFromEvent) && isNewMember) {
                         const currentAddress = this.groupFiService.getCurrentAddress()
                         if (this.groupFiService.addHexPrefixIfAbsent(currentAddress) === this.groupFiService.addHexPrefixIfAbsent(address)) {
                             this.groupMemberDomain.off(EventGroupMemberChangedLiteKey,this._groupMemberChangedCallback)
+                            this.groupMemberDomain.setAddressStatusInGroup(groupId, 'marked', true)
                             resolve({})
                         }
                     }
@@ -106,12 +111,14 @@ export class MessageAggregateRootDomain implements ICycle {
         })
     }
     async leaveGroup(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.outputSendingDomain.leaveGroup(groupId, false)
         return new Promise((resolve, reject) => {
             this._groupMemberChangedCallback = ({groupId: groupIdFromEvent, isNewMember, address}) => {
                 const currentAddress = this.groupFiService.getCurrentAddress()
-                if(this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMember && address === currentAddress) {
+                if(isGroupIdEqual(groupId, groupIdFromEvent) && !isNewMember && address === currentAddress) {
                     this.groupMemberDomain.off(EventGroupMemberChangedLiteKey, this._groupMemberChangedCallback)
+                    this.groupMemberDomain.setAddressStatusInGroup(groupId, 'marked', false)
                     resolve({})
                 }
             }
@@ -120,11 +127,14 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     _groupMarkChangedCallback: (param:{groupId: string,isNewMark:boolean}) => void
     async markGroup(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.outputSendingDomain.markGroup(groupId)
         return new Promise((resolve, reject) => {
             this._groupMarkChangedCallback = ({groupId: groupIdFromEvent, isNewMark}) => {
-                if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && isNewMark) {
+                // if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && isNewMark) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent) && isNewMark) {
                     this.groupMemberDomain.off(EventGroupMarkChangedLiteKey, this._groupMarkChangedCallback)
+                    this.groupMemberDomain.resetAddressStatusLastTimeForGroup(groupId)
                     resolve({})
                 }
             }
@@ -132,11 +142,14 @@ export class MessageAggregateRootDomain implements ICycle {
         })
     } 
     async unMarkGroup(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.outputSendingDomain.leaveGroup(groupId, true)
         return new Promise((resolve, reject) => {
             this._groupMarkChangedCallback = ({groupId: groupIdFromEvent, isNewMark}) => {
-                if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMark) {
+                // if (this.groupFiService.addHexPrefixIfAbsent(groupId) === groupIdFromEvent && !isNewMark) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent) && !isNewMark) {
                     this.groupMemberDomain.off(EventGroupMarkChangedLiteKey, this._groupMarkChangedCallback)
+                    this.groupMemberDomain.resetAddressStatusLastTimeForGroup(groupId)
                     resolve({})
                 }
             }
@@ -145,10 +158,12 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     _voteOrUnVoteGroupChangedCallback: (params: {outputId: string, groupId: string}) => void
     async voteOrUnVoteGroup(groupId: string, vote: number | undefined): Promise<{outputId: string}> {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.outputSendingDomain.voteOrUnvoteGroup(groupId, vote)
         return new Promise((resolve, reject) => {
             this._voteOrUnVoteGroupChangedCallback = ({outputId, groupId: groupIdFromEvent}) => {
-                if (groupIdFromEvent === groupId) {
+                // if (groupIdFromEvent === groupId) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent)) {
                     this.outputSendingDomain.off(VoteOrUnVoteGroupLiteEventKey, this._voteOrUnVoteGroupChangedCallback)
                     resolve({
                         outputId
@@ -160,11 +175,12 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     _muteOrUnMuteGroupMemberChangedCallback: (params: {groupId: string, isMuted: boolean}) => void
     async muteOrUnmuteGroupMember(groupId: string, address: string, isMuteOperation: boolean) {
-        groupId = this.groupFiService.addHexPrefixIfAbsent(groupId)
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.outputSendingDomain.muteOrUnmuteGroupMember(groupId, address, isMuteOperation)
         return new Promise((resolve, reject) => {
             this._muteOrUnMuteGroupMemberChangedCallback = ({groupId: groupIdFromEvent, isMuted}) => {
-                if (groupId === groupIdFromEvent && isMuteOperation === isMuted) {
+                // if (groupId === groupIdFromEvent && isMuteOperation === isMuted) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent) && isMuteOperation === isMuted) {
                     this.groupMemberDomain.off(EventGroupMuteChangedLiteKey, this._muteOrUnMuteGroupMemberChangedCallback)
                     resolve({})
                 }
@@ -174,11 +190,12 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     _likeOrUnLikeGroupMemberChangedCallback: (params: {groupId: string, isLiked: boolean}) => void
     async likeOrUnLikeGroupMember(groupId: string, address: string, isLikeOperation: boolean) {
-        groupId = this.groupFiService.addHexPrefixIfAbsent(groupId)
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.outputSendingDomain.likeOrUnLikeGroupMember(groupId, address, isLikeOperation)
         return new Promise((resolve, reject) => {
             this._likeOrUnLikeGroupMemberChangedCallback = ({groupId: groupIdFromEvent, isLiked}) => {
-                if (groupId === groupIdFromEvent && isLikeOperation === isLiked) {
+                // if (groupId === groupIdFromEvent && isLikeOperation === isLiked) {
+                if (isGroupIdEqual(groupId, groupIdFromEvent) && isLikeOperation === isLiked) {
                     this.groupMemberDomain.off(EventGroupLikeChangedLiteKey, this._likeOrUnLikeGroupMemberChangedCallback)
                     resolve({})
                 }
@@ -248,6 +265,7 @@ export class MessageAggregateRootDomain implements ICycle {
     async getLatestConversationMessageList(groupId: string, size = 3): Promise<{
         messages: IMessage[],
     }> {
+        groupId = prefixedGroupIdToGroupId(groupId)
         const {messages} = await this.getConversationMessageListFromLatest({groupId,key:HeadKey,size})
         return {
             messages
@@ -258,6 +276,7 @@ export class MessageAggregateRootDomain implements ICycle {
         directionMostMessageId?: string,
         chunkKeyForDirectMostMessageId: string
     }> {
+        groupId = prefixedGroupIdToGroupId(groupId)
         return await this.getConversationMessageList({groupId,key,messageId, direction:'tail',size})
     }
     async getConversationMessageList({groupId,key,messageId, direction,size}:{groupId: string, key: string, messageId?:string,direction:MessageFetchDirection, size?: number}): Promise<{
@@ -265,6 +284,7 @@ export class MessageAggregateRootDomain implements ICycle {
         directionMostMessageId?: string,
         chunkKeyForDirectMostMessageId: string
     }> {
+        groupId = prefixedGroupIdToGroupId(groupId)
         return await this.conversationDomain.getMessageList({groupId,key,messageId,direction,size})
     }
     async setupGroupFiMqttConnection(connect:any) {
@@ -278,8 +298,8 @@ export class MessageAggregateRootDomain implements ICycle {
         message: string
       ): Promise<{ messageSent: IMessage, blockId: string }>
       {
-         
-            return await this.outputSendingDomain.sendMessageToGroup(groupId,message)
+          groupId = prefixedGroupIdToGroupId(groupId)
+          return await this.outputSendingDomain.sendMessageToGroup(groupId,message)
       }
     onIsHasPublicKeyChanged(callback: (param:{isHasPublicKey: boolean}) => void) {
         this.outputSendingDomain.on(PublicKeyChangedEventKey,callback)
@@ -324,21 +344,28 @@ export class MessageAggregateRootDomain implements ICycle {
         this.inboxDomain.offInboxLoaded(callback);
     }
     onConversationDataChanged(groupId: string, callback: () => void) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.conversationDomain.onGroupDataUpdated(groupId, callback);
     }
     offConversationDataChanged(groupId: string, callback: () => void) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         this.conversationDomain.offGroupDataUpdated(groupId, callback);
     }
     getInbox() {
         return this.inboxDomain.getInbox();
     }
     async clearUnreadCount(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        groupId = stripHexPrefix(groupId)
         this.inboxDomain.clearUnreadCount(groupId)
     }
     async setUnreadCount(groupId: string, unreadCount: number, lastTimeReadLatestMessageTimestamp: number) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        groupId = groupId = stripHexPrefix(groupId)
         this.inboxDomain.setUnreadCount(groupId, unreadCount, lastTimeReadLatestMessageTimestamp)
     }
     async enteringGroupByGroupId(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         const isEvm = this.proxyModeDomain.getMode() !== ShimmerMode
         const tasks = [ 
             this.groupMemberDomain._refreshGroupMemberAsync(groupId),
@@ -360,6 +387,7 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     // navigate away from group
     navigateAwayFromGroup(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         // check is wallet connected
         if (this._context.isWalletConnected) {
             this.groupFiService.disablePreparedRemainderHint()
@@ -377,7 +405,15 @@ export class MessageAggregateRootDomain implements ICycle {
 
     // get for me group Configs
     getForMeGroupConfigs() {
-        return this.groupMemberDomain.forMeGroupConfigs;
+        // When forMeGroupConfigs is undefined, it must return undefined
+        // This indicates that forMeGroupConfigs has not started loading yet
+        if (this.groupMemberDomain.forMeGroupConfigs === undefined) {
+            return undefined
+        }
+        const forMeGroupConfigs = this.groupMemberDomain.forMeGroupConfigs??[]
+        const forMeGroupConfigsProcessed = forMeGroupConfigs.map(GroupFiSDKObj.processGroupConfigBeforeReturn)      
+        console.log('getForMeGroupConfigs before processed', forMeGroupConfigs, 'after processed', forMeGroupConfigsProcessed)  
+        return forMeGroupConfigsProcessed
     }
     
     onRegisterStatusChanged(callback: () => void) {
@@ -413,7 +449,10 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     // get marked group Configs
     getMarkedGroupConfigs() {
-        return this.groupMemberDomain.markedGroupConfigs;
+        if (this.groupMemberDomain.markedGroupConfigs === undefined) {
+            return undefined
+        }
+        return this.groupMemberDomain.markedGroupConfigs.map(GroupFiSDKObj.processGroupConfigBeforeReturn)
     }
     getIsHasPairX() {
         return this.outputSendingDomain.isHasPairX
@@ -579,6 +618,7 @@ export class MessageAggregateRootDomain implements ICycle {
         this._context.offPropertyChanged(fieldName, callback)
     }
     isAnnouncementGroup(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         return this.groupMemberDomain.isAnnouncementGroup(groupId)
     }
     getProfileList() {
@@ -592,6 +632,42 @@ export class MessageAggregateRootDomain implements ICycle {
     }
 
     async getGroupMember(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
         return await this.groupMemberDomain.getGroupMember(groupId)
+    }
+
+    async isGroupPublic(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        return await this.groupMemberDomain.isGroupPublic(groupId)
+    }
+
+    onGroupIsPublicChanged(callback:() => void) {
+        this.groupMemberDomain.on(EventGroupIsPublicChangedKey, callback)
+    }
+
+    offGroupIsPublicChanged(callback:() => void) {
+        this.groupMemberDomain.off(EventGroupIsPublicChangedKey, callback)
+    }
+
+    getAddressStatusInGroup(groupId: string): {
+        muted: boolean;
+        isQualified: boolean;
+        marked: boolean;
+    } | undefined {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        return this.groupMemberDomain.getAddressStatusInGroup(groupId);
+    }
+
+    // Updated to use getAddressStatusChangedEventKey for specific group
+    onAddressStatusInGroupChangedOnce(groupId: string, callback: () => void) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        const eventKey = this.groupMemberDomain.getAddressStatusChangedEventKey(groupId)
+        this.groupMemberDomain.removeAllListeners(eventKey)
+        return this.groupMemberDomain.once(eventKey, callback)
+    }
+
+    setAddressStatusInGroup(groupId: string, type: 'muted' | 'isQualified' | 'marked', newValue: boolean) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        return this.groupMemberDomain.setAddressStatusInGroup(groupId, type, newValue);
     }
 }

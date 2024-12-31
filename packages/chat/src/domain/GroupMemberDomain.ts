@@ -4,12 +4,12 @@ import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageComman
 import { ThreadHandler } from "../util/thread";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
-import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged} from "groupfi-sdk-core";
+import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual} from "groupfi-sdk-core";
 import { objectId, bytesToHex, compareHex } from "groupfi-sdk-utils";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
 import EventEmitter from "events";
-import { IConversationDomainCmdFetchPublicGroupMessage } from "./ConversationDomain";
+import { IConversationDomainCmdFetchPublicGroupMessage, IConversationDomainCmdFetchPublicGroupMessageBatch } from "./ConversationDomain";
 import { SharedContext } from "./SharedContext";
 export const StoragePrefixGroupMinMaxToken = 'GroupMemberDomain.groupMinMaxToken';
 export interface IGroupMember {
@@ -24,6 +24,7 @@ export const EventMarkedGroupConfigChangedKey = 'GroupMemberDomain.markedGroupCo
 export const EventGroupMuteChangedLiteKey = 'GroupMemberDomain.groupMuteChangedLite'
 export const EventGroupLikeChangedLiteKey = 'GroupMemberDomain.groupLikeChangedLite'
 export const EventGroupIsPublicChangedKey = 'GroupMemberDomain.groupIsPublicChanged';
+
 @Singleton
 export class GroupMemberDomain implements ICycle, IRunnable {
     private _lruCache: LRUCache<IGroupMember>;
@@ -61,8 +62,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (this._context.userBrowseMode) {
             return true
         }
-        return !!this._context.proxyAddress
-        // return this._context.isIncludeGroupNamesSet;
+        return !!this._context.walletAddress
+        // return !!this._context.proxyAddress
     }
 
     _lastTimeRefreshForMeGroupConfigs: number = 0;
@@ -151,9 +152,12 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             // log entering _actualRefreshForMeGroupConfigs
             const includesAndExcludes = this._context.includesAndExcludes;
             console.log('entering _actualRefreshForMeGroupConfigs', includesAndExcludes);
+            const start = Date.now()
+            console.log('===>test start _actualRefreshForMeGroupConfigs', Date.now())
             let configs: GroupConfigPlus[] = []
             if (includesAndExcludes.length > 0) {
-                configs = await this.groupFiService.fetchForMeGroupConfigs({includes:includesAndExcludes});
+                configs = await this.groupFiService.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes:includesAndExcludes});
+                console.log('===>test end _actualRefreshForMeGroupConfigs cost', Date.now(), Date.now() - start)
             }
             // const configs = await this.groupFiService.fetchForMeGroupConfigs({includes:includesAndExcludes});
             this._forMeGroupConfigs = configs;
@@ -204,7 +208,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     async _actualRefreshMarkedGroupConfigs() {
         // log entering _actualRefreshMarkedGroupConfigs
         console.log('entering _actualRefreshMarkedGroupConfigs');
-        const configs = await this.groupFiService.fetchAddressMarkedGroupConfigs();
+        
+        const [_, configs] = await Promise.all([
+            // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
+            this._lastTimeRefreshAddressStatusMap.size === 0 ? 
+                this.tryRefreshAddressStatusForAll() :
+                Promise.resolve(),
+            this.groupFiService.fetchAddressMarkedGroupConfigs()
+        ]);
+
         this._markedGroupConfigs = configs;
         this._lastTimeRefreshMarkedGroupConfigs = Date.now();
         // emit event
@@ -341,9 +353,18 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (this._markedGroupIds) {
             this._markedGroupIds.clear();
         }
+
+        if (this._addressStatusCache) {
+            Object.keys(this._addressStatusCache).forEach(type => {
+                this._addressStatusCache[type as keyof typeof this._addressStatusCache] = {};
+            });
+        }
+        
+        // Clear the refresh timestamps
+        this._lastTimeRefreshAddressStatusMap.clear();
     }
     async bootstrap(): Promise<void> {
-        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 1000);
+        this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 100);
         this._lruCache = new LRUCache<IGroupMember>(100);
         this._evmQualifyCache = new LRUCache<{addr:string,publicKey:string}[]>(100);
         this._groupMaxMinTokenLruCache = new LRUCache<{max?:string,min?:string}>(100);
@@ -451,11 +472,21 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         if (isMarkedConfigUpdated) {
             return false;
         }
+        const isMuteMapUpdated = await this.tryRefreshMuteMap();
+        if (isMuteMapUpdated) {
+            return false;
+        }
+        
+        
         const isAllGroupIdsUpdated = await this.tryUpdateAllGroupIdsWithinContext();
         if (isAllGroupIdsUpdated) {
             return false;
         }
 
+        const isAddressStatusUpdated = await this.tryRefreshAddressStatusForAll();
+        if (isAddressStatusUpdated) {
+            return false;
+        }
 
         const event = this._inChannel.poll();
         if (event) {
@@ -527,23 +558,31 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
     async _checkForMeGroupIdsLastUpdateTimestamp() {
         const now = Date.now();
+        const groupIdsToUpdate: string[] = [];
+
         for (const groupId in this._forMeGroupIdsLastUpdateTimestamp) {
             if (now - this._forMeGroupIdsLastUpdateTimestamp[groupId] > 60 * 1000) {
                 const isGroupPublic = await this.isGroupPublic(groupId);
                 const isGroupMarked = this._markedGroupIds.has(groupId);
+                
                 // log groupId, isGroupPublic, isGroupMarked
-                console.log(groupId,isGroupPublic,isGroupMarked);
+                console.log(groupId, isGroupPublic, isGroupMarked);
+                
                 if (isGroupPublic && !isGroupMarked) {
-                    const cmd:IConversationDomainCmdFetchPublicGroupMessage = {
-                        type: 2,
-                        groupId
-                    };
-                    // log cmd
-                    console.log('_checkForMeGroupIdsLastUpdateTimestamp cmd',cmd);
-                    this._conversationDomainCmdChannel.push(cmd);
+                    groupIdsToUpdate.push(groupId);
                 }
                 this._forMeGroupIdsLastUpdateTimestamp[groupId] = now;
             }
+        }
+
+        if (groupIdsToUpdate.length > 0) {
+            const cmd: IConversationDomainCmdFetchPublicGroupMessageBatch = {
+                type: 3,
+                groupIds: groupIdsToUpdate
+            };
+            // log cmd
+            console.log('_checkForMeGroupIdsLastUpdateTimestamp batch cmd', cmd);
+            this._conversationDomainCmdChannel.push(cmd);
         }
     }
     on(key: string, callback: (event: any) => void) {
@@ -551,6 +590,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
     off(key: string, callback: (event: any) => void) {
         this._events.off(key, callback)
+    }
+    // Add generic once method
+    once(key: string, callback: (event: any) => void) {
+        this._events.once(key, callback)
     }
     _getGroupMemberKey(groupId: string) {
         return `GroupMemberDomain.groupMember.${groupId}`;
@@ -745,16 +788,185 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
     isAnnouncementGroup(groupId: string) {
         groupId = this._gid(groupId);
-        const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => formeGroup.groupId === groupId)
+        // const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => formeGroup.groupId === groupId)
+        const isForMeGroup = this._forMeGroupConfigs?.find(formeGroup => isGroupIdEqual(groupId, formeGroup.groupId))
         if (isForMeGroup === undefined) {
             return false
         }
         const announcement = this._context._getProperty<IIncludesAndExcludes[]>('announcement')
         for (const group of announcement) {
-            if (isForMeGroup.dappGroupId === group.groupId) {
+            // if (isForMeGroup.dappGroupId === group.groupId) {
+            //     return true
+            // }
+            if (isGroupIdEqual(group.groupId, isForMeGroup.groupId)) {
                 return true
             }
         }
         return false
+    }
+
+    // Add these near the top with other private fields
+    private _lastTimeRefreshMuteMap: number = 0;
+    private _isStartRefreshMuteMap: boolean = false;
+
+    // Add these methods after other similar refresh methods
+    _isCanRefreshMuteMap(): boolean {
+        return this._context.isLoggedIn;
+    }
+
+    _isShouldRefreshMuteMap(): boolean {
+        return Date.now() - this._lastTimeRefreshMuteMap > 60 * 1000;
+    }
+
+    async tryRefreshMuteMap() {
+        if (!this._isCanRefreshMuteMap()) {
+            return false;
+        }
+        if (this._isShouldRefreshMuteMap()) {
+            try {
+                await this.groupFiService.tryRefreshUserMuteGroupAddresses();
+                this._lastTimeRefreshMuteMap = Date.now();
+                return true;
+            } catch (error) {
+                console.error('Error refreshing mute map:', error);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    // Add these near the top with other private fields
+    private _addressStatusCache: {
+        isGroupPublic: Record<string, boolean>;
+        muted: Record<string, boolean>;
+        isQualified: Record<string, boolean>;
+        marked: Record<string, boolean>;
+    } = {
+        isGroupPublic: {},
+        muted: {},
+        isQualified: {},
+        marked: {}
+    };
+
+    private _lastTimeRefreshAddressStatusMap: Map<string, number> = new Map();
+
+    // Update the _isShouldRefreshAddressStatus method to take groupId
+    private _isShouldRefreshAddressStatus(groupId: string): boolean {
+        const lastTime = this._lastTimeRefreshAddressStatusMap.get(groupId) || 0;
+        return Date.now() - lastTime > 60 * 1000;
+    }
+
+    _isCanRefreshAddressStatus(): boolean {
+        return this._context.isLoggedIn;
+    }
+
+    // Update to handle all groups
+    async tryRefreshAddressStatusForAll(): Promise<boolean> {
+        if (!this._isCanRefreshAddressStatus()) {
+            return false;
+        }
+
+        // Get all group IDs
+        const allGroupIds = this._getAllGroupIds();
+        let hasUpdates = false;
+
+        // Add any new group IDs to the timestamp map with time 0
+        for (const groupId of allGroupIds) {
+            if (!this._lastTimeRefreshAddressStatusMap.has(groupId)) {
+                this._lastTimeRefreshAddressStatusMap.set(groupId, 0);
+            }
+        }
+
+        // Filter groups that need updating and refresh them in parallel
+        const groupsToUpdate = allGroupIds.filter(groupId => this._isShouldRefreshAddressStatus(groupId));
+        if (groupsToUpdate.length > 0) {
+            await Promise.all(groupsToUpdate.map(async groupId => {
+                await this._actualRefreshAddressStatus(groupId);
+                this._events.emit(this.getAddressStatusChangedEventKey(groupId));
+            }));
+            hasUpdates = true;
+        }
+
+        return hasUpdates;
+    }
+
+    private async _actualRefreshAddressStatus(groupId: string) {
+        const statusTypes = [
+            {
+                type: 'muted' as const,
+                func: () => this.groupFiService.isBlackListed(groupId)
+            },
+            {
+                type: 'isQualified' as const,
+                func: () => this.groupFiService.isQualified(groupId)
+            },
+            {
+                type: 'marked' as const,
+                func: () => this.groupFiService.marked(groupId)
+            }
+        ];
+
+        try {
+            const results = await Promise.all(statusTypes.map(item => item.func()));
+            
+            statusTypes.forEach((item, i) => {
+                this._addressStatusCache[item.type][groupId] = results[i];
+            });
+
+            // Update last refresh time for this specific group
+            this._lastTimeRefreshAddressStatusMap.set(groupId, Date.now());
+        } catch (error) {
+            console.error('Error refreshing address status:', error);
+            throw error;
+        }
+    }
+
+    getAddressStatusInGroup(groupId: string): {
+        muted: boolean;
+        isQualified: boolean;
+        marked: boolean;
+    } | undefined {
+        // Return undefined if any status is not in cache
+        if (!(groupId in this._addressStatusCache.muted) || 
+            !(groupId in this._addressStatusCache.isQualified) || 
+            !(groupId in this._addressStatusCache.marked)) {
+            return undefined;
+        }
+
+        return {
+            muted: this._addressStatusCache.muted[groupId],
+            isQualified: this._addressStatusCache.isQualified[groupId],
+            marked: this._addressStatusCache.marked[groupId]
+        };
+    }
+
+    // Reset last refresh time for address status for a specific group
+    resetAddressStatusLastTimeForGroup(groupId: string) {
+        this._lastTimeRefreshAddressStatusMap.set(groupId, 0);
+    }
+
+    // Add method to get the event key for a specific groupId
+    getAddressStatusChangedEventKey(groupId: string): string {
+        return `GroupMemberDomain.addressStatusChanged.${groupId}`;
+    }
+
+    // Add this method after the getAddressStatusInGroup method
+    setAddressStatusInGroup(groupId: string, type: keyof typeof this._addressStatusCache, newValue: boolean) {
+        // Validate the type parameter
+        if (!(type in this._addressStatusCache)) {
+            console.error(`Invalid status type: ${type}`);
+            return;
+        }
+
+        // Update the cache value
+        this._addressStatusCache[type][groupId] = newValue;
+
+        // Emit the status changed event for this group
+        this._events.emit(this.getAddressStatusChangedEventKey(groupId));
+    }
+
+    // Add this method
+    removeAllListeners(eventKey: string) {
+        this._events.removeAllListeners(eventKey);
     }
 }

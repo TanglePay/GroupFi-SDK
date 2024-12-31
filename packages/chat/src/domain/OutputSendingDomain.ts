@@ -799,6 +799,7 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                 }
             })
             this._isDelegationModeProxyModeInfoSet = true
+            return false
         }
         return isOk
     }

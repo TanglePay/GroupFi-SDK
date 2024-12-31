@@ -80,15 +80,23 @@ export class ThreadHandler {
         }
     }
 
+    private async createCancellablePause(): Promise<void> {
+        const ps = new Promise<void>((resolve) => {
+            this._pauseResolve = resolve;
+            setTimeout(() => {
+                this.forcePauseResolve();
+            }, this._pauseInterval);
+        });
+        return ps;
+    }
+
     private async loop(): Promise<void> {
         // log loop started
         console.log(`loop ${this.name} started`)
         for (;;) {
             try {
                 if (this._shouldPause) {
-                    // log loop paused
-                    // console.log(`loop ${this.name} paused`)
-                    await sleep(this._pauseInterval)
+                    await this.createCancellablePause()
                     continue
                 }
 
@@ -100,16 +108,8 @@ export class ThreadHandler {
                         break;
                     }
 
-                    // If there are no items to process, pause the loop
-                    // console.log(`loop ${this.name} paused because there are no items to process`)
-                    const ps = new Promise<void>((resolve) => {
-                        this._pauseResolve = resolve
-                        setTimeout(() => {
-                            this.forcePauseResolve()
-                        }, this._pauseInterval)
-                    })
-                    await ps
-                    continue
+                    await this.createCancellablePause();
+                    continue;
                 }
 
                 if (this._shouldStopAfterCurrent) {

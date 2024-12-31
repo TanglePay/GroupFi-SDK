@@ -12,7 +12,9 @@ import {
   MessageResponseItem,
   PublicItemsResponse,
   IIncludesAndExcludes,
-  MessageResponseItemPlus
+  MessageResponseItemPlus,
+  GroupConfigPlus,
+  PublicMessageBatchResponse
 } from 'groupfi-sdk-core'
 // IMMessage <-> UInt8Array
 // IRecipient <-> UInt8Array
@@ -25,7 +27,6 @@ import {
   StorageAdaptor,
   Profile
 } from '../types'
-import { logAllMethods } from 'groupfi-sdk-utils'
 
 @Singleton
 export class GroupFiService {
@@ -52,6 +53,10 @@ export class GroupFiService {
   async browseModeSetupClient() {
     await GroupFiSDKFacade.browseModeSetupClient()
   }
+  // fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn
+  async fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
+    return await GroupFiSDKFacade.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes})
+  } 
   // async initialAddress() {
   //   await GroupFiSDKFacade.initialAddress()
   // }
@@ -215,9 +220,9 @@ export class GroupFiService {
     }
   }
 
-  async waitOutput(outputId: string) {
-    await GroupFiSDKFacade.waitOutput(outputId)
-  }
+  // async waitOutput(outputId: string) {
+  //   await GroupFiSDKFacade.waitOutput(outputId)
+  // }
   async setupIotaMqttConnection(mqttClient: any) {
     return await GroupFiSDKFacade.setupIotaMqttConnection(mqttClient)
   }
@@ -241,85 +246,6 @@ export class GroupFiService {
 
   async filterMutedMessage(groupId: string, sender: string) {
     return await GroupFiSDKFacade.filterMutedMessage(groupId, sender)
-  }
-
-  _addressStatusDic: any = {
-    isGroupPublic: {},
-    muted: {},
-    isQualified: {},
-    marked: {}
-  }
-  checkAddressStatusByCache(
-    key: string,
-    // type: 'isGroupPublic' | 'muted' | 'isQualified' | 'marked'
-    type: string
-  ): boolean {
-    switch (type) {
-      case 'isGroupPublic':
-      case 'muted':
-        return !this._addressStatusDic[type]?.hasOwnProperty(key)
-      case 'isQualified':
-      case 'marked':
-        return !this._addressStatusDic[type]?.[key]
-      default:
-        break
-    }
-    return false
-  }
-  removeAddressStatusCache(groupId: string, type: string) {
-    const address = GroupFiSDKFacade.getCurrentAddress()
-    const key = `${address}_${groupId}`
-    if (this._addressStatusDic[type]) {
-      delete this._addressStatusDic[type][key]
-    }
-  }
-  async getAddressStatusInGroup(groupId: string): Promise<{
-    // isGroupPublic: boolean
-    muted: boolean
-    isQualified: boolean
-    marked: boolean
-  }> {
-    const address = GroupFiSDKFacade.getCurrentAddress()
-    const key = `${address}_${groupId}`
-    const requestAllList = [
-      // {
-      //   type: 'isGroupPublic',
-      //   func: () => GroupFiSDKFacade.isGroupPublic(groupId)
-      // },
-      {
-        type: 'muted',
-        func: () => GroupFiSDKFacade.isBlackListed(groupId)
-      },
-      {
-        type: 'isQualified',
-        func: () => GroupFiSDKFacade.isQualified(groupId)
-      },
-      {
-        type: 'marked',
-        func: () => GroupFiSDKFacade.marked(groupId)
-      }
-    ]
-
-    const requestList = requestAllList.filter((item) =>
-      this.checkAddressStatusByCache(key, item.type)
-    )
-    const result = await Promise.all(requestList.map((item) => item.func()))
-    requestList.forEach((item, i) => {
-      this._addressStatusDic[item.type][key] = result[i]
-    })
-    const backgroundRequest = requestAllList.filter(
-      (item) => !this.checkAddressStatusByCache(key, item.type)
-    )
-    Promise.all(backgroundRequest.map((item) => item.func())).then((result) => {
-      backgroundRequest.forEach((item, i) => {
-        this._addressStatusDic[item.type][key] = result[i]
-      })
-    })
-    const obj: any = {}
-    requestAllList.forEach((e) => {
-      obj[e.type] = this._addressStatusDic[e.type][key]
-    })
-    return obj
   }
 
   async getGroupMarked(groupId: string) {
@@ -370,7 +296,6 @@ export class GroupFiService {
   }
 
   async leaveOrUnMarkGroup(groupId: string) {
-    this.removeAddressStatusCache(groupId, 'marked')
     await GroupFiSDKFacade.leaveOrUnMarkGroup(groupId)
   }
 
@@ -415,6 +340,23 @@ export class GroupFiService {
 
   async unMuteGroupMember(groupId: string, memberAddress: string) {
     await GroupFiSDKFacade.unMuteGroupMember(groupId, memberAddress)
+  }
+
+  async ensureMuteMap() {
+    return await GroupFiSDKFacade._ensureMuteMap()
+  }
+
+  async tryRefreshUserMuteGroupAddresses() {
+    if (this.getCurrentMode() === undefined) {
+      return false
+    }
+    try {
+      await this.ensureMuteMap()
+      return true
+    } catch (error) {
+      console.error('Error refreshing user mute group addresses:', error)
+      return false
+    }
   }
 
   async getIsMutedFromMuteMap(groupId: string, address: string) {
@@ -597,5 +539,27 @@ export class GroupFiService {
 
   async batchGetProfileFromNameMappingCache(addressList: string[]) {
     return await GroupFiSDKFacade.batchGetProfileFromNameMappingCache(addressList)
+  }
+
+  async fetchPublicMessageOutputListBatch(params: Array<{
+    groupId: string,
+    direction: 'head' | 'tail',
+    startToken?: string,
+    endToken?: string,
+    size?: number
+  }>): Promise<PublicMessageBatchResponse[]> {
+    return await GroupFiSDKFacade.fetchPublicMessageOutputListBatch(params)
+  }
+
+  async isBlackListed(groupId: string) {
+    return await GroupFiSDKFacade.isBlackListed(groupId)
+  }
+
+  async isQualified(groupId: string) {
+    return await GroupFiSDKFacade.isQualified(groupId)
+  }
+
+  async marked(groupId: string) {
+    return await GroupFiSDKFacade.marked(groupId)
   }
 }
