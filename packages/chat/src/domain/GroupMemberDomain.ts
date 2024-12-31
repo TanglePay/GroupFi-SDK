@@ -208,11 +208,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     async _actualRefreshMarkedGroupConfigs() {
         // log entering _actualRefreshMarkedGroupConfigs
         console.log('entering _actualRefreshMarkedGroupConfigs');
-                    // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
-                    if (this._lastTimeRefreshAddressStatusMap.size === 0) {
-                        await this.tryRefreshAddressStatusForAll();
-                    }   
-        const configs = await this.groupFiService.fetchAddressMarkedGroupConfigs();
+        
+        const [configs] = await Promise.all([
+            this.groupFiService.fetchAddressMarkedGroupConfigs(),
+            // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
+            this._lastTimeRefreshAddressStatusMap.size === 0 ? 
+                this.tryRefreshAddressStatusForAll() :
+                Promise.resolve()
+        ]);
+
         this._markedGroupConfigs = configs;
         this._lastTimeRefreshMarkedGroupConfigs = Date.now();
         // emit event
