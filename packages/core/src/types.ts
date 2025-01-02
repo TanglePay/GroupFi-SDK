@@ -88,7 +88,13 @@ export const ADDRESSLIST_PRESIGN_SERVICE_URL = process.env.ADDRESSLIST_PRESIGN_S
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
 // schema version for evm qualify
+export const EvmQualifySchemaVersion = 1
+
+// schema version for group state sync
+export const GroupStateSyncSchemaVersion = 1
+
 export const EvmQualifySchemaVersion = 3
+
 // like
 export const LikeSchemaVersion = 1
 // mark
@@ -346,4 +352,18 @@ export interface PublicMessageBatchResponse {
     startToken: string
     endToken: string
 }
-  
+
+export interface GroupStateSyncItem {
+    groupId: string
+    lastTimeReadLatestMessageTimestamp: number
+}
+export interface GroupStateSync {
+    schemaVersion: number,
+    items: GroupStateSyncItem[]
+}
+export interface GroupStateSyncStorage {
+    schemaVersion: number,
+    outputId: string,
+    items: GroupStateSyncItem[]
+}
+

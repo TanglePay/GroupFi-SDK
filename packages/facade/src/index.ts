@@ -26,8 +26,8 @@ import {
   prefixedGroupIdToGroupId,
   PublicMessageBatchResponse,
   isGroupIdEqual,
+  GroupStateSyncItem
 }   from 'groupfi-sdk-core';
-
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
 import {
@@ -42,6 +42,7 @@ import {
   GroupfiSdkClient,
   IProxyModeRequestAdapter,
   AddressMappingStore,
+  BasicOutputWrapper,
   nameMappingCache,
   StorageFacade
 } from 'groupfi-sdk-client';
@@ -590,6 +591,13 @@ class GroupFiSDKFacade {
     tracer.endStep('sendMessageToGroup','call client sendMessage');
     return res;
   }
+  // call getAllGroupStateSyncs
+  async getAllGroupStateSyncs() {
+    return await this._client!.getAllGroupStateSyncs(this._address!);
+  }
+  // call persistGroupStateSyncs
+  async persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper) {
+    return await this._client!.persistGroupStateSyncs(groupStateSyncs,consumedOutputWrapper);
   // async batchOutputIdToOutput(outputIds:string[]){
   async batchOutputIdToOutput(outputIds: string[]) {
     const res = await this._client!.batchOutputIdToOutput(outputIds);

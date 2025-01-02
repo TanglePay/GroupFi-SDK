@@ -52,7 +52,8 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
     GROUPFIPROFILETAG,
     GROUPFICASHTAG,MessageGroupMeta,
-    GROUPFILIKETAG,
+    GROUPFILIKETAG,GROUPFIGROUPSTATESYNCTAG,
+    serializeGroupStateSync,
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers,
     AddressType,
@@ -60,12 +61,14 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     IMAGE_PRESIGN_SERVICE_URL,
     ADDRESSLIST_PRESIGN_SERVICE_URL,
     MessageTypePrivate,
-    INodeProvider
+    INodeProvider,
+    GroupStateSyncItem,
+    GroupStateSyncStorage
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions, sleep } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import nameMappingCache from './nameMappingCache';
-import { IRequestAdapter, PairX, IProxyModeRequestAdapter, CashOutputResponse, OutputIdOutputResponse } from './types'
+import { IRequestAdapter, PairX, IProxyModeRequestAdapter, CashOutputResponse, OutputIdOutputResponse, GroupStateSyncStorageExtended } from './types'
 export * from './types'
 export { AddressMappingStore, nameMappingCache}
 type IntermediateResult = {
@@ -137,11 +140,11 @@ type OutputResponseWrapper = {
     output: IOutputResponse;
     outputId: string;
 }
-type BasicOutputWrapper = {
+export type BasicOutputWrapper = {
     output: IBasicOutput;
     outputId: string;
 }
-type OutputWrapper = {
+export type OutputWrapper = {
     output: OutputTypes;
     outputId: string;
 }
@@ -611,6 +614,27 @@ export class GroupfiSdkClient {
         const domain = domains[Math.floor(Math.random() * domains.length)];
         return domain
     }
+    // get group sync state from inx api
+    // /groupstatesyncunderaddress
+    async _getGroupSyncStateFromInxApi(address:string):Promise<GroupStateSyncStorage|undefined>{
+       // TODO
+        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupstatesyncunderaddress?address=${address}`
+        console.log('getGroupSyncStateFromInxApi url', url);
+        const res = await fetch(url,
+        {
+            method:'GET',
+            headers:{
+            'Content-Type':'application/json'
+            }
+        })
+        if (!res.ok) {
+            console.log('getGroupSyncStateFromInxApi res not ok', res.status);
+        }
+        console.log('getGroupSyncStateFromInxApi res', res);
+        const data = await res.json() as GroupStateSyncStorage | undefined
+        return data
+    }
+
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
         //TODO try inx plugin 
         try {
@@ -2948,6 +2972,35 @@ export class GroupfiSdkClient {
         const {list} = await this._getUserMuteGroupMembers(userAddress)
         return list
     }
+    // get group state sync
+    async getAllGroupStateSyncs(userAddress: string):Promise<GroupStateSyncStorageExtended|undefined> {
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const groupStateSync = await this._getGroupSyncStateFromInxApi(userAddress)
+        if (!groupStateSync) return groupStateSync
+        const {outputId, ...rest} = groupStateSync
+        const outputResp = await this._client!.output(groupStateSync.outputId)
+        const resp = {
+            outputWrapper:{
+                output:outputResp.output as IBasicOutput,
+                outputId
+            },
+            ...rest
+        }
+        return resp
+    }
+
+    
+    // persist group state syncs
+    async persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const data = serializeGroupStateSync(groupStateSyncs)
+        const tag = Converter.utf8ToHex(GROUPFIGROUPSTATESYNCTAG)
+        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const toBeConsumed = consumedOutputWrapper ? [consumedOutputWrapper] : []
+        return await this._sendBasicOutput([basicOutput],toBeConsumed);
+    }
     // same sets of function for user like group members
     async likeGroupMember(groupId:string,addrSha256Hash:string, userAddress: string){
         this._ensureClientInited()
@@ -3300,4 +3353,5 @@ export class GroupfiSdkClient {
     //     return collectionOutput
     // }
 }
+
 
