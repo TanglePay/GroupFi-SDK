@@ -1,7 +1,6 @@
-
 import CryptoJS from 'crypto-js';
-import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'iotacat-sdk-utils';
-import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion } from './types';
+import { concatBytes, hexToBytes, bytesToHex, addressHash, bytesToStr, strToBytes, getCurrentEpochInSeconds, blake256Hash, formatUrlParams } from 'groupfi-sdk-utils';
+import { IMMessage, Address, MessageAuthSchemeRecipeintOnChain, MessageTypePrivate, MessageAuthSchemeRecipeintInMessage, MessageGroupMeta, MessageGroupMetaKey, IMRecipient, IMRecipientIntermediate, IMMessageIntermediate, PushedValue, INX_GROUPFI_DOMAIN, NFT_CONFIG_URL, IGroupQualify, IGroupUserReputation, ImInboxEventTypeNewMessage, ImInboxEventTypeGroupMemberChanged, InboxItemResponse, EncryptedHexPayload, SharedNotFoundError, PublicItemsResponse, GroupQualifyTypeStr, ImInboxEventTypeMarkChanged, IIncludesAndExcludes, GroupConfig, GroupConfigPlus, MessageGroupMetaPlus, SharedSchemaVersion, MessageGroupMetaKeyOmited, INodeProvider, PublicMessageBatchResponse } from './types';
 import type { MqttClient, connect as mqttconnect } from "mqtt";
 import type { MqttClient as IotaMqttClient } from "@iota/mqtt.js"
 import EventEmitter from 'events';
@@ -11,6 +10,8 @@ import { WriteStream, ReadStream } from '@iota/util.js';
 import LZString from 'lz-string'
 import { deserializePushed } from './codec_event';
 import { ethers } from 'ethers';
+import { isSolanaChain, isSolanaAddress, isEvmAddress } from './address_check'
+import { prefixedGroupIdToGroupId } from './groupId';
 export * from './types';
 export * from './codec_mark';
 export * from './codec_like';
@@ -18,21 +19,57 @@ export * from './codec_mute';
 export * from './codec_vote';
 export * from './codec_evm_qualify';
 export * from './codec_groupstatesync';
+export * from './address_check';
+export * from './nodeManager';
+export * from './groupId';
 const SHA256_LEN = 32
-class IotaCatSDK {
+export type ProfileResponse = {
+    address: string;
+    profile: {
+        chainId: number,
+        name: string,
+        avatar?: string
+    };
+    outputId: string;
+};
+const GroupIdIncludedFields:MessageGroupMetaKey[] = ['chainId','qualifyType','contractAddress','tokenThres']
+class GroupFiSDK {
+    private _nodeManager: INodeProvider | null = null;
+    private _currentUrlUsing: string | null = null;
+  
+    // Method to inject NodeManager instance
+    setNodeManager(nodeManager: INodeProvider): void {
+      this._nodeManager = nodeManager;
+      // Initialize _currentUrlUsing on first setup
+      this._currentUrlUsing = this._nodeManager.getUrl();
+    }
+  
+    // Wrapped method to get the current URL, reinitializing if the URL changes
+    getUrl(): string {
+      if (!this._nodeManager) {
+        throw new Error("NodeManager is not set. Please call setNodeManager() first.");
+      }
+  
+      const currentUrl = this._nodeManager.getUrl();
+      if (this._currentUrlUsing !== currentUrl) {
+        // URL has changed; update _currentUrlUsing and trigger reinitialization
+        this._currentUrlUsing = currentUrl;
+        this.reinitializeForNewUrl();
+      }
+  
+      return currentUrl;
+    }
+  
+    // Placeholder for reinitializing classes that depend on the URL
+    private reinitializeForNewUrl(): void {
+      // Reinitialization logic for components depending on the URL
+      this.recreateMqttClient();
+    }
     private _groupConfigMap:Record<string,MessageGroupMeta> = {}
     
     _groupIdCache:Record<string,string[]> = {}
 
-    _groupToGroupId(group:string){
-        const meta = this._groupNameToGroupMeta(group)
-        if (!meta) return undefined
-        const groupId = this._groupMetaToGroupId(meta)
-        return groupId
-    }
-    _groupNameToGroupMeta(group:string):MessageGroupMeta|undefined{
-        return this._groupConfigMap[group]
-    }
+
     groupIdToGroupName(groupId:string):string|undefined{
         const meta = this._groupIdToGroupMeta(groupId)
         if (!meta) return undefined
@@ -41,20 +78,15 @@ class IotaCatSDK {
     _groupIdToGroupMeta(groupId:string):MessageGroupMeta|undefined{
         // log enter
         console.log('_groupIdToGroupMeta enter',groupId, this._groupConfigMap)
-        for (const group in this._groupConfigMap) {
-            const meta = this._groupConfigMap[group]
-            const groupId_ = this._groupMetaToGroupId(meta)
-            // log groupId_ groupId
-            // console.log('_groupIdToGroupMeta groupId_ groupId',groupId_,groupId)
-            if (this._addHexPrefixIfAbsent(groupId_) === this._addHexPrefixIfAbsent(groupId)) return meta
-        }
-        return undefined
+        const groupIdPrefixed = this._addHexPrefixIfAbsent(groupId)
+        return this._groupConfigMap[groupIdPrefixed]
     }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
-        let sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
-        // filter out dappGroupId
-        sortedKeys = sortedKeys.filter(key=>key !== 'dappGroupId')
-        const sortedMap = sortedKeys.reduce((acc,key)=>{
+        const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
+        // filter included fields
+        
+        const sortedKeysFiltered = sortedKeys.filter(key=>GroupIdIncludedFields.includes(key))
+        const sortedMap = sortedKeysFiltered.reduce((acc,key)=>{
             let value = meta[key]
             if (Array.isArray(value)) {
                 value = (value as string[]).sort().join('')
@@ -73,42 +105,69 @@ class IotaCatSDK {
         return '0x'+hex
     }
     addressToInboxId(address:string):string{
-        return this._sha256Hash(address)
+        return this._sha256HashAddress(address)
     }
     _sha256Hash(str:string):string{
         const hash = CryptoJS.SHA256(str).toString(CryptoJS.enc.Hex)
         return this._addHexPrefixIfAbsent(hash)
     }
+    // _sha256HashAddress
+    _sha256HashAddress(address:string):string{
+        const lowerCaseAddress = address.toLowerCase()
+        return this._sha256Hash(lowerCaseAddress)
+    }
     _groupIdToGroupMembers(groupId:string):string[]{
         return this._groupIdCache[groupId] || []
     }
-    _mqttClient?:MqttClient
-    setupMqttConnection(connect:(url:string)=>MqttClient){
-        // log enter setupMqttConnection
-        console.log('setupMqttConnection enter')
-        if (this._mqttClient) {
-            // log setupMqttConnection already setup then return
-            console.log('setupMqttConnection already setup then return')
+    _mqttClient?: MqttClient;
+    _connectFn?: (url: string) => MqttClient;
+
+    setupMqttConnection(connect: (url: string) => MqttClient) {
+        // Cache the connect function for future reconnections
+        if (!this._connectFn) {
+            this._connectFn = connect;
         }
-        const client = connect(`wss://${INX_GROUPFI_DOMAIN}/api/groupfi/mqtt/v1`)
-        // log connect close disconnect
-        client.on('connect', function () {
-            console.log('mqtt connected')
-        })
-        client.on('close', function () {
-            console.log('mqtt closed')
-        })
-        client.on('reconnect', function () {
+
+        // Log entry
+        console.log('setupMqttConnection enter');
+    }
+
+    recreateMqttClient() {
+        if (!this._connectFn) {
+            console.error('Connect function not set');
+            return;
+        }
+
+        // Close the existing client if it exists
+        if (this._mqttClient) {
+            this._mqttClient.end(true); // Clean up any ongoing connection
+            console.log('Existing mqttClient closed');
+        }
+
+        // log recreateMqttClient
+        console.log('recreateMqttClient enter');
+        // Create a new MqttClient instance and set up event listeners
+        const httpsUrl = this.getUrl();
+        const wssUrl = httpsUrl.replace('https://', 'wss://');
+        const client = this._connectFn(`${wssUrl}/api/groupfi/mqtt/v1`);
+        client.on('connect', () => {
+            console.log('mqtt connected');
+        });
+        client.on('close', () => {
+            console.log('mqtt closed');
+        });
+        client.on('reconnect', () => {
             console.log('Reconnecting');
         });
-        client.on('disconnect', function () {
-            console.log('mqtt disconnected')
-        })
-        client.on('error', function (error) {
-            console.log('mqtt error',error)
-        })
-        client.on('message', this._handleMqttMessage.bind(this))
-        this._mqttClient = client
+        client.on('disconnect', () => {
+            console.log('mqtt disconnected');
+        });
+        client.on('error', (error) => {
+            console.log('mqtt error', error);
+        });
+        client.on('message', this._handleMqttMessage.bind(this));
+
+        this._mqttClient = client;
     }
     _iotaMqttClient?:IotaMqttClient
     setupIotaMqttConnection(mqttClient:new (...args: any[])=>IotaMqttClient){
@@ -164,7 +223,7 @@ class IotaCatSDK {
     async switchMqttAddress(address:string){
         this._ensureMqttClient()
         const topics = []
-        let addressSha256Hash = this._sha256Hash(address.toLowerCase())
+        let addressSha256Hash = this._sha256HashAddress(address)
         addressSha256Hash = this._addHexPrefixIfAbsent(addressSha256Hash)
         console.log('===> subscribeToAddressSha256Hash',address, addressSha256Hash)
         topics.push(`inbox/${addressSha256Hash}`)
@@ -182,8 +241,9 @@ class IotaCatSDK {
     _subscribedTopics:Set<string> = new Set()
     // subscribe to a topic
     _subscribeToTopics(topics:string[]){
+        if (!this._mqttClient) return
         const filteredTopics = topics.filter(topic=>!this._subscribedTopics.has(topic))
-        this._mqttClient!.subscribe(filteredTopics)
+        filteredTopics.forEach(topic=>this._mqttClient!.subscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.add(topic))
     }
 
@@ -202,19 +262,19 @@ class IotaCatSDK {
 
     // unsubscribe to a topic
     _unsubscribeToTopics(topics:string[]){
+        if (!this._mqttClient) return
         const filteredTopics = topics.filter(topic=>this._subscribedTopics.has(topic))
-        this._mqttClient!.unsubscribe(filteredTopics)
+        filteredTopics.forEach(topic=>this._mqttClient!.unsubscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.delete(topic))
     }
     // unsubscribe to all topics
     unsubscribeToAllTopics(){
         this._unsubscribeToTopics(Array.from(this._subscribedTopics))
     }
-    async prepareSendMessage(senderAddr:Address, group:string,message: string, isAnnouncement:boolean):Promise<IMMessage|undefined>  {
-        const meta = this._groupNameToGroupMeta(group)
+    async prepareSendMessage(senderAddr:Address, groupId:string,message: string, isAnnouncement:boolean):Promise<IMMessage|undefined>  {
+        const meta = this._groupIdToGroupMeta(groupId)
         if (!meta) return undefined
         const {schemaVersion,messageType,authScheme} = meta
-        const groupId = this._groupMetaToGroupId(meta)
         const timestamp = getCurrentEpochInSeconds()
         return {
             schemaVersion,
@@ -233,7 +293,7 @@ class IotaCatSDK {
         try {
             const params = {address:`${address}`,size:limit, token:coninuationToken}
             const paramStr = formatUrlParams(params)
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/inboxitems${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/inboxitems${paramStr}`
             // @ts-ignore
             const res = await fetch(url,{
                 method:'GET',
@@ -251,12 +311,15 @@ class IotaCatSDK {
     // fetch publicitems output list
     async fetchPublicMessageOutputList(groupId:string, direction:'head'|'tail', startToken?:string, endToken?:string, size:number=10) {
         try {
-            const params = {groupId:this._addHexPrefixIfAbsent(groupId),direction, size,
+            const params = {
+                groupId: this._addHexPrefixIfAbsent(groupId),
+                direction, 
+                size,
                 startToken: startToken && this._addHexPrefixIfAbsent(startToken),
                 endToken: endToken && this._addHexPrefixIfAbsent(endToken)
             }
             const paramStr = formatUrlParams(params)
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/publicitems${paramStr}`
+            const url = `${this.getUrl()}/api/groupfi/v1/publicitems${paramStr}`
             const res = await fetch(url)
             const data = await res.json() as PublicItemsResponse
             return data
@@ -264,6 +327,47 @@ class IotaCatSDK {
             console.log('error',error)
         }
     }
+
+    // Add the new batch request function
+    async fetchPublicMessageOutputListBatch(params: Array<{
+        groupId: string
+        direction: 'head' | 'tail'
+        startToken?: string
+        endToken?: string
+        size?: number
+    }>): Promise<PublicMessageBatchResponse[]> {
+        try {
+            const url = `${this.getUrl()}/api/groupfi/v1/publicitemsbatch`
+            
+            // Prepare request params
+            const requestParams = params.map(param => ({
+                groupId: this._addHexPrefixIfAbsent(param.groupId),
+                direction: param.direction,
+                size: param.size || 10,
+                startToken: param.startToken && this._addHexPrefixIfAbsent(param.startToken),
+                endToken: param.endToken && this._addHexPrefixIfAbsent(param.endToken)
+            }))
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestParams)
+            })
+
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`)
+            }
+
+            const data = await res.json() as PublicMessageBatchResponse[]
+            return data
+        } catch (error) {
+            console.log('fetchPublicMessageOutputListBatch error', error)
+            throw error
+        }
+    }
+
     async fetchIpfsOrigins(address:string):Promise<string[]>{
         const url = `${NFT_CONFIG_URL}/nft.json?v=${new Date().getTime()}`
         const res = await fetch(url)
@@ -272,7 +376,7 @@ class IotaCatSDK {
         return ipfsOrigins
     }
     async fetchAddressQualifiedGroups(address:string,ipfsOrigins:string[]):Promise<IGroupQualify[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressgroupdetails?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressgroupdetails?address=${address}`
         const res = await fetch(url)
         const json = await res.json() as IGroupQualify[]
         const ipfsPolyfilled = (json ?? []).map((group:IGroupQualify)=>{
@@ -288,14 +392,14 @@ class IotaCatSDK {
     // fetch qualified addresses for a group, /groupqualifiedaddresses
     async fetchGroupQualifiedAddresses(groupId:string):Promise<string[]>{
         const fullfilled = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresses?groupId=${fullfilled}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupqualifiedaddresses?groupId=${fullfilled}`
         const res = await fetch(url)
         const json = await res.json()
         return json
     }
     // fetch qualified addresse,pubkey for a group, /groupqualifiedaddresspublickeypairs
     async fetchGroupQualifiedAddressPublicKeyPairs(groupId:string):Promise<{ownerAddress:string,publicKey:string}[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupqualifiedaddresspublickeypairs?groupId=${this._addHexPrefixIfAbsent(groupId)}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupqualifiedaddresspublickeypairs?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -303,14 +407,14 @@ class IotaCatSDK {
     // fetch marked addresses for a group, /groupmarkedaddresses
     async fetchGroupMarkedAddresses(groupId:string):Promise<string[]>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmarkedaddresses?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupmarkedaddresses?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
     }
     // fetch member addresses for a group, /groupmemberaddresses
     async fetchGroupMemberAddresses(groupId:string):Promise<{ownerAddress:string,publicKey:string, timestamp: number}[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupmemberaddresses?groupId=${this._addHexPrefixIfAbsent(groupId)}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupmemberaddresses?groupId=${this._addHexPrefixIfAbsent(groupId)}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -321,7 +425,7 @@ class IotaCatSDK {
     }
     // fetch public key of a address, /getaddresspublickey
     async fetchAddressPublicKey(address:string):Promise<string|undefined>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/getaddresspublickey?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/getaddresspublickey?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -329,7 +433,7 @@ class IotaCatSDK {
     // fetch group votes for a group, /groupvotes
     async fetchGroupVotes(groupId:string):Promise<{groupId:string,addressSha256Hash:string,vote:number}>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotes?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupvotes?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -342,20 +446,20 @@ class IotaCatSDK {
         memberCount: number;
     }>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupvotescount?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupvotescount?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
     }
     async fetchAddressVotes(address: string): Promise<{groupId: string, vote: number}[]> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressvotes?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressvotes?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         const jsonList = this._ensureList(json)
         return jsonList.map(list => ({groupId: list.groupId, vote: list.vote})) 
     }
     async fetchAddressMutes(address: string): Promise<{groupId: string,addrSha256Hash: string}[]> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmutes?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressmutes?address=${address}`
         const res = await fetch(url)
         const json = await res.json() 
         const jsonList = this._ensureList(json) as {groupId:string,mutedAddressSha256Hash:string}[]
@@ -366,7 +470,7 @@ class IotaCatSDK {
     }
     // fetchAddressLikes
     async fetchAddressLikes(address: string): Promise<{groupId: string,addrSha256Hash: string}[]> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addresslikes?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addresslikes?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         const jsonList = this._ensureList(json) as {groupId:string,likedAddressSha256Hash:string}[]
@@ -378,14 +482,14 @@ class IotaCatSDK {
     // fetch group blacklist for a group, /groupblacklist
     async fetchGroupBlacklist(groupId:string):Promise<string[]>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupblacklist?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupblacklist?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
     }
     // fetch address member groups for an address, /addressmembergroups
     async fetchAddressMemberGroups(address:string):Promise<string[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmembergroups?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressmembergroups?address=${address}`
         const res = await fetch(url)
         if (!res.ok) {
             throw new Error(`fetchAddressMemberGroups error ${res.status} ${res.statusText}`)
@@ -395,13 +499,13 @@ class IotaCatSDK {
     }
     // fetch address mark groups for an address, /addressmarkgroups
     async fetchAddressMarkGroups(address:string):Promise<string[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmarkgroups?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressmarkgroups?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
     }
     async fetchAddressMarkGroupDetails(address:string): Promise<{groupId: string, timestamp: number}[]> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressmarkgroupdetails?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressmarkgroupdetails?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -409,7 +513,7 @@ class IotaCatSDK {
     // RouteGroupUserReputation = "/groupuserreputation"
     async fetchGroupUserReputation(groupId:string):Promise<IGroupUserReputation[]>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupuserreputation?groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/groupuserreputation?groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return this._ensureList(json)
@@ -418,7 +522,7 @@ class IotaCatSDK {
     // RouteUserGroupReputation = "/usergroupreputation"
     async fetchUserGroupReputation(groupId:string,address:string):Promise<IGroupUserReputation>{
         const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/usergroupreputation?address=${address}&groupId=${prefixedGroupId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/usergroupreputation?address=${address}&groupId=${prefixedGroupId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -427,51 +531,66 @@ class IotaCatSDK {
         return this._addHexPrefixIfAbsent(groupId)
     }
     // get shared output for a group
-    async checkIsGroupPublicFromSharedApiCall(groupId:string):Promise<boolean>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${this._gid(groupId)}`
-            try {
-                // @ts-ignore
-                const res = await fetch(url,{
-                    method:'GET',
-                    headers:{
-                    'Content-Type':'application/json'
-                    }})
-                if (!res.ok) {
-                    if (res.status === 901) {
-                        return true
-                    } 
-                }                    
-                return false
-            } catch (error) {
-                console.log('error',error)
-                // return false
-                throw error
-            }
-    }
-    // get shared output id for a group
-    async fetchSharedOutputId(groupId:string):Promise<{outputId:string}>{
-        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId)
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/shared?groupId=${prefixedGroupId}`
+    async checkIsGroupPublicFromSharedApiCall(groupId: string): Promise<boolean> {
+        const url = `${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${this._gid(groupId)}`;
         try {
-            const res = await fetch(url)
-            const json = await res.json() as {outputId:string}
-            return json
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+    
+            if (res.ok) {
+                const json = await res.json();
+                if (json.code === 901) {
+                    return true;
+                }
+            } else {
+                console.log(`Unexpected status code: ${res.status}`);
+            }
+            return false;
         } catch (error) {
-            console.log('error',error)
-            return {outputId:''}
+            console.log('error', error);
+            throw error;
         }
     }
+    
+    // get shared output id for a group
+    async fetchSharedOutputId(groupId: string): Promise<{ outputId: string }> {
+        const prefixedGroupId = this._addHexPrefixIfAbsent(groupId);
+        const url = `${this.getUrl()}/api/groupfi/v1/shared/v2?groupId=${prefixedGroupId}`;
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+    
+            if (res.ok) {
+                const json = await res.json();
+                return { outputId: json.outputId || '' };
+            } else {
+                console.log(`Unexpected status code: ${res.status}`);
+                return { outputId: '' };
+            }
+        } catch (error) {
+            console.log('error', error);
+            return { outputId: '' };
+        }
+    }
+    
     // message group meta to group config
     _messageGroupMetaToGroupConfig(meta:MessageGroupMeta):GroupConfig{
         const groupId = this._groupMetaToGroupId(meta)
         return {...meta,groupId}
     }
     // addressqualifiedgroupconfigs
-    async fetchAddressQualifiedGroupConfigs({address, includes, excludes, ifSaveGroupConfigMap}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[], ifSaveGroupConfigMap: boolean}): Promise<MessageGroupMeta[]> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;
+    async fetchAddressQualifiedGroupConfigs({address, includes, ifSaveGroupConfigMap}: {address: string, includes?: IIncludesAndExcludes[], ifSaveGroupConfigMap: boolean}): Promise<MessageGroupMeta[]> {
+        const url = `${this.getUrl()}/api/groupfi/v1/addressqualifiedgroupconfigs?address=${address}`;
         const body = {
-            includes,
-            excludes
+            includes
         };
         const res = await fetch(url, {
             method: 'POST',
@@ -482,20 +601,16 @@ class IotaCatSDK {
         });
         const json = await res.json() as MessageGroupMeta[];
         if (ifSaveGroupConfigMap) {
-            this._groupConfigMap = (json ?? []).reduce((acc, group) => {
-                acc[group.groupName] = group;
-                return acc;
-            }, {} as Record<string, MessageGroupMeta>);
+            this._groupConfigMap = this._inxApiResultToGroupConfig(json);
         }
         return this._ensureList(json);
     }
 
     // fetch public group configs
-    async fetchPublicGroupConfigs({includes, excludes}: {includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfig[]> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/publicgroupconfigs`;
+    async fetchPublicGroupConfigs({includes}: {includes?: IIncludesAndExcludes[]}): Promise<GroupConfig[]> {
+        const url = `${this.getUrl()}/api/groupfi/v1/publicgroupconfigs`;
         const body = {
-            includes,
-            excludes
+            includes
         };
         const res = await fetch(url, {
             method: 'POST',
@@ -505,21 +620,26 @@ class IotaCatSDK {
             body: JSON.stringify(body)
         });
         const json = await res.json() as MessageGroupMeta[];
-        const groupConfig = (json ?? []).reduce((acc, group) => {
-            acc[group.groupName] = group;
-            return acc;
-        }, {} as Record<string, MessageGroupMeta>);
+        const groupConfig = this._inxApiResultToGroupConfig(json);
         // merge groupConfig with this._groupConfigMap
         this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
         return this._ensureList(json).map(group => this._messageGroupMetaToGroupConfig(group));
     }
+    _inxApiResultToGroupConfig(json:MessageGroupMeta[]):Record<string,MessageGroupMeta>{
+        const groupConfig = (json ?? []).reduce((acc, group) => {
+            const groupId = this._groupMetaToGroupId(group)
+            acc[groupId] = group;
+            return acc;
+        }, {} as Record<string, MessageGroupMeta>);
+        return groupConfig;
+    }
+
     // fetch for me group configs
-    async fetchForMeGroupConfigs({address, includes, excludes}: {address: string, includes?: IIncludesAndExcludes[], excludes?: IIncludesAndExcludes[]}): Promise<GroupConfigPlus[]> {
+    async fetchForMeGroupConfigs({address, includes}: {address: string, includes?: IIncludesAndExcludes[]}): Promise<GroupConfigPlus[]> {
         try {
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/formegroupconfigs?address=${address}`
+            const url = `${this.getUrl()}/api/groupfi/v1/formegroupconfigs?address=${address}`
             const body = {
-                includes,
-                excludes
+                includes
             };
             const res = await fetch(url, {
                 method: 'POST',
@@ -528,30 +648,44 @@ class IotaCatSDK {
                 },
                 body: JSON.stringify(body)
             });
-            const json = await res.json() as MessageGroupMetaPlus[];
-            const resultList = this._ensureList(json);
-            const groupConfig = resultList.reduce((acc, group) => {
-                const {isPublic,...config} = group
-                acc[group.groupName] = config;
+            const json = await res.json() as GroupConfigPlus[];
+            const resultList = this._ensureList(json) as GroupConfigPlus[]
+            const groupConfigList = resultList.map(this._processGroupConfigFromInxApi)
+            const groupConfig = groupConfigList.reduce((acc: Record<string, GroupConfig>, group: GroupConfigPlus) => {
+                const {isPublic, ...meta} = group;
+                acc[group.groupId] = meta;
                 return acc;
-            }, {} as Record<string, MessageGroupMeta>);
+            }, {} as Record<string, GroupConfig>);
             // merge groupConfig with this._groupConfigMap
             this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
-            const configPlusList = resultList.map(group => {
-                const {isPublic, ...meta} = group;
-                const config = this._messageGroupMetaToGroupConfig(meta);
-                return {...config, isPublic};
-            })
-            return configPlusList;
+            // log method groupConfigList _groupConfigMap
+            console.log('fetchForMeGroupConfigs groupConfigList _groupConfigMap',groupConfigList,this._groupConfigMap)
+            return groupConfigList;
         } catch (error) {
             console.log('fetchForMeGroupConfigs error',error)
             throw error
         }
     }
+    // process group config from inx api,
+    _processGroupConfigFromInxApi<T extends GroupConfig | GroupConfigPlus>(rawConfig: T): T {
+        const config = {...rawConfig}
+        config.dappGroupId = config.groupId
+        // log method config
+        console.log('processGroupConfigFromInxApi config',config)
+        config.groupId = prefixedGroupIdToGroupId(config.groupId)
+        return config
+    }
+    // process group config before return to user
+    processGroupConfigBeforeReturn<T extends GroupConfig | GroupConfigPlus>(rawConfig: T): T {
+        const config = {...rawConfig}
+        config.groupId = config.dappGroupId
+        config.dappGroupId = ''
+        return config
+    }
 // fetch address marked group configs
     async fetchAddressMarkedGroupConfigs(address:string):Promise<GroupConfig[]>{
         try {
-            const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/markedgroupconfigs?address=${address}`
+            const url = `${this.getUrl()}/api/groupfi/v1/markedgroupconfigs?address=${address}`
             const res = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -559,21 +693,22 @@ class IotaCatSDK {
                 }
             })
             let json = await res.json()
-            json = this._ensureList(json)
-            const groupConfig = json.reduce((acc:Record<string, MessageGroupMeta>, group:MessageGroupMeta) => {
-                acc[group.groupName] = group;
+            json = this._ensureList(json) as GroupConfig[]
+            const groupConfigList = json.map(this._processGroupConfigFromInxApi)
+            const groupConfig = groupConfigList.reduce((acc: Record<string, GroupConfig>, group: GroupConfig) => {
+                acc[group.groupId] = group;
                 return acc;
-            }, {} as Record<string, MessageGroupMeta>);
+            }, {} as Record<string, GroupConfig>);
             // merge groupConfig with this._groupConfigMap
             this._groupConfigMap = {...this._groupConfigMap, ...groupConfig};
-            return json.map((group:MessageGroupMeta) => this._messageGroupMetaToGroupConfig(group))
+            return groupConfigList
         } catch (error) {
             console.log('fetchAddressMarkedGroupConfigs error',error)
             throw error
         }
     }
     async fetchAddressPairX(evmAddress: string) {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addresspairx?address=${evmAddress}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addresspairx?address=${evmAddress}`
         const res = await fetch(url, {
             method: 'POST',
             headers: {
@@ -590,7 +725,7 @@ class IotaCatSDK {
     }
 
     async fetchTokenTotalBalance(token: string, chainId: number): Promise<{TotalSupply:string,Decimals: number,Name:string,Symbol:string}> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/tokentotalbalance?token=${token}&chainId=${chainId}`
+        const url = `${this.getUrl()}/api/groupfi/v1/tokentotalbalance?token=${token}&chainId=${chainId}`
         const res = await fetch(url)
         const json = await res.json()
         return json
@@ -598,14 +733,14 @@ class IotaCatSDK {
 
     // addressbalance
     async fetchAddressBalance(address:string):Promise<number>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressbalance?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressbalance?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json
-    }    
+    }
 
     async fetchAddressNames(addressList: string[]): Promise<{[key: string]: {name: string}}> {
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressdid`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressdid`
         const body = addressList
         const res = await fetch(url, {
             method: 'POST',
@@ -649,11 +784,57 @@ class IotaCatSDK {
         return result.join('')
     }
     async _fetchAddressGroupIds(address:string):Promise<string[]>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/addressgroupids?address=${address}`
+        const url = `${this.getUrl()}/api/groupfi/v1/addressgroupids?address=${address}`
         const res = await fetch(url)
         const json = await res.json()
         return json
+    } 
+    formatProfileName(chainId: number, rawName: string) {
+        if (!rawName) return rawName
+        chainId = typeof chainId === 'string' ? parseInt(chainId) : chainId
+        if (chainId === 185 && !rawName.endsWith('.mint')) {
+          return rawName + '.mint'
+        }
+        if (chainId === 42 && !rawName.endsWith('.up')) {
+          return rawName  + '.up'
+        }
+        // Due to a bug on the chain, a capitalized name was introduced, so we specifically convert it here.
+        if (chainId === 148) {
+            return rawName.toLocaleLowerCase()
+        }
+        return rawName
     }
+    async _fetchProfilesByEvmAddresses(addresses: string[]): Promise<ProfileResponse[]> {
+        const url = `${this.getUrl()}/api/groupfi/v1/batchprofileunderevmaddress`;
+        
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(addresses),
+        });
+    
+        const json = await res.json();
+        const profileRawResponseList = this._ensureList(json).filter(Boolean) as Array<{address: string, data: string, outputId: string}>
+        const profileResponse: ProfileResponse[] = []
+        for(const item of profileRawResponseList) {
+            const profileData = JSON.parse(item.data)
+            const profile: {chainId: number, name: string, avatar?: string} = {
+                chainId: parseInt(profileData.chainId), 
+                name: this.formatProfileName(profileData.chainId, profileData.name)
+            }
+            if (profileData.avatar) {
+                profile.avatar = profileData.avatar
+            }
+            profileResponse.push({
+                ...item,
+                profile
+            })
+        }
+        return profileResponse
+    }
+    
     _compressMessageText(message:IMMessage){
         const compressed = LZString.compressToUint8Array(message.data)
         message.data = bytesToHex(compressed)
@@ -745,7 +926,40 @@ class IotaCatSDK {
         return msg as IMMessage
     }
     
-
+    async deserializeMessageWithoutExtra(messageBytes: Uint8Array, address: string): Promise<{ sharedOutputId?: string, msg: IMMessage }> {
+        const rs = new ReadStream(messageBytes);
+        const msg_ = deserializeIMMessage(rs);
+        const msg = this._decompileMessage(msg_);
+        
+        // Decryption handling
+        if (msg.messageType === MessageTypePrivate) {
+            if (msg.authScheme === MessageAuthSchemeRecipeintInMessage) {
+                throw new Error('decryptUsingPrivateKey is required for MessageAuthSchemeRecipeintInMessage');
+            } else if (msg.authScheme === MessageAuthSchemeRecipeintOnChain) {
+                if (!msg.recipientOutputid) {
+                    console.log('invalid message', msg, msg_);
+                    throw new Error('invalid message');
+                }
+                return { sharedOutputId: msg.recipientOutputid, msg };  // Return the sharedOutputId and partially done message
+            }
+        }
+        this._decompressMessageText(msg);
+        return { msg };  // Return the fully processed message
+    }
+    completeMessageWithSalt(msg: IMMessage, salt: string): IMMessage {
+        if (!salt) {
+            throw new Error('Salt is required to complete the message');
+        }
+        
+        // Decrypt the message data using the provided salt
+        msg.data = this._decrypt(msg.data, salt);
+        
+        // Decompress the message text
+        this._decompressMessageText(msg);
+        
+        return msg;  // Return the fully processed message
+    }
+    
     serializeRecipientList(recipients:IMRecipient[], groupId:string):Uint8Array{
         const groupBytes = hexToBytes(groupId)
         const recipientIntermediateList = recipients.map(recipient=>this._compileRecipient(recipient))
@@ -766,12 +980,12 @@ class IotaCatSDK {
     }
     _compileRecipient(recipient:IMRecipient):IMRecipientIntermediate{
         return {
-            addr: addressHash(recipient.addr,IOTACATTAG),
+            addr: addressHash(recipient.addr,GROUPFITAG),
             mkey: hexToBytes(recipient.mkey),
         }
     }
     getAddressHashStr(addr:string):string{
-        return bytesToHex(addressHash(addr,IOTACATTAG))
+        return bytesToHex(addressHash(addr,GROUPFITAG))
     }
     _compileMessage(message:IMMessage):IMMessageIntermediate{
         const {schemaVersion,groupId,messageType,authScheme, timestamp, data} = message
@@ -959,28 +1173,30 @@ class IotaCatSDK {
         const filterParam = this._prepareEvmFilterPayload(addresses,groupId)
         return await this._callFilterEvmGroupQualify(filterParam)
     }
-    async _callFilterEvmGroupQualify(param:{
-        addresses:string[], 
-        chain:number,
-        contract:string,
-        threshold?:number,
-        erc:20|721|0
-        ts:number,
+    async _callFilterEvmGroupQualify(param: {
+        addresses: string[], 
+        chains: Array<{
+            chain: number,
+            contract: string,
+            threshold?: string,
+            erc: 20 | 721 | 0 | 1 | 10000
+        }>,
+        ts: number,
     }):Promise<{addressList:string[],signature:string}>
     {
         // post https://testapi.groupfi.ai/filter
-        const url = `https://${process.env.AUXILIARY_SERVICE_DOMAIN}/group/filter`
+        const url = `https://${process.env.AUXILIARY_SERVICE_DOMAIN}/group/filter/v2`
         const res = await fetch(url, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            // headers: {
+            //     'Content-Type': 'application/json'
+            // },
             body: JSON.stringify(param)
         })
         // log res
         console.log('filterEvmGroupQualify res',res)
         if (!res.ok) {
-            return {addressList:param.addresses,signature:'s'}
+            throw new Error(`filterEvmGroupQualify error ${res.status} ${res.statusText}`)
         }
         const json = await res.json() as {'err-code'?:number,indexes:number[]}
         // log json
@@ -994,6 +1210,29 @@ class IotaCatSDK {
         const signature = 's'
         return {addressList,signature}
     }
+    // call /batchfetchgroupispublic, method POST
+    async batchFetchGroupIsPublic(groupIds: string[]): Promise<{[key: string]: boolean}> {
+        const url = `${this.getUrl()}/api/groupfi/v1/batchfetchgroupispublic`;
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(groupIds)
+            });
+            const result = await res.json() as { groupId: string, isPublic: boolean }[];
+            const map: { [key: string]: boolean } = {};
+            result.forEach(item => {
+                map[item.groupId] = item.isPublic;
+            });
+            return map;
+        } catch (error) {
+            console.log('error', error);
+            return {};
+        }
+    }
+
     _chainNameToChainId(chainName:string):number{
         if (chainName === 'shimmer-evm') return 148;
         return 0
@@ -1009,29 +1248,55 @@ class IotaCatSDK {
         return addressList.length > 0
     }
     _getActualThresholdValue(groupConfig:MessageGroupMeta):string{
-        if (groupConfig.qualifyType === 'nft') return '1'
+        if (['nft','event', 'metadata'].includes(groupConfig.qualifyType)) return '1'
         const humanReadable = groupConfig.tokenThresValue!
         const decimal = parseInt(groupConfig.tokenDecimals!)
         return ethers.parseUnits(humanReadable,decimal).toString()
     }
+    _getActualAddresses(addresses: string[], chainId: number) {
+        if (isSolanaChain(chainId)) {
+            return addresses.filter(isSolanaAddress)
+        } else {
+            return addresses.filter(isEvmAddress)
+        }
+    }
     _prepareEvmFilterPayload(addresses:string[], groupId:string) {
         try {
-            const groupConfig = IotaCatSDKObj._groupIdToGroupMeta(groupId) as MessageGroupMeta
+            const groupConfig = this._groupIdToGroupMeta(groupId) as MessageGroupMeta
+            const actualAddresses = this._getActualAddresses(addresses, groupConfig.chainId)
             let filterParam = {
-                addresses,
+                addresses: actualAddresses,
                 chain:groupConfig.chainId,
                 contract:groupConfig.contractAddress,
-                erc:20 as 20|721|0,
+                threshold: '0',
+                uriContains: '',
+                // chainId 518, spl token, erc = 1
+                erc:20 as 20|721|0|1,
                 ts:getCurrentEpochInSeconds()
             }
             const thresValue = this._getActualThresholdValue(groupConfig)
             // check if contract address is all zero, if so, set erc to 0
-            if (groupConfig.contractAddress === '0x0000000000000000000000000000000000000000') {
+            if (['0x0000000000000000000000000000000000000000', '11111111111111111111111111111111'].includes(groupConfig.contractAddress) ) {
                 filterParam = Object.assign(filterParam,{
                     erc:0,
                     threshold: thresValue
                 })
-            } else if (groupConfig.qualifyType === 'nft'){
+            } else if (groupConfig.qualifyType === 'event'){
+                filterParam = Object.assign(filterParam,{
+                    erc:10000,
+                    threshold: thresValue
+                })
+            } 
+            else if (groupConfig.qualifyType === 'metadata'){
+                let erctype = groupConfig.contractType??'erc721'
+                erctype = erctype.toLowerCase()
+                const erc = erctype === 'erc1155' ? 115500 : 72100
+                filterParam = Object.assign(filterParam,{
+                    erc,
+                    uriContains: groupConfig.uriContains
+                })
+            }
+             else if (groupConfig.qualifyType === 'nft'){
                 filterParam = Object.assign(filterParam,{
                     erc:721,
                     threshold: thresValue
@@ -1042,7 +1307,27 @@ class IotaCatSDK {
                     threshold: thresValue
                 })
             }
-            return filterParam
+            const filterParamV2 = {
+                addresses: actualAddresses,
+                chains: [
+                    {
+                        chain: filterParam.chain,
+                        contract: filterParam.contract,
+                        erc: filterParam.erc,
+                        uriContains: filterParam.uriContains,
+                        threshold: filterParam.threshold?.toString() // Ensure threshold is a string
+                    },
+                    ...groupConfig.extraChains?.map(extraChain => ({
+                        chain: extraChain.chainId,
+                        contract: extraChain.contractAddress,
+                        erc: filterParam.erc, // Same ERC type as the main chain
+                        threshold: filterParam.threshold?.toString() // Same threshold as the main chain
+                    })) || []
+                ],
+                ts: filterParam.ts
+            }
+            
+            return filterParamV2
         } catch (error) {
             console.log('_prepareEvmFilterPayload error',error)
             throw error
@@ -1052,7 +1337,7 @@ class IotaCatSDK {
 
     // call /batchsmraddresstoevmaddress, method POST
     async batchSmrAddressToEvmAddress(addresses:string[]):Promise<{[key:string]:string}>{
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/batchsmraddresstoevmaddress`
+        const url = `${this.getUrl()}/api/groupfi/v1/batchsmraddresstoevmaddress`
         try {
             
             const res = await fetch(url, {
@@ -1073,20 +1358,70 @@ class IotaCatSDK {
             return {}
         }
     }
+
+    async batchFetchAddressProfile(addressList: string[]): Promise<{[key: string]: {name: string, avatar?: string}}> { 
+        console.log('batchFetchAddressProfile addressList', addressList, this)
+        try {
+            const [nameMap, profileResponseList] = await Promise.all([this.fetchAddressNames(addressList), this._fetchProfilesByEvmAddresses(addressList)])
+            console.log('batchFetchAddressProfile first res', nameMap, profileResponseList)
+            const profileMap: {[key: string]: {name: string, avatar?: string}} = {}
+            for(const item of profileResponseList) {
+                profileMap[item.address] = item.profile
+            }
+            console.log('batchFetchAddressProfile profileMap', profileMap)
+            console.log('batchFetchAddressProfile final res', {
+                ...nameMap,
+                ...profileMap
+            })
+            return {
+                ...nameMap,
+                ...profileMap,
+            } 
+        } catch(error) {
+            console.log('batchFetchAddressProfile error', error)
+            return {}
+        }
+    }
+
+    async fetchAddressProfile(address: string): Promise<{data: any, outputId: string} | null> {
+        const url = `${this.getUrl()}/api/groupfi/v1/profileunderevmaddress?address=${address}`
+        try {
+            const res = await fetch(url, {
+                method:'GET',
+                headers:{
+                'Content-Type':'application/json',
+            }})
+            const json = await res.json()
+            return json
+        } catch(error) {
+            console.log('error',error)
+            return null
+        }
+    }
 }
 
-const instance = new IotaCatSDK
+const instance = new GroupFiSDK
 
-export const IOTACATTAG = 'GROUPFIV4'
-export const IOTACATSHAREDTAG = 'GROUPFISHAREDV2'
+export const GROUPFITAG = 'GROUPFIV4'
+export const GROUPFISHAREDTAG = 'GROUPFISHAREDV2'
 export const GROUPFIMARKTAG = 'GROUPFIMARKV2'
 export const GROUPFIMUTETAG = 'GROUPFIMUTEV1'
 export const GROUPFIVOTETAG = 'GROUPFIVOTEV2'
 export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV2'
-export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1'
+export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1';
 export const GROUPFILIKETAG = 'GROUPFILIKEV1'
 export const GROUPFIGROUPSTATESYNCTAG = 'GROUPFIGROUPSTATESYNCV1'
-export const IotaCatSDKObj = instance
+export const GROUPFIPROFILETAG = 'GROUPFIPROFILEV1'
+export const GROUPFIReservedTags = [
+    GROUPFIMARKTAG,
+    GROUPFIMUTETAG,
+    GROUPFIVOTETAG,
+    GROUPFILIKETAG,
+    GROUPFIQUALIFYTAG,
+    GROUPFIPROFILETAG,
+    'PARTICIPANTION',
+]
+export const GroupFiSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']
 export * from './misc'

@@ -1,19 +1,25 @@
 {
-  "name": "iotacat-sdk-core",
+  "name": "groupfi-sdk-core",
   "version": "0.0.1",
-  "main": "dist/cjs/index.js",
+  "main": "dist/cjs/index.cjs",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
-  "moduleNameIife": "iotacatsdk",
+  "moduleNameIife": "groupfisdk",
+  "exports": {
+    ".": {
+      "require": "./dist/cjs/index.cjs",
+      "import": "./dist/esm/index.js"
+    }
+  },
   "scripts": {
     "clean": "rimraf dist",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
-    "build:staging": "cross-env NODE_ENV=staging pnpm run build",
-    "build:prerelease": "cross-env NODE_ENV=prerelease pnpm run build",
-    "build:production": "cross-env NODE_ENV=production pnpm run build",
+    "build:staging": "env-cmd -f .env.staging pnpm run build",
+    "build:prerelease": "env-cmd -f .env.prerelease pnpm run build",
+    "build:production": "env-cmd -f .env.production pnpm run build",
     "lint": "eslint src --fix --ext .ts,.js",
     "test": "jest"
   },
@@ -44,14 +50,16 @@
     "mqtt": "^5.0.5"
   },
   "dependencies": {
+    "@erc725/erc725.js": "^0.27.1",
     "@iota/util.js": "2.0.0-rc.2",
     "big-integer": "^1.6.51",
+    "bs58": "^6.0.0",
     "crypto-js": "^4.1.1",
+    "ecies-ed25519-js": "^1.0.1",
     "ethers": "^6.11.1",
-    "iotacat-sdk-utils": "workspace:^",
+    "groupfi-sdk-utils": "workspace:^",
     "js-crypto-hkdf": "^1.0.4",
     "lz-string": "^1.5.0",
-    "p-limit": "^4.0.0",
-    "tanglepaysdk-client": "^0.1.10"
+    "p-limit": "^4.0.0"
   }
 }

@@ -7,7 +7,6 @@ import {
   IProxyModeRequest,
 } from 'groupfi-sdk-client';
 import { Ed25519 } from '@iota/crypto.js';
-import { IotaCatSDKObj, IOTACATTAG } from 'iotacat-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 import {
   strToBytes,
@@ -20,10 +19,11 @@ import {
   utf8ToHex,
   concatBytes,
   hexToBytes,
-} from 'iotacat-sdk-utils';
+} from 'groupfi-sdk-utils';
 
 import IotaSDK from 'tanglepaysdk-client';
 import auxiliaryService from '../auxiliaryService';
+import { IBasicOutput } from '@iota/iota.js';
 
 const signText = "I acknowledge that I'm signing into GroupFi. If you did not initiate this sign-in, please disconnect your wallet immediately."
 
@@ -58,7 +58,7 @@ export class ShimmerModeRequestAdapter implements IRequestAdapter {
     )) as string;
 
     releaseBlobUrl(recipientPayloadUrl);
-    return res;
+    return res
   }
 
   async sendTransaction({ essence }: IRequestAdapterSendTransationParams) {
@@ -115,7 +115,7 @@ export class ImpersonationModeRequestAdapter
 
   async decryptPairX(params: { encryptedData: string }) {
     console.log('Enter client mode decryptPairX');
-    return (await IotaSDK.request({
+    const res = (await IotaSDK.request({
       method: 'iota_im_eth_decrypt',
       params: {
         content: {
@@ -125,6 +125,10 @@ export class ImpersonationModeRequestAdapter
         },
       },
     })) as string;
+    return {
+      password: '',
+      decryptedResult: res
+    }
   }
 
   async ethSign(params: { dataToBeSignedHex: string }) {
@@ -189,45 +193,40 @@ export class DelegationModeRequestAdapter
 
   private _nodeUrlHint: string;
 
-  private _dappClient: any;
+  private _walletClient: any;
 
-  constructor(evmAddress: string, nodeUrlHint: string, dappClient: any) {
+  constructor(evmAddress: string, nodeUrlHint: string, walletClient: any) {
     this._evmAddress = evmAddress;
     this._nodeUrlHint = nodeUrlHint;
-    this._dappClient = dappClient;
+    this._walletClient = walletClient;
     GroupfiWalletEmbedded.setup(this._nodeUrlHint);
   }
 
-  async decryptPairX(params: { encryptedData: string }) {
+  async decryptPairX(params: { encryptedData: string }): Promise<{
+    password: string,
+    decryptedResult: string | undefined
+  }> {
     const signTextHex = utf8ToHex(signText, true)
-    const res = await this._dappClient.request({
+    const password = await this._walletClient.request({
       method: 'personal_sign',
       params: [signTextHex, this._evmAddress!],
     });
-    console.log('===>test decryptPairX publickey:', res)
-    const test = GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
-    console.log('===>test decryptPairX res', test)
-    return GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, res)
-    // const res = await this._dappClient.request({
-    //   method: 'eth_decrypt',
-    //   params: [params.encryptedData, this._evmAddress!],
-    // });
-    // console.log('===> Groupfi facade res', res);
-    // return res;
-    // return (await window.ethereum.request({
-    //   method: 'eth_decrypt',
-    //   params: [params.encryptedData, this._evmAddress!],
-    // })) as string;
+    console.log('decryptPairX res:', password)
+    const decryptedResult = GroupfiWalletEmbedded.decryptDataUsingPassword(params.encryptedData, password)
+    return {
+      decryptedResult,
+      password: password
+    }
   }
 
-  async registerPairX(metadataObjWithSignature: Object): Promise<string> {
+  async registerPairX(metadataObjWithSignature: Object): Promise<{proxyAccount:string,remainderIds:string[],remainderOutputs:IBasicOutput[]}> {
     try {
       const body = JSON.stringify(metadataObjWithSignature);
       
       const res = await auxiliaryService.register(body);
 
       if (res.result) {
-        return res.proxy_account;
+        return {proxyAccount:res.proxy_account,remainderIds:res.outputids,remainderOutputs:res.outputs};
       } else {
         throw new Error('Failed to register pairX');
       }
@@ -238,7 +237,7 @@ export class DelegationModeRequestAdapter
 
 
   async ethSign(params: { dataToBeSignedHex: string }): Promise<string> {
-    const res = await this._dappClient.request({
+    const res = await this._walletClient.request({
       method: 'personal_sign',
       params: [params.dataToBeSignedHex, this._evmAddress!],
     });
@@ -252,7 +251,7 @@ export class DelegationModeRequestAdapter
 
   async getEncryptionPublicKey(): Promise<string> {
     const signTextHex = utf8ToHex(signText, true)
-    const res = await this._dappClient.request({
+    const res = await this._walletClient.request({
       method: 'personal_sign',
       params: [signTextHex, this._evmAddress!],
     });
@@ -343,7 +342,7 @@ export class DelegationModeRequestAdapter
       body
     );
 
-    const { outputId, remainderOutputId } =
+    const { outputIds } =
       GroupfiWalletEmbedded.getMetadataFromTransactionId(
         transactionId,
         essenceOutputsLength
@@ -352,8 +351,7 @@ export class DelegationModeRequestAdapter
     return {
       blockId,
       transactionId,
-      outputId,
-      remainderOutputId,
+      outputIds
     };
   }
 }

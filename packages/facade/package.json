@@ -5,10 +5,16 @@
   "author": "",
   "homepage": "https://github.com/TanglePay/GroupFi-SDK#readme",
   "license": "ISC",
-  "main": "dist/cjs/index.js",
+  "main": "dist/cjs/index.cjs",
   "module": "dist/esm/index.js",
   "types": "dist/index.d.ts",
   "moduleNameIife": "iotacatsdkfacade",
+  "exports": {
+    ".": {
+      "require": "./dist/cjs/index.cjs",
+      "import": "./dist/esm/index.js"
+    }
+  },
   "directories": {
     "lib": "lib",
     "test": "__tests__"
@@ -22,6 +28,7 @@
   },
   "scripts": {
     "clean": "rimraf dist",
+    "remove_deps": "find . -name \"node_modules\" -type d -prune -exec rm -rf '{}' +",
     "build:type": "tsc",
     "build:source": "rollup --config rollup.config.mjs",
     "build": "pnpm run clean && pnpm run build:type && pnpm run build:source",
@@ -36,14 +43,15 @@
   },
   "dependencies": {
     "@ethereumjs/util": "^9.0.3",
-    "@iota/crypto.js": "^1.8.6",
+    "@iota/crypto.js": "2.0.0-rc.2",
     "@iota/iota.js": "2.0.0-rc.4",
     "@metamask/sdk": "^0.18.1",
+    "ethers": "^6.11.1",
     "groupfi-sdk-client": "workspace:^",
-    "iotacat-sdk-core": "workspace:^",
-    "iotacat-sdk-utils": "workspace:^",
+    "groupfi-sdk-core": "workspace:^",
+    "groupfi-sdk-utils": "workspace:^",
     "groupfi-walletembed": "workspace:^",
-    "tanglepaysdk-client": "^0.1.10",
+    "tanglepaysdk-client": "^0.1.16",
     "web3": "^4.7.0"
   }
 }

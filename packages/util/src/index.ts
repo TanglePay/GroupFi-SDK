@@ -14,6 +14,32 @@ export * from './SerialAsyncQueue'
 export * from './tracer';
 export * from './browser_upload_helper';
 
+export function logAllMethods(obj: any) {
+  let properties = new Set<string>();
+
+  // Get all properties and methods from the object itself
+  let currentObj = obj;
+  do {
+    Object.getOwnPropertyNames(currentObj).forEach((item) => properties.add(item));
+  } while ((currentObj = Object.getPrototypeOf(currentObj))); // Traverse the prototype chain
+
+  // Filter only methods and handle potential undefined values
+  const methods = Array.from(properties).filter((prop) => {
+    try {
+      return typeof obj[prop] === 'function';
+    } catch (error) {
+      console.warn(`Skipping property '${prop}' due to error: ${error}`);
+      return false;
+    }
+  });
+
+  console.log('Methods:', methods);
+}
+// strip 0x prefix if exist
+export const stripHexPrefix = (hex: string) => {
+  return hex.startsWith('0x') ? hex.slice(2) : hex;
+};
+
 export const concatBytes = (...args: Uint8Array[]) => {
   let totalLength = 0;
   args.forEach((bytes) => {
@@ -201,6 +227,10 @@ export function sleep(ms: number) {
   }
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+// add sleep 0 for yield
+export function sleepYield() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+} 
 export function createBlobURLFromUint8Array(data: Uint8Array): string {
   // Convert Uint8Array to Blob
   const blob = new Blob([data], { type: 'application/octet-stream' });

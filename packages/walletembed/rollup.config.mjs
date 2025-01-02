@@ -1,8 +1,8 @@
-import {createRollupConfig, decorateIifeExternal,decoratePlugin} from "../../rollup.config.mjs";
+import {createRollupConfig,decorateCjsExternal, decorateIifeExternal,decoratePlugin} from "../../rollup.config.mjs";
 import replace from '@rollup/plugin-replace';
 import pkg from './package.json' assert { type: "json" }
 const config =  createRollupConfig(pkg)
-decorateIifeExternal(config[0],{
+decorateIifeExternal(config,{
     '@iota/iota.js': 'Iota',
     '@iota/crypto.js':'IotaCrypto',
     '@iota/util.js': 'IotaUtil',

@@ -1,0 +1,7 @@
+version: 2
+updates:
+  - package-ecosystem: "pnpm" # Dependency ecosystem (e.g., npm, yarn, pip)
+    directory: "/" # Location of package.json or requirements.txt
+    schedule:
+      interval: "weekly" # Update frequency (daily, weekly, or monthly)
+    target-branch: "dev" # Branch to target for PRs

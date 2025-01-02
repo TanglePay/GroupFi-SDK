@@ -1,4 +1,6 @@
-import { PairX } from './types';
+import { IBasicOutput } from '@iota/iota.js';
+import { Profile } from './types';
+import { INodeProvider, INX_GROUPFI_DOMAIN } from 'groupfi-sdk-core';
 
 export const config = [
   {
@@ -25,6 +27,37 @@ export const config = [
 ];
 
 export class AuxiliaryService {
+  private _nodeManager: INodeProvider | null = null;
+    private _currentUrlUsing: string | null = null;
+  
+    // Method to inject NodeManager instance
+    setNodeManager(nodeManager: INodeProvider): void {
+      this._nodeManager = nodeManager;
+      // Initialize _currentUrlUsing on first setup
+      this._currentUrlUsing = this._nodeManager.getUrl();
+    }
+  
+    // Wrapped method to get the current URL, reinitializing if the URL changes
+    getUrl(): string {
+      if (!this._nodeManager) {
+        throw new Error("NodeManager is not set. Please call setNodeManager() first.");
+      }
+  
+      const currentUrl = this._nodeManager.getUrl();
+      if (this._currentUrlUsing !== currentUrl) {
+        // URL has changed; update _currentUrlUsing and trigger reinitialization
+        this._currentUrlUsing = currentUrl;
+        this.reinitializeForNewUrl();
+      }
+  
+      return currentUrl;
+    }
+  
+    // Placeholder for reinitializing classes that depend on the URL
+    private reinitializeForNewUrl(): void {
+      // Reinitialization logic for components depending on the URL
+      // (To be filled in when specifics are available)
+    }
   _domain = process.env.AUXILIARY_SERVICE_DOMAIN;
 
   async fetchSMRPrice(chainId: number) {
@@ -63,8 +96,11 @@ export class AuxiliaryService {
     result: boolean;
     transactionId: string;
   }> {
-    console.log('send proxy tx body:', body);
-    const res = await fetch(`https://${this._domain}/proxy/send`, {
+    const domain = this.getUrl();
+    // split domain to get first part
+    const domainEncoded = encodeURIComponent(domain);
+    console.log('send proxy tx body:');
+    const res = await fetch(`https://${this._domain}/proxy/send?hornet=${domainEncoded}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -96,6 +132,8 @@ export class AuxiliaryService {
     const resJson = (await res.json()) as {
       result: boolean;
       proxy_account: string;
+      outputids: string[];
+      outputs: IBasicOutput[];
     };
 
     return resJson;
@@ -164,6 +202,128 @@ export class AuxiliaryService {
       blockId: json.block_id,
     };
   }
+
+  async getChainList(): Promise<ChainList> {
+    const rawRes = await fetch(`https://${this._domain}/chains`);
+    const json = (await rawRes.json()) as {
+      [chainId: string]: {
+        chainid: number;
+        name: string;
+        Symbol: string;
+        decimal: number;
+        contract: string;
+        pic_uri: string;
+      };
+    };
+    const res: ChainList = {};
+    for (let key in json) {
+      const value = json[key];
+      res[key] = {
+        chainId: value.chainid,
+        name: value.name,
+        symbol: value.Symbol,
+        decimal: value.decimal,
+        contract: value.contract,
+        picUri: value.pic_uri,
+      };
+    }
+
+    return res;
+  }
+
+  async getChainRpc(chainId: number): Promise<string | undefined> {
+    const rawRes = await fetch(
+      `https://${this._domain}/rpc?chainid=${chainId}`
+    );
+    const rawJson = (await rawRes.json()) as {
+      result: boolean;
+      rpc: string;
+    };
+    if (rawJson.result) {
+      return rawJson.rpc;
+    }
+    return undefined;
+  }
+
+  async isNameDuplicate(
+    name: string
+  ): Promise<{ result: boolean; errCode?: number; reason?: string }> {
+    const rawRes = await fetch(`https://${this._domain}/group/checkname?n=${name}`);
+    const rawJson = (await rawRes.json()) as {
+      result: boolean;
+      'err-msg'?: string;
+      'err-code'?: number;
+    };
+
+    return {
+      result: rawJson.result,
+      errCode: rawJson['err-code'],
+      reason: rawJson['err-msg']
+    }
+  }
+
+  async getAddressProfileList(
+    body: string
+  ): Promise<{ [address: string]: Profile[] }> {
+    try {
+      const rawRes = await fetch(`https://${this._domain}/group/dids`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: body,
+      });
+      const rawJson = (await rawRes.json()) as {
+        result: boolean;
+        dids: {
+          [addr: string]: {
+            [chainId: string]: {
+              name: string;
+              image_url: string;
+            };
+          };
+        };
+      };
+      console.log('tryRefreshProfileList rawJson', rawJson);
+      const profileListMap: { [addr: string]: Profile[] } = {};
+      if (!rawJson.result) {
+        return profileListMap;
+      }
+      for (const address in rawJson.dids) {
+        const profileList: Profile[] = [];
+        for (const chainId in rawJson.dids[address]) {
+          const { name, image_url } = rawJson.dids[address][chainId];
+          if (name || image_url) {
+            profileList.push({
+              chainId: Number(chainId),
+              name,
+              avatar: image_url,
+            });
+          }
+        }
+        if (profileList.length) {
+          profileListMap[address] = profileList;
+        }
+      }
+      return profileListMap;
+    } catch (error) {
+      console.error('AuxiliaryService Failed to getAddressProfileList', error);
+      return {};
+    }
+  }
+}
+
+export type ChainList = {
+  [chainId: string]: ChainInfo;
+};
+
+export interface ChainInfo {
+  chainId: number;
+  name: string;
+  symbol: string;
+  decimal: number;
+  contract: string;
+  picUri: string;
 }
 
 const instance = new AuxiliaryService();

@@ -1,6 +1,6 @@
-import { IKeyPair, INftOutput } from '@iota/iota.js';
-import { GroupStateSyncItem } from 'iotacat-sdk-core';
-import { BasicOutputWrapper } from '.';
+
+import { GroupStateSyncItem } from 'groupfi-sdk-core';
+import { IKeyPair, INftOutput, OutputTypes } from '@iota/iota.js';
 
 export const ShimmerMode = 1;
 export const ImpersonationMode = 2;
@@ -17,9 +17,8 @@ export interface PairX {
 
 export interface SendTransationRes {
   blockId: string;
-  outputId: string;
+  outputIds: string[];
   transactionId: string;
-  remainderOutputId?: string | undefined;
 }
 
 export interface IRequestAdapterDecryptParams {
@@ -45,11 +44,23 @@ export interface IRequestAdapter {
     params: IRequestAdapterSendTransationParams
   ) => Promise<SendTransationRes>;
 }
+export interface OutputIdOutputResponse {
+  outputIdHex: string;
+  output: OutputTypes;
+  milestoneTimestamp: number;
+}
+export interface CashOutputResponse {
+  createdCashOutputIds: string[];
+  recentConsumedOutputIds: string[];
+}
 
 export interface IProxyModeRequest {
   getEncryptionPublicKey: () => Promise<string>;
   ethSign: (params: { dataToBeSignedHex: string}) => Promise<string>;
-  decryptPairX: (params: {encryptedData: string}) => Promise<string> 
+  decryptPairX: (params: {encryptedData: string}) => Promise<{
+    password: string,
+    decryptedResult: string | undefined
+  }> 
 }
 
 export type IProxyModeRequestAdapter = IProxyModeRequest & IRequestAdapter

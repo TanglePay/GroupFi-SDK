@@ -1,8 +1,8 @@
-import { DidChangedEvent, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, PairXChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
+import { DidChangedEvent, EventGroupIsPublicChanged, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, ImInboxEventTypeProfileChangedEvent, PairXChangedEvent, ProfileChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
-import { readUint16, readUint32 } from 'iotacat-sdk-utils'
+import { readUint16, readUint32 } from 'groupfi-sdk-utils'
 import { deserializeFieldWithLengthPrefixed } from "./codec_util";
-import { read } from "fs";
+
 
 export function deserializePushed(data: Uint8Array): PushedValue {
     // log enter deserializePushed, data in hex
@@ -52,7 +52,17 @@ export function deserializePushed(data: Uint8Array): PushedValue {
             type: ImInboxEventTypeLikeChanged,
             ...deserializeLikeChangedEvent(reader)
         };
-    } 
+    } else if (eventType === ImInboxEventTypeGroupIsPublicChanged) {
+        return {
+            type: ImInboxEventTypeGroupIsPublicChanged,
+            ...deserializeGroupIsPublicChangedEvent(reader)
+        };
+    } else if (eventType === ImInboxEventTypeProfileChangedEvent) {
+        return {
+            type: ImInboxEventTypeProfileChangedEvent,
+           ...deserializeProfileChangedEvent(reader)
+        }
+    }
     
     
     else {
@@ -91,6 +101,35 @@ export function deserializeGroupMemberChangedEvent(reader : ReadStream): Omit<Ev
         address
     };
 }
+
+export function deserializeGroupIsPublicChangedEvent(reader: ReadStream): Omit<EventGroupIsPublicChanged, 'type'> {
+    console.log("deserializeGroupIsPublicChangedEvent");
+
+    // read groupId
+    const groupIdBytes = reader.readBytes("groupId", GroupIDLength);
+    const groupId = Converter.bytesToHex(groupIdBytes, true);
+    console.log("groupId", groupId);
+
+    // read milestone index
+    const milestoneIndex = readUint32(reader, 'milestoneIndex');
+    console.log("milestoneIndex", milestoneIndex);
+
+    // read timestamp
+    const timestamp = readUint32(reader, 'timestamp');
+    console.log("timestamp", timestamp);
+
+    // read isPublic
+    const isPublic = reader.readUInt8("isPublic") === 1;
+    console.log("isPublic", isPublic);
+
+    return {
+        groupId,
+        timestamp,
+        isPublic
+    };
+}
+
+
 export function deserializeEvmQualifyChangedEvent(reader : ReadStream): Omit<EvmQualifyChangedEvent,'type'> {
     // log enter deserializeEvmQualifyChangedEvent
     console.log("deserializeEvmQualifyChangedEvent");
@@ -152,6 +191,17 @@ export function deserializeDidChangedEvent(reader : ReadStream): Omit<DidChanged
     };
 }
 
+export function deserializeProfileChangedEvent(reader: ReadStream): Omit<ProfileChangedEvent,'type'> {
+    // read addressSha256Hash
+    const addressSha256Hash = Converter.bytesToHex(reader.readBytes("addressSha256Hash", 32), true);
+    // read timestamp
+    const timestamp = readUint32(reader,'timestamp')
+    return {
+        addressSha256Hash,
+        timestamp
+    };
+}
+
 // deserializeNewMessageEvent
 export function deserializeNewMessageEvent(reader : ReadStream): Omit<PushedNewMessage,'type'> {
     // log enter deserializeNewMessageEvent
@@ -180,15 +230,27 @@ export function deserializeMuteChangedEvent(reader : ReadStream): Omit<EventGrou
     // read groupId
     const groupIdBytes = reader.readBytes("groupId", GroupIDLength);
     const groupId = Converter.bytesToHex(groupIdBytes, true);
+
+    // read addressHash
+    const addressHashBytes = reader.readBytes("addressHash", Sha256Length)
+    const addressHash = Converter.bytesToHex(addressHashBytes, true)
     // read timestamp
     const timestamp = readUint32(reader,'timestamp')
-    // read isNewMute
-    const isNewMute = reader.readUInt8("isNewMute") === 1;
+    // read isMuted
+    const isMuted = reader.readUInt8("isMuted") === 1;
+
+    console.log("deserializeMuteChangedEvent res", {
+        groupId,
+        addressHash,
+        timestamp,
+        isMuted
+    });
     
     return {
+        addressHash,
         groupId,
         timestamp,
-        isNewMute
+        isMuted
     };
 }
 
@@ -199,14 +261,25 @@ export function deserializeLikeChangedEvent(reader : ReadStream): Omit<EventGrou
     // read groupId
     const groupIdBytes = reader.readBytes("groupId", GroupIDLength);
     const groupId = Converter.bytesToHex(groupIdBytes, true);
+    // read addressHash
+    const addressHashBytes = reader.readBytes("addressHash", Sha256Length)
+    const addressHash = Converter.bytesToHex(addressHashBytes, true)
     // read timestamp
     const timestamp = readUint32(reader,'timestamp')
-    // read isNewLike
-    const isNewLike = reader.readUInt8("isNewLike") === 1;
-    
-    return {
+    // read isLiked
+    const isLiked = reader.readUInt8("isLiked") === 1;
+
+    console.log('deserializeLikeChangedEvent res', {
+        addressHash,
         groupId,
         timestamp,
-        isNewLike
+        isLiked
+    })
+    
+    return {
+        addressHash,
+        groupId,
+        timestamp,
+        isLiked
     };
 }

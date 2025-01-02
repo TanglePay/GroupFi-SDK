@@ -36,11 +36,11 @@ import {
 import { Converter, ReadStream, WriteStream } from "@iota/util.js";
 import { encrypt, decrypt, getEphemeralSecretAndPublicKey, util, setCryptoJS, setHkdf, setIotaCrypto, EncryptedPayload, decryptOneOfList, EncryptingPayload, encryptPayloadList } from 'ecies-ed25519-js';
 import bigInt from "big-integer";
-import { IMMessage, IotaCatSDKObj, IOTACATTAG, IOTACATSHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
+import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LRUCache, cacheGet, cachePut, MessageAuthSchemeRecipeintOnChain, MessageAuthSchemeRecipeintInMessage, INX_GROUPFI_DOMAIN, 
     EncryptedHexPayload
 
-} from "iotacat-sdk-core";
-import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL, EthDecrypt, tpEncrypt, tpDecrypt} from 'iotacat-sdk-utils';
+} from "groupfi-sdk-core";
+import {addToMap, mapsEqual,retrieveUint8ArrayFromBlobURL, EthDecrypt, tpEncrypt, tpDecrypt} from 'groupfi-sdk-utils';
 
 import { hdkey, Wallet } from '@ethereumjs/wallet'
 import { hashPersonalMessage, ecsign, toRpcSig } from '@ethereumjs/util'
@@ -58,14 +58,14 @@ setIotaCrypto({
 
 import hkdf from 'js-crypto-hkdf';
 import { EventEmitter } from 'events';
-import { ImInboxEventTypeNewMessage } from 'iotacat-sdk-core';
-import { EventGroupMemberChanged } from 'iotacat-sdk-core';
+import { ImInboxEventTypeNewMessage } from 'groupfi-sdk-core';
+import { EventGroupMemberChanged } from 'groupfi-sdk-core';
 setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
     const res = await hkdf.compute(secret, 'SHA-256', length, '',salt)
     return res.key;
 })
 setCryptoJS(CryptoJS)
-const tag = Converter.utf8ToBytes(IOTACATTAG)
+const tag = Converter.utf8ToBytes(GROUPFITAG)
 
 interface StorageFacade {
     prefix: string;
@@ -114,44 +114,12 @@ type NftItemReponse = {
     publicKey: string;
     nftId: string;
 }
-type Network = {
-    id: number;
-    isFaucetAvailable: boolean;
-    faucetUrl?: string;
-    apiUrl: string;
-    explorerApiUrl: string;
-    explorerApiNetwork: string;
-    networkId: string;
-    inxMqttEndpoint: string;
-}
-const shimmerTestNet = {
-    id: 101,
-    isFaucetAvailable: true,
-    faucetUrl: "https://faucet.alphanet.iotaledger.net/api/enqueue",
-    apiUrl: "https://mainnet.shimmer.node.tanglepay.com",
-    explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
-    explorerApiNetwork: "testnet",
-    networkId: "1856588631910923207",
-    inxMqttEndpoint: "wss://test.shimmer.node.tanglepay.com/mqtt",
-}
 
-const shimmerMainNet = {
-    id: 102,
-    isFaucetAvailable: false,
-    apiUrl: "https://prerelease.api.iotacat.com",
-    explorerApiUrl: "https://explorer-api.shimmer.network/stardust",
-    explorerApiNetwork: "shimmer",
-    networkId: "14364762045254553490",
-    inxMqttEndpoint: "wss://test.api.iotacat.com/api/iotacatmqtt/v1",
-}
-const nodes = [
-    shimmerTestNet,
-    shimmerMainNet
-]
+
 class GroupfiWalletEmbedded {
     _client?: SingleNodeClient;
     _indexer?: IndexerPluginClient;
-    _nodeInfo?: INodeInfo;
+    // _nodeInfo?: INodeInfo;
     _protocolInfo?: INodeInfoProtocol;
     // _baseSeed?: Ed25519Seed;
     // _walletKeyPair?: IKeyPair;
@@ -264,20 +232,37 @@ class GroupfiWalletEmbedded {
     async setup(nodeUrlHint?:string){
         if (this._currentNodeUrl && (!nodeUrlHint || nodeUrlHint === this._currentNodeUrl)) return
         if (!nodeUrlHint) {
-            const id = parseInt(process.env.NODE_ID??'0',10)
-            const node = nodes.find(node=>node.id === id)
-            if (!node) throw new Error('Node not found')
-            nodeUrlHint = node.apiUrl
+            nodeUrlHint = `https://${INX_GROUPFI_DOMAIN}`
         }
         this._client = new SingleNodeClient(nodeUrlHint)
         this._currentNodeUrl = nodeUrlHint
         this._indexer = new IndexerPluginClient(this._client)
-        this._nodeInfo = await this._client.info();
-        this._protocolInfo = await this._client.protocolInfo();
+        // this._nodeInfo = await this._client.info();
+        // this._protocolInfo = await this._client.protocolInfo();
+        this._protocolInfo = await this.firstGetNodeProtocolInfo(this._client);
+        
         this._networkId = TransactionHelper.networkIdFromNetworkName(this._protocolInfo!.networkName)
         this._pubKeyCache = makeLRUCache<string>(200)
-        console.log('NodeInfo', this._nodeInfo);
+        // console.log('NodeInfo', this._nodeInfo);
         console.log('ProtocolInfo', this._protocolInfo);
+    }
+    getNodeProtocolInfoStorageKey() {
+        return `${this._storage?.prefix}.ProtocolInfo`
+    }
+    async firstGetNodeProtocolInfo(client: SingleNodeClient) {
+        this._ensureStorageInited()
+        try {
+            const key = this.getNodeProtocolInfoStorageKey()
+            const storageValue = await this._storage!.get(key)
+            if (storageValue !== null) {
+                return JSON.parse(storageValue)
+            }
+            const res = await client.protocolInfo()
+            this._storage!.set(key, JSON.stringify(res))
+            return res
+        } catch(error) {
+            console.log('getNodeProtocolInfo error: ', error)
+        }
     }
     setupStorage(storage:StorageFacade){
         this._storage = storage
@@ -314,7 +299,8 @@ class GroupfiWalletEmbedded {
         const genesisEd25519Address = new Ed25519Address(accountObj._walletKeyPair.publicKey);
         const genesisWalletAddress = genesisEd25519Address.toAddress();
         accountObj._accountHexAddress = Converter.bytesToHex(genesisWalletAddress, true);
-        accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
+        // accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._nodeInfo!.protocol.bech32Hrp);
+        accountObj._accountBech32Address = Bech32Helper.toBech32(ED25519_ADDRESS_TYPE, genesisWalletAddress, this._protocolInfo!.bech32Hrp);
     }
     _getPair(baseSeed:Ed25519Seed, idx:number){
         const addressGeneratorAccountState = {
@@ -333,7 +319,8 @@ class GroupfiWalletEmbedded {
         return new Ed25519Seed(uint8arr);
     }
     _ensureClientInited(){
-        if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
+        // if (!this._client || !this._indexer || !this._nodeInfo || !this._protocolInfo) throw new Error('Client not initialized')
+        if (!this._client || !this._indexer || !this._protocolInfo) throw new Error('Client not initialized')
     }
     _ensureWalletInited(){
         if (!this._SMRAccount._walletKeyPair) throw new Error('Wallet not initialized')
@@ -356,7 +343,7 @@ class GroupfiWalletEmbedded {
         if(decrypted) {
             salt = decrypted.payload
         }
-        if (!salt) throw IotaCatSDKObj.makeErrorForSaltNotFound()
+        if (!salt) throw GroupFiSDKObj.makeErrorForSaltNotFound()
         return salt
     }
     getEd25519PublicKey(){
@@ -374,7 +361,7 @@ class GroupfiWalletEmbedded {
         const address = addressUnlockCondition.address;
         if (!address || address.type !== ED25519_ADDRESS_TYPE) return false
         const ed25519Address = address as IEd25519Address;
-        if (IotaCatSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._SMRAccount._accountHexAddress) return true
+        if (GroupFiSDKObj._addHexPrefixIfAbsent(ed25519Address.pubKeyHash) === this._SMRAccount._accountHexAddress) return true
         // log not self unlock condition
         console.log('Not self unlock condition',addressUnlockCondition,this._SMRAccount._accountHexAddress)
         return false
@@ -613,12 +600,12 @@ class GroupfiWalletEmbedded {
 
     // Before figuring out the relationship between getTransactionPayloadHash and transactionId, keep this function.
     getMetadataFromTransactionId(transactionId: string, essenceOutputsLength: number) {
-        const messageOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,0)
-        let remainderOutputId:string|undefined
-        if (essenceOutputsLength > 1) {
-            remainderOutputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,essenceOutputsLength-1)
+        const outputIds = [] as string[]
+        for (let i = 0; i < essenceOutputsLength; i++) {
+            const outputId = this.getOutputIdFromTransactionPayloadHashAndIndex(transactionId,i)
+            outputIds.push(outputId)
         }
-        return {outputId:messageOutputId,remainderOutputId}
+        return {outputIds}
     }
 
     ethDecrypt(encryptedData: string): string | undefined {
@@ -674,34 +661,48 @@ class GroupfiWalletEmbedded {
         return encryptedData.toString(CryptoJS.enc.Hex);
     }
     
-     decryptDataUsingPassword(encryptedData:string, password:string) {
-        // Convert the encrypted data from hexadecimal to WordArray
-        const encryptedBytes = CryptoJS.enc.Hex.parse(encryptedData);
+    // return undefined means decryption was not successful.
+    decryptDataUsingPassword(encryptedData:string, password:string) {
+        try {
+            console.log('===>up decrypt encryptedData', encryptedData)
+            console.log('===>up decrypt password', password)
+            // Convert the encrypted data from hexadecimal to WordArray
+            const encryptedBytes = CryptoJS.enc.Hex.parse(encryptedData);
+        
+            // Extract the salt (16 bytes), IV (16 bytes), and ciphertext
+            const salt = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(0, 4), 16);
+            const iv = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(4, 8), 16);
+            const ciphertext = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(8), encryptedBytes.sigBytes - 32);
+        
+            // Derive the key using PBKDF2 with the same salt
+            const key = CryptoJS.PBKDF2(password, salt, {
+                keySize: 256 / 32,
+                iterations: 1000 // Ensure the same number of iterations as used during encryption
+            });
     
-        // Extract the salt (16 bytes), IV (16 bytes), and ciphertext
-        const salt = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(0, 4), 16);
-        const iv = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(4, 8), 16);
-        const ciphertext = CryptoJS.lib.WordArray.create(encryptedBytes.words.slice(8), encryptedBytes.sigBytes - 32);
-    
-        // Derive the key using PBKDF2 with the same salt
-        const key = CryptoJS.PBKDF2(password, salt, {
-            keySize: 256 / 32,
-            iterations: 1000 // Ensure the same number of iterations as used during encryption
-        });
-    
-        // Decrypt the data using the derived key and extracted IV
-        const decrypted = CryptoJS.AES.decrypt(
-            CryptoJS.lib.CipherParams.create({ ciphertext: ciphertext }),
-            key,
-            {
-                mode: CryptoJS.mode.CBC,
-                padding: CryptoJS.pad.Pkcs7,
-                iv: iv
+            // Decrypt the data using the derived key and extracted IV
+            const decrypted = CryptoJS.AES.decrypt(
+                CryptoJS.lib.CipherParams.create({ ciphertext: ciphertext }),
+                key,
+                {
+                    mode: CryptoJS.mode.CBC,
+                    padding: CryptoJS.pad.Pkcs7,
+                    iv: iv
+                }
+            );
+
+            const res = decrypted.toString(CryptoJS.enc.Utf8)
+            console.log('===>up decrypt res', res, typeof res, res === '')
+            if (res == '') {
+                throw new Error('decrypt pairX failed')
             }
-        );
-    
-        // Return the decrypted data as a UTF-8 string
-        return decrypted.toString(CryptoJS.enc.Utf8);
+            console.log('===>up decrypt success', res)
+            // Return the decrypted data as a UTF-8 string
+            return res
+        } catch(error) {
+            console.log('===>up decrypt error')
+            return undefined
+        }
     }
 }
 
