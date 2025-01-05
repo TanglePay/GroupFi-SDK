@@ -1,4 +1,16 @@
-import { IBasicOutput } from '@iota/iota.js'
+import { IBasicOutput, INftOutput, OutputTypes } from '@iota/iota.js'
+export type BasicOutputWrapper = {
+    output: IBasicOutput;
+    outputId: string;
+}
+export type OutputWrapper = {
+    output: OutputTypes;
+    outputId: string;
+}
+export type NftOutputWrapper = {
+    output: INftOutput,
+    outputId: string
+}
 export interface IMRecipient {
     addr: string
     mkey: string
@@ -87,8 +99,12 @@ export const ADDRESSLIST_PRESIGN_SERVICE_URL = process.env.ADDRESSLIST_PRESIGN_S
 
 export const NFT_CONFIG_URL = 'https://api.iotaichi.com'
 export const MessageCurrentSchemaVersion = 1
-// schema version for evm qualify
+
+// schema version for group state sync
+export const GroupStateSyncSchemaVersion = 1
+
 export const EvmQualifySchemaVersion = 3
+
 // like
 export const LikeSchemaVersion = 1
 // mark
@@ -170,6 +186,12 @@ export type ProfileChangedEvent = {
     addressSha256Hash: string
     timestamp: number
 }
+
+export type EventGroupStateSyncChanged = {
+    type: typeof ImInboxEventTypeGroupStateSync
+    timestamp: number
+}
+
 export type PushedEvent =
     | EventGroupMemberChanged
     | EventGroupMarkChanged
@@ -180,6 +202,8 @@ export type PushedEvent =
     | EventGroupLikeChanged
     | EventGroupIsPublicChanged
     | ProfileChangedEvent
+    | EventGroupStateSyncChanged
+    
 export type EventGroupUpdateMinMaxToken = {
     type: typeof DomainGroupUpdateMinMaxToken
     groupId: string
@@ -251,7 +275,7 @@ export type IMessage = {
     name?: string
     avatar?: string
 }
-export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged | EventGroupMuteChanged | EventGroupLikeChanged | ProfileChangedEvent | EventGroupIsPublicChanged
+export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged | EventGroupMuteChanged | EventGroupLikeChanged | ProfileChangedEvent | EventGroupIsPublicChanged | EventGroupStateSyncChanged 
 export interface IGroupFiSDK {
     bootstrap(): Promise<void>
     getGroups(): Promise<{ groupId: string; groupName: string }[]>
@@ -299,6 +323,7 @@ export const ImInboxEventTypeMuteChanged = 8
 export const ImInboxEventTypeLikeChanged = 9
 export const ImInboxEventTypeGroupIsPublicChanged = 10
 export const ImInboxEventTypeProfileChangedEvent = 11
+export const ImInboxEventTypeGroupStateSync = 12
 export type InboxItemResponse = {
     items: EventItem[]
     token: string
@@ -346,4 +371,19 @@ export interface PublicMessageBatchResponse {
     startToken: string
     endToken: string
 }
-  
+
+export interface GroupStateSyncItem {
+    groupId: string
+    lastTimeReadLatestMessageTimestamp: number
+}
+export interface GroupStateSync {
+    schemaVersion: number,
+    items: GroupStateSyncItem[]
+}
+export interface GroupStateSyncStorage {
+    schemaVersion: number,
+    outputId: string,
+    output: IBasicOutput,
+    items: GroupStateSyncItem[]
+}
+

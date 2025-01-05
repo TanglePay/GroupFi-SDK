@@ -18,6 +18,7 @@ export * from './codec_like';
 export * from './codec_mute';
 export * from './codec_vote';
 export * from './codec_evm_qualify';
+export * from './codec_groupstatesync';
 export * from './address_check';
 export * from './nodeManager';
 export * from './groupId';
@@ -1410,6 +1411,7 @@ export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV2'
 export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1';
 export const GROUPFILIKETAG = 'GROUPFILIKEV1'
+export const GROUPFIGROUPSTATESYNCTAG = 'GROUPFIGROUPSTATESYNCV1'
 export const GROUPFIPROFILETAG = 'GROUPFIPROFILEV1'
 export const GROUPFIReservedTags = [
     GROUPFIMARKTAG,
@@ -1419,6 +1421,7 @@ export const GROUPFIReservedTags = [
     GROUPFIQUALIFYTAG,
     GROUPFIPROFILETAG,
     'PARTICIPANTION',
+    GROUPFIGROUPSTATESYNCTAG,
 ]
 export const GroupFiSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']

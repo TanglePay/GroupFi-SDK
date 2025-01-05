@@ -670,4 +670,6 @@ export class MessageAggregateRootDomain implements ICycle {
         groupId = prefixedGroupIdToGroupId(groupId)
         return this.groupMemberDomain.setAddressStatusInGroup(groupId, type, newValue);
     }
+
+
 }

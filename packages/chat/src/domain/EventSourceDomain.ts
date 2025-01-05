@@ -1,5 +1,5 @@
 import { Inject, Singleton } from "typescript-ioc";
-import { EventGroupMemberChanged,EventGroupUpdateMinMaxToken, EventItemFromFacade, IMessage, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeNewMessage, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeLikeChanged, MessageResponseItemPlus, ImInboxEventTypeGroupIsPublicChanged } from 'groupfi-sdk-core'
+import { EventGroupMemberChanged,EventGroupUpdateMinMaxToken, EventItemFromFacade, IMessage, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeNewMessage, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeLikeChanged, MessageResponseItemPlus, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupStateSync } from 'groupfi-sdk-core'
 import EventEmitter from "events";
 
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
@@ -21,6 +21,7 @@ import { OutputSendingDomain } from "./OutputSendingDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
 import { bytesToHex,objectId, sleepYield } from "groupfi-sdk-utils";
 import { SharedContext } from "./SharedContext";
+import { GroupMemberDomain } from "./GroupMemberDomain";
 // act as a source of new message, notice message is write model, and there is only one source which is one addresse's inbox message
 // maintain anchor of inbox message inx api call
 // fetch new message on requested(start or after new message pushed), update anchor
@@ -63,10 +64,15 @@ export class EventSourceDomain implements ICycle,IRunnable{
     
     private outputSendingDomain: OutputSendingDomain
 
+    private groupMemberDomain: GroupMemberDomain
+
     @Inject
     private proxyModeDomain: ProxyModeDomain
     setOutputSendingDomain(outputSendingDomain: OutputSendingDomain) {
         this.outputSendingDomain = outputSendingDomain
+    }
+    setGroupMemberDomain(groupMemberDomain: GroupMemberDomain) {
+        this.groupMemberDomain = groupMemberDomain
     }
     private _seenEventIds: Set<string> = new Set<string>();
     
@@ -273,7 +279,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
                 ImInboxEventTypeMuteChanged,
                 ImInboxEventTypeLikeChanged,
                 ImInboxEventTypeEvmQualifyChanged,
-                ImInboxEventTypeGroupIsPublicChanged
+                ImInboxEventTypeGroupIsPublicChanged,
+                ImInboxEventTypeGroupStateSync
             ].includes(type)) {
                 this._outChannelToGroupMemberDomain.push(event)
             } else if (type === ImInboxEventTypePairXChanged) {
@@ -309,7 +316,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
     }
     // isCan catch up from api
     isCanCatchUpFromApi() {
-        return this._context.isLoggedIn
+        return this._context.isLoggedIn && this.groupMemberDomain.isGroupStateSyncInited()
     }
     // isshould catch up from api
     isShouldCatchUpFromApi() {
@@ -569,6 +576,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
             console.log('Get profile mqtt event', item)
             this.handleIncommingEvent([item])
         } else if (item.type === ImInboxEventTypeGroupIsPublicChanged) {
+            this.handleIncommingEvent([item])
+        } else if (item.type === ImInboxEventTypeGroupStateSync) {
             this.handleIncommingEvent([item])
         }
     }
