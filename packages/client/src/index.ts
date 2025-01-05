@@ -2974,7 +2974,14 @@ export class GroupfiSdkClient {
         this._ensureWalletInited()
         const groupStateSync = await this._getGroupSyncStateFromInxApi(userAddress)
         if (!groupStateSync || !groupStateSync.outputId) return undefined
-        const {outputId, output, ...rest} = groupStateSync
+        let {outputId, output, ...rest} = groupStateSync
+        // case output is undefined
+        if (!output) {
+            const outputResponse = await this._client!.output(outputId)
+            output = outputResponse.output as IBasicOutput
+            // log this case, which should not happen
+            console.log('getAllGroupStateSyncs output is undefined, outputId', outputId)
+        }
         const resp = {
             outputWrapper:{
                 output,

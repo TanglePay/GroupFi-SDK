@@ -299,10 +299,7 @@ export class InboxDomain implements ICycle, IRunnable {
             () => {
                 const group = this._getGroupFromCacheOnly(groupId);
                 if (group) {
-                // log group before and after sync  
-                    console.log('InboxDomain syncGroupThrottled group before:', group);
                     this.groupMemberDomain.syncGroupStateTimestamps([group]);
-                    console.log('InboxDomain syncGroupThrottled group after:', group);
                 }
             },
             1000,

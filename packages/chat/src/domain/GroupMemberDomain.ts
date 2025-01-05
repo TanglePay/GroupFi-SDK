@@ -1087,8 +1087,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
 
     // Update the sync method to work with IInboxGroup[]
     syncGroupStateTimestamps(inboxGroups: IInboxGroup[]) {
-        // log enter syncGroupStateTimestamps
-        console.log('enter syncGroupStateTimestamps, inboxGroups:', JSON.stringify(inboxGroups), 'this._groupStateSyncs', JSON.stringify(this._groupStateSyncs))
         
         // Convert current state to timestamps map
         const currentTimestamps: Record<string, number> = {};
