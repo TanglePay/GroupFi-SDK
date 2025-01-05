@@ -1,6 +1,6 @@
 
-import { GroupStateSyncItem } from 'groupfi-sdk-core';
-import { IKeyPair, INftOutput, OutputTypes } from '@iota/iota.js';
+import { BasicOutputWrapper, GroupStateSyncItem } from 'groupfi-sdk-core';
+import { OutputTypes } from '@iota/iota.js';
 
 export const ShimmerMode = 1;
 export const ImpersonationMode = 2;

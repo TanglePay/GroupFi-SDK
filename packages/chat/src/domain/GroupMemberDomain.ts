@@ -1,16 +1,22 @@
 import { Inject, Singleton } from "typescript-ioc";
 import { CombinedStorageService } from "../service/CombinedStorageService";
-import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageCommand, IRunnable, IIncludesAndExcludes } from "../types";
+import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageCommand, IRunnable, IIncludesAndExcludes, IInboxGroup } from "../types";
 import { ThreadHandler } from "../util/thread";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
-import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual} from "groupfi-sdk-core";
+import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual, GroupStateSyncSchemaVersion} from "groupfi-sdk-core";
 import { objectId, bytesToHex, compareHex } from "groupfi-sdk-utils";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
 import EventEmitter from "events";
 import { IConversationDomainCmdFetchPublicGroupMessage, IConversationDomainCmdFetchPublicGroupMessageBatch } from "./ConversationDomain";
 import { SharedContext } from "./SharedContext";
+import { GroupStateSyncStorageExtended } from "groupfi-sdk-client";
+import { 
+    ImInboxEventTypeGroupStateSync, 
+    EventGroupStateSyncChanged 
+} from "groupfi-sdk-core";
+
 export const StoragePrefixGroupMinMaxToken = 'GroupMemberDomain.groupMinMaxToken';
 export interface IGroupMember {
     groupId: string;
@@ -156,10 +162,17 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             console.log('===>test start _actualRefreshForMeGroupConfigs', Date.now())
             let configs: GroupConfigPlus[] = []
             if (includesAndExcludes.length > 0) {
-                configs = await this.groupFiService.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes:includesAndExcludes});
+                const promises: Promise<any>[] = [
+                    ...(!this.isGroupStateSyncInited() ? [
+                        this._fetchGroupState()
+                    ] : []),
+                    this.groupFiService.fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes:includesAndExcludes})
+                ];
+                
+                const results = await Promise.all(promises);
+                configs = results[results.length - 1];
                 console.log('===>test end _actualRefreshForMeGroupConfigs cost', Date.now(), Date.now() - start)
             }
-            // const configs = await this.groupFiService.fetchForMeGroupConfigs({includes:includesAndExcludes});
             this._forMeGroupConfigs = configs;
             // get public group ids
             const publicGroupIds = configs.filter(({isPublic}) => isPublic).map(({groupId}) => groupId);
@@ -209,13 +222,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         // log entering _actualRefreshMarkedGroupConfigs
         console.log('entering _actualRefreshMarkedGroupConfigs');
         
-        const [_, configs] = await Promise.all([
+        const promises: Promise<any>[] = [
             // case lasttimerefreshAddressStatusMap is 0, refresh address status for all groups
-            this._lastTimeRefreshAddressStatusMap.size === 0 ? 
-                this.tryRefreshAddressStatusForAll() :
-                Promise.resolve(),
+            ...(this._lastTimeRefreshAddressStatusMap.size === 0 ? [
+                this.tryRefreshAddressStatusForAll()
+            ] : []),
             this.groupFiService.fetchAddressMarkedGroupConfigs()
-        ]);
+        ];
+
+        const configs = (await Promise.all(promises))[promises.length - 1];
 
         this._markedGroupConfigs = configs;
         this._lastTimeRefreshMarkedGroupConfigs = Date.now();
@@ -362,6 +377,14 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         
         // Clear the refresh timestamps
         this._lastTimeRefreshAddressStatusMap.clear();
+
+        // Clear group state syncs - initialize with default structure instead of undefined
+        this._groupStateSyncs = {
+            schemaVersion: GroupStateSyncSchemaVersion,
+            items: []
+        };
+        this._isDirtyGroupStateSyncs = false;
+        this._isGroupStateSyncOutputUsed = false;
     }
     async bootstrap(): Promise<void> {
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 100);
@@ -379,6 +402,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             this._lastTimeUpdateAllGroupIdsWithinContext = 0;
         }
         this._inChannel = this.eventSourceDomain.outChannelToGroupMemberDomain;
+        this.eventSourceDomain.setGroupMemberDomain(this);  
         // log
         console.log('GroupMemberDomain bootstraped');
     }
@@ -434,6 +458,15 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     _forMeGroupIdsLastUpdateTimestamp: Record<string,number> = {};
     _processedPublicGroupIds: Set<string>;
 
+    private async _tryRefreshGroupStateSyncs(): Promise<boolean> {
+        // Only refresh if dirty and output has not been used
+        if (this._isDirtyGroupStateSyncs && !this._isGroupStateSyncOutputUsed) {
+            await this.persistDirtyGroupStateSyncs();
+            return true;
+        }
+        return false;
+    }
+
     async poll(): Promise<boolean> {
         const cmd = this._groupMemberDomainCmdChannel.poll();
         if (cmd) {
@@ -477,7 +510,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             return false;
         }
         
-        
         const isAllGroupIdsUpdated = await this.tryUpdateAllGroupIdsWithinContext();
         if (isAllGroupIdsUpdated) {
             return false;
@@ -485,6 +517,12 @@ export class GroupMemberDomain implements ICycle, IRunnable {
 
         const isAddressStatusUpdated = await this.tryRefreshAddressStatusForAll();
         if (isAddressStatusUpdated) {
+            return false;
+        }
+
+        // Add the new check here
+        const isGroupStateSyncsUpdated = await this._tryRefreshGroupStateSyncs();
+        if (isGroupStateSyncsUpdated) {
             return false;
         }
 
@@ -526,6 +564,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
                 this._events.emit(EventGroupLikeChangedLiteKey, event as EventGroupLikeChanged)
             } else if (type === ImInboxEventTypeGroupIsPublicChanged) {
                 this._handleGroupIsPublicChangedEvent(event as EventGroupIsPublicChanged);
+            } else if (type === ImInboxEventTypeGroupStateSync) {
+                this._handleGroupStateSyncChangedEvent(event as EventGroupStateSyncChanged);
             }
             return false;
         } 
@@ -542,6 +582,13 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             return false;
         }
         await this._checkForMeGroupIdsLastUpdateTimestamp();
+
+        // Handle dirty group state syncs
+        if (this._isDirtyGroupStateSyncs) {
+            await this.persistDirtyGroupStateSyncs();
+            return false;
+        }
+
         return true;
     }
     // persist dirty group max min token
@@ -857,7 +904,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
 
     _isCanRefreshAddressStatus(): boolean {
-        return this._context.isLoggedIn;
+        return !!this._context.walletAddress;
     }
 
     // Update to handle all groups
@@ -968,5 +1015,143 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     // Add this method
     removeAllListeners(eventKey: string) {
         this._events.removeAllListeners(eventKey);
+    }
+
+    // Add these near the top with other private fields
+    private _groupStateSyncs: GroupStateSyncStorageExtended = {
+        schemaVersion: GroupStateSyncSchemaVersion,
+        items: []
+    };
+    private _isDirtyGroupStateSyncs: boolean = false;
+    private _isGroupStateSyncOutputUsed: boolean = false;
+
+    // Add these near the top with other private fields
+    private _isGroupStateSyncInited: boolean = false;
+
+    // Add these methods after other similar methods
+
+    // Get all group state syncs with their timestamps
+    async getAllGroupStateTimestamps(): Promise<Record<string, number>> {
+        const timestamps: Record<string, number> = {};
+        if (this._groupStateSyncs.items) {
+            for (const item of this._groupStateSyncs.items) {
+                timestamps[item.groupId] = item.lastTimeReadLatestMessageTimestamp;
+            }
+        }
+        return timestamps;
+    }
+
+    // Update a specific group's timestamp
+    async updateGroupStateTimestamp(groupId: string, timestamp: number): Promise<void> {
+
+        const existingItemIndex = this._groupStateSyncs.items.findIndex(
+            item => item.groupId === groupId
+        );
+
+        if (existingItemIndex >= 0) {
+            // Update existing item if timestamp is newer
+            if (this._groupStateSyncs.items[existingItemIndex].lastTimeReadLatestMessageTimestamp < timestamp) {
+                this._groupStateSyncs.items[existingItemIndex].lastTimeReadLatestMessageTimestamp = timestamp;
+                this._isDirtyGroupStateSyncs = true;
+            }
+        } else {
+            // Add new item
+            this._groupStateSyncs.items.push({
+                groupId,
+                lastTimeReadLatestMessageTimestamp: timestamp
+            });
+            this._isDirtyGroupStateSyncs = true;
+        }
+    }
+
+    // Persist dirty state syncs
+    async persistDirtyGroupStateSyncs(): Promise<void> {
+        if (!this._isDirtyGroupStateSyncs || !this._groupStateSyncs) {
+            return;
+        }
+
+        // log enter persistDirtyGroupStateSyncs
+        console.log('enter persistDirtyGroupStateSyncs, starting to persist');
+        try {
+            await this.groupFiService.persistGroupStateSyncs(
+                this._groupStateSyncs.items,
+                this._groupStateSyncs.outputWrapper
+            );
+            this._isDirtyGroupStateSyncs = false;
+            this._isGroupStateSyncOutputUsed = true;
+        } catch (error) {
+            console.error('Error persisting group state syncs:', error);
+            throw error;
+        }
+    }
+
+    // Update the sync method to work with IInboxGroup[]
+    syncGroupStateTimestamps(inboxGroups: IInboxGroup[]) {
+        // log enter syncGroupStateTimestamps
+        console.log('enter syncGroupStateTimestamps, inboxGroups:', JSON.stringify(inboxGroups), 'this._groupStateSyncs', JSON.stringify(this._groupStateSyncs))
+        
+        // Convert current state to timestamps map
+        const currentTimestamps: Record<string, number> = {};
+        this._groupStateSyncs.items.forEach(item => {
+            if (item && item.groupId) {  // Add null check for item
+                currentTimestamps[item.groupId] = item.lastTimeReadLatestMessageTimestamp;
+            }
+        });
+
+        let hasChanges = false;
+
+        // Update timestamps in place if needed
+        for (const group of inboxGroups) {
+            if (!group || !group.groupId) continue;  // Add null check for group
+            
+            // Prefix the groupId using _gid method
+            const prefixedGroupId = this._gid(group.groupId);
+            const timestamp = group.lastTimeReadLatestMessageTimestamp ?? 0;
+
+            if (!currentTimestamps[prefixedGroupId] || currentTimestamps[prefixedGroupId] < timestamp) {
+                currentTimestamps[prefixedGroupId] = timestamp;
+                hasChanges = true;
+            } else if (currentTimestamps[prefixedGroupId] > timestamp) {
+                // Update the inbox group's timestamp if current state has a newer timestamp
+                group.lastTimeReadLatestMessageTimestamp = currentTimestamps[prefixedGroupId];
+            }
+        }
+
+        // Update internal state if changes detected
+        if (hasChanges) {
+            this._groupStateSyncs.items = Object.entries(currentTimestamps).map(([groupId, timestamp]) => ({
+                groupId,
+                lastTimeReadLatestMessageTimestamp: timestamp
+            }));
+            this._isDirtyGroupStateSyncs = true;
+        }
+    }
+
+    async _handleGroupStateSyncChangedEvent(event: EventGroupStateSyncChanged) {
+        try {
+            // Refresh the group state when a sync event is received
+            await this._fetchGroupState();
+        } catch (error) {
+            console.error('Error handling group state sync event:', error);
+        }
+    }
+
+    // Add this method after other group state sync related methods
+    isGroupStateSyncInited(): boolean {
+        return this._isGroupStateSyncInited;
+    }
+
+    // Update the _fetchGroupState method
+    async _fetchGroupState(): Promise<void> {
+        try {
+            const newGroupStateSyncs = await this.groupFiService.getAllGroupStateSyncs();
+            console.log('Fetched group state syncs:', newGroupStateSyncs);
+            if (newGroupStateSyncs) {
+                this._groupStateSyncs = newGroupStateSyncs;
+                this._isGroupStateSyncInited = true; // Set to true after successful fetch
+            }
+        } catch (error) {
+            console.error('Error fetching group state syncs:', error);
+        }
     }
 }

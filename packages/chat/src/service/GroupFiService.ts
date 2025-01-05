@@ -14,7 +14,9 @@ import {
   IIncludesAndExcludes,
   MessageResponseItemPlus,
   GroupConfigPlus,
-  PublicMessageBatchResponse
+  PublicMessageBatchResponse,
+  BasicOutputWrapper,
+  GroupStateSyncItem
 } from 'groupfi-sdk-core'
 // IMMessage <-> UInt8Array
 // IRecipient <-> UInt8Array
@@ -27,6 +29,7 @@ import {
   StorageAdaptor,
   Profile
 } from '../types'
+import { GroupStateSyncStorageExtended } from 'groupfi-sdk-client'
 
 @Singleton
 export class GroupFiService {
@@ -561,5 +564,18 @@ export class GroupFiService {
 
   async marked(groupId: string) {
     return await GroupFiSDKFacade.marked(groupId)
+  }
+
+  // Get all group state syncs
+  async getAllGroupStateSyncs(): Promise<GroupStateSyncStorageExtended | undefined> {
+    return await GroupFiSDKFacade.getAllGroupStateSyncs();
+  }
+
+  // Persist group state syncs
+  async persistGroupStateSyncs(
+    groupStateSyncs: GroupStateSyncItem[], 
+    consumedOutputWrapper?: BasicOutputWrapper
+  ): Promise<void> {
+    await GroupFiSDKFacade.persistGroupStateSyncs(groupStateSyncs, consumedOutputWrapper);
   }
 }

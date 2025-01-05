@@ -8,9 +8,10 @@ import { ThreadHandler } from "../util/thread";
 import EventEmitter from "events";
 import { LRUCache } from "../util/lru";
 import { CombinedStorageService } from "../service/CombinedStorageService";
-import { IInboxGroup, IInboxRecommendGroup } from "../types";
-import { DebouncedEventEmitter } from "../util/debounced";
+import { IInboxGroup } from "../types";
 import { sleepYield } from "groupfi-sdk-utils";
+import { GroupMemberDomain } from "./GroupMemberDomain";
+import { throttle } from "../util/misc";
 // maintain list of groupid, order matters
 // maintain state of each group, including group name, last message, unread count, etc
 // restore from local storage on start, then update on new message from inbox message hub domain
@@ -29,6 +30,8 @@ export class InboxDomain implements ICycle, IRunnable {
     private combinedStorageService: CombinedStorageService;
 
     @Inject
+    private groupMemberDomain: GroupMemberDomain;
+    @Inject
     private localStorageRepository: LocalStorageRepository;
     private _events: EventEmitter = new EventEmitter();
     private _groupIdsList: string[] = [];
@@ -36,6 +39,8 @@ export class InboxDomain implements ICycle, IRunnable {
     private _pendingGroupIdsListUpdate: boolean = false;
     private _pendingGroupsUpdateGroupIds: Set<string> = new Set<string>();
     private _firstUpdateEmitted: boolean = false;
+    private _syncGroupThrottles: Map<string, Function> = new Map();
+
     cacheClear() {
         if (this._groups) {
             this._groups.clear();
@@ -65,6 +70,7 @@ export class InboxDomain implements ICycle, IRunnable {
 
     async destroy() {
         this.threadHandler.destroy();
+        this._syncGroupThrottles.clear();
         //@ts-ignore
         this._groups = undefined;
     }
@@ -139,14 +145,13 @@ export class InboxDomain implements ICycle, IRunnable {
 
     async getGroup(groupId: string) {
         const key = this.getGroupStoreKey(groupId);
-        const group = await this.combinedStorageService.get(key, this._groups);
-        if (group) {
-            return group;
-        } else {
-            const defaultGroup = this._getDefaultGroup(groupId);
-            this._groups.put(key, defaultGroup)
-            return defaultGroup;
+        let group = await this.combinedStorageService.get(key, this._groups);
+        if (!group) {
+            group = this._getDefaultGroup(groupId);
+            this._groups.put(key, group);
         }
+        this._syncGroupThrottled(groupId);
+        return group;
     }
     _getGroupFromCacheOnly(groupId: string) {
         const key = this.getGroupStoreKey(groupId);
@@ -160,6 +165,7 @@ export class InboxDomain implements ICycle, IRunnable {
     setGroup(groupId: string, group: IInboxGroup) {
         const key = this.getGroupStoreKey(groupId);
         this.combinedStorageService.setSingleThreaded(key, group, this._groups);
+        this._syncGroupThrottled(groupId);
     }
     _persistGroupIfInCache(groupId: string) {
         const group = this._getGroupFromCacheOnly(groupId);
@@ -276,8 +282,7 @@ export class InboxDomain implements ICycle, IRunnable {
 
     async switchAddress() {
         await this._loadGroupIdsListFromLocalStorage();
-        this._events.emit(EventInboxUpdated)
-        // log event
+        this._events.emit(EventInboxUpdated);
         console.log('InboxDomain event emitted', EventInboxLoaded);
     }
 
@@ -285,5 +290,24 @@ export class InboxDomain implements ICycle, IRunnable {
         const groupIds = this._groupIdsList;
         const groups: IInboxGroup[] = await Promise.all(groupIds.map((groupId) => this.getGroup(groupId)));
         return groups;
+    }
+
+    
+
+    private _syncGroupThrottled(groupId: string) {
+        const throttledFn = throttle(
+            () => {
+                const group = this._getGroupFromCacheOnly(groupId);
+                if (group) {
+                // log group before and after sync  
+                    console.log('InboxDomain syncGroupThrottled group before:', group);
+                    this.groupMemberDomain.syncGroupStateTimestamps([group]);
+                    console.log('InboxDomain syncGroupThrottled group after:', group);
+                }
+            },
+            1000,
+            `inbox-sync-${groupId}`
+        );
+        throttledFn();
     }
 }

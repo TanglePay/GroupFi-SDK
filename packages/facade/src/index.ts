@@ -26,7 +26,8 @@ import {
   prefixedGroupIdToGroupId,
   PublicMessageBatchResponse,
   isGroupIdEqual,
-  GroupStateSyncItem
+  GroupStateSyncItem,
+  BasicOutputWrapper
 }   from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -42,9 +43,9 @@ import {
   GroupfiSdkClient,
   IProxyModeRequestAdapter,
   AddressMappingStore,
-  BasicOutputWrapper,
   nameMappingCache,
-  StorageFacade
+  StorageFacade,
+  GroupStateSyncStorageExtended
 } from 'groupfi-sdk-client';
 import { Web3 } from 'web3';
 import smrPurchaseAbi from './contractAbi/smr-purchase';
@@ -592,12 +593,13 @@ class GroupFiSDKFacade {
     return res;
   }
   // call getAllGroupStateSyncs
-  async getAllGroupStateSyncs() {
+  async getAllGroupStateSyncs(): Promise<GroupStateSyncStorageExtended | undefined> {
     return await this._client!.getAllGroupStateSyncs(this._address!);
   }
   // call persistGroupStateSyncs
-  async persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper) {
-    return await this._client!.persistGroupStateSyncs(groupStateSyncs,consumedOutputWrapper);
+  async persistGroupStateSyncs(groupStateSyncs: GroupStateSyncItem[], consumedOutputWrapper?: BasicOutputWrapper): Promise<void> {  
+    await this._client!.persistGroupStateSyncs(groupStateSyncs, consumedOutputWrapper);
+  }
   // async batchOutputIdToOutput(outputIds:string[]){
   async batchOutputIdToOutput(outputIds: string[]) {
     const res = await this._client!.batchOutputIdToOutput(outputIds);

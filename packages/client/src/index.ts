@@ -63,7 +63,10 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     MessageTypePrivate,
     INodeProvider,
     GroupStateSyncItem,
-    GroupStateSyncStorage
+    GroupStateSyncStorage,
+    BasicOutputWrapper,
+    NftOutputWrapper,
+    OutputWrapper
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions, sleep } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -140,18 +143,7 @@ type OutputResponseWrapper = {
     output: IOutputResponse;
     outputId: string;
 }
-export type BasicOutputWrapper = {
-    output: IBasicOutput;
-    outputId: string;
-}
-export type OutputWrapper = {
-    output: OutputTypes;
-    outputId: string;
-}
-type NftOutputWrapper = {
-    output: INftOutput,
-    outputId: string
-}
+
 type MessageResponseItem = {
     type: typeof ImInboxEventTypeNewMessage
     outputId: string;
@@ -617,8 +609,9 @@ export class GroupfiSdkClient {
     // get group sync state from inx api
     // /groupstatesyncunderaddress
     async _getGroupSyncStateFromInxApi(address:string):Promise<GroupStateSyncStorage|undefined>{
-       // TODO
-        const url = `https://${INX_GROUPFI_DOMAIN}/api/groupfi/v1/groupstatesyncunderaddress?address=${address}`
+        const params = {address}
+        const paramStr = formatUrlParams(params)
+        const url = `${this.getUrl()}/api/groupfi/v1/groupstatesyncunderaddress${paramStr}`
         console.log('getGroupSyncStateFromInxApi url', url);
         const res = await fetch(url,
         {
@@ -632,6 +625,9 @@ export class GroupfiSdkClient {
         }
         console.log('getGroupSyncStateFromInxApi res', res);
         const data = await res.json() as GroupStateSyncStorage | undefined
+        if (data) {
+            data.items = data.items ?? []   
+        }
         return data
     }
 
@@ -2977,12 +2973,11 @@ export class GroupfiSdkClient {
         this._ensureClientInited()
         this._ensureWalletInited()
         const groupStateSync = await this._getGroupSyncStateFromInxApi(userAddress)
-        if (!groupStateSync) return groupStateSync
-        const {outputId, ...rest} = groupStateSync
-        const outputResp = await this._client!.output(groupStateSync.outputId)
+        if (!groupStateSync || !groupStateSync.outputId) return undefined
+        const {outputId, output, ...rest} = groupStateSync
         const resp = {
             outputWrapper:{
-                output:outputResp.output as IBasicOutput,
+                output,
                 outputId
             },
             ...rest
@@ -2995,6 +2990,8 @@ export class GroupfiSdkClient {
     async persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper){
         this._ensureClientInited()
         this._ensureWalletInited()
+        // log method
+        console.log('persistGroupStateSyncs',groupStateSyncs)
         const data = serializeGroupStateSync(groupStateSyncs)
         const tag = Converter.utf8ToHex(GROUPFIGROUPSTATESYNCTAG)
         const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
