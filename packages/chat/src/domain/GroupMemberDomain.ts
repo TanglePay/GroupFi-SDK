@@ -383,6 +383,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             schemaVersion: GroupStateSyncSchemaVersion,
             items: []
         };
+        this._isGroupStateSyncInited = false;
         this._isDirtyGroupStateSyncs = false;
         this._isGroupStateSyncOutputUsed = false;
     }
