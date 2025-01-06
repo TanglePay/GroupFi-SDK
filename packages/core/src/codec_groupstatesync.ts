@@ -1,6 +1,6 @@
 import { Converter, ReadStream, WriteStream } from "@iota/util.js";
 import { GroupStateSyncSchemaVersion, GroupStateSync, GroupStateSyncItem, GroupIDLength } from "./types";
-import { uint16ToBytes } from "groupfi-sdk-utils";
+import { uint16ToBytes, uint32ToBytes } from "groupfi-sdk-utils";
 
 // serialize group state sync
 export function serializeGroupStateSync(items: GroupStateSyncItem[]): Uint8Array {
@@ -10,27 +10,8 @@ export function serializeGroupStateSync(items: GroupStateSyncItem[]): Uint8Array
     writer.writeBytes("items_length", itemsLengthBytes.length, itemsLengthBytes);
     for (const item of items) {
         writer.writeBytes("group_id", GroupIDLength,Converter.hexToBytes(item.groupId));
-        writer.writeUInt32("lastTimeReadLatestMessageTimestamp", item.lastTimeReadLatestMessageTimestamp);
+        const lastTimeReadLatestMessageTimestampBytes = uint32ToBytes(item.lastTimeReadLatestMessageTimestamp);
+        writer.writeBytes("lastTimeReadLatestMessageTimestamp", lastTimeReadLatestMessageTimestampBytes.length, lastTimeReadLatestMessageTimestampBytes);
     }
     return writer.finalBytes();
-}
-
-// deserialize group state sync
-export function deserializeGroupStateSync(bytes: Uint8Array): GroupStateSync {
-    const reader = new ReadStream(bytes);
-    const schemaVersion = reader.readUInt8("schema_version");
-    const itemsLength = reader.readUInt16("items_length");
-    const items = [];
-    for (let i = 0; i < itemsLength; i++) {
-        const groupId = Converter.bytesToHex(reader.readBytes("group_id", GroupIDLength), true);
-        const lastTimeReadLatestMessageTimestamp = reader.readUInt32("lastTimeReadLatestMessageTimestamp");
-        items.push({
-            groupId,
-            lastTimeReadLatestMessageTimestamp
-        });
-    }
-    return {
-        schemaVersion,
-        items
-    };
 }
