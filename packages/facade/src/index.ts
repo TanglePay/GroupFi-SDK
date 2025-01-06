@@ -27,7 +27,8 @@ import {
   PublicMessageBatchResponse,
   isGroupIdEqual,
   GroupStateSyncItem,
-  BasicOutputWrapper
+  BasicOutputWrapper,
+  ImInboxEventTypeGroupStateSync
 }   from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -320,6 +321,8 @@ class GroupFiSDKFacade {
       } else if (pushed.type === ImInboxEventTypeProfileChangedEvent) {
         item = pushed
       } else if (pushed.type === ImInboxEventTypeGroupIsPublicChanged) {
+        item = pushed
+      } else if (pushed.type === ImInboxEventTypeGroupStateSync) {
         item = pushed
       }
       if (item) {
