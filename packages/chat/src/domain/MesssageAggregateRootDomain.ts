@@ -392,9 +392,6 @@ export class MessageAggregateRootDomain implements ICycle {
         if (this._context.isWalletConnected) {
             this.groupFiService.disablePreparedRemainderHint()
         }
-        setTimeout(() => {
-            this.clearUnreadCount(groupId)
-        }, 1000)
     }
         
     getGroupFiService() {
