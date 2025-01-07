@@ -1,6 +1,7 @@
 import { Inject, Singleton } from "typescript-ioc";
 import { EventGroupMemberChanged,EventGroupUpdateMinMaxToken, EventItemFromFacade, IMessage, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeNewMessage, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeLikeChanged, MessageResponseItemPlus, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupStateSync } from 'groupfi-sdk-core'
 import EventEmitter from "events";
+import { IDomain } from "../types";
 
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { MessageInitStatus } from './MesssageAggregateRootDomain'
@@ -51,7 +52,7 @@ const InboxApiEvents = [
     ImInboxEventTypeGroupStateSync
 ]
 @Singleton
-export class EventSourceDomain implements ICycle,IRunnable{
+export class EventSourceDomain implements IDomain, IRunnable {
     
     
     private anchor: string | undefined
@@ -149,7 +150,13 @@ export class EventSourceDomain implements ICycle,IRunnable{
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'EventSourceDomain', 100);
         this._outChannel = new Channel<IMessage>();
         this._outChannelToGroupMemberDomain = new Channel<EventGroupMemberChanged>();
-        this._cmdChannel = new Channel<IClearCommandBase<any>>()
+        this._cmdChannel = new Channel<IClearCommandBase<any>>();
+        
+        console.log('EventSourceDomain initialized');
+    }
+
+    postInit(): void {
+        // Move wiring logic here
         this._onTopicChangedHandler = () => {
             const allGroupIds = this._context.allGroupIds
             let allTopic = [...allGroupIds]
@@ -158,7 +165,6 @@ export class EventSourceDomain implements ICycle,IRunnable{
                 const walletAddressHash = this.groupFiService.sha256Hash(walletAddress)
                 allTopic = [...allTopic, walletAddressHash]
             }
-            // log EventSourceDomain syncAllTopics
             console.log('EventSourceDomain _onTopicChangedHandler', allGroupIds, allTopic);
             const prefixedAllTopic = allTopic.map((topic) => {
                 return `inbox/${topic}`
@@ -168,10 +174,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
         console.log('EventSourceDomain bootstraped');
     }
     async start() {
-        // this.registerMessageConsumedCallback()
         this.switchAddress()
         this.threadHandler.start();
-        // log EventSourceDomain started
         console.log('EventSourceDomain started');
     }
 

@@ -6,7 +6,7 @@ import { EventSourceDomain } from "./EventSourceDomain";
 import { UserProfileDomain } from "./UserProfileDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
 
-import { ICycle,  StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
+import { ICycle,  StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo, IDomain } from "../types";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
 import { EventGroupMemberChanged, GroupFiSDKObj, IMessage, isGroupIdEqual } from "groupfi-sdk-core";
@@ -57,7 +57,7 @@ export class MessageAggregateRootDomain implements ICycle {
     @Inject
     private _context: SharedContext
 
-    private _cycleableDomains: ICycle[]
+    private _cycleableDomains: IDomain[]
     setStorageAdaptor(storageAdaptor: StorageAdaptor) {
         this.localStorageRepository.setStorageAdaptor(storageAdaptor);
         this.groupFiService.setupGroupFiSDKFacadeStorage(storageAdaptor)
@@ -82,8 +82,13 @@ export class MessageAggregateRootDomain implements ICycle {
     async bootstrap() {
         this._cycleableDomains = [this.eventSourceDomain, this.outputSendingDomain, this.messageHubDomain, this.inboxDomain, this.conversationDomain, this.groupMemberDomain];
         //this._cycleableDomains = [this.eventSourceDomain, this.messageHubDomain, this.inboxDomain]
+        
+        // Parallel bootstrap
+        await Promise.all(this._cycleableDomains.map(domain => domain.bootstrap()));
+        
+        // Sequential post init
         for (const domain of this._cycleableDomains) {
-            await domain.bootstrap();
+            domain.postInit();
         }
     }
     _groupMemberChangedCallback: (param:{groupId: string,isNewMember:boolean,address:string}) => void

@@ -3,7 +3,7 @@ import { IMessage } from 'groupfi-sdk-core'
 import { EventEmitter } from "events";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { LRUCache } from "../util/lru";
-import { ICycle, IRunnable } from "../types";
+import { IDomain, IRunnable } from "../types";
 import { IContext, ThreadHandler } from "../util/thread";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
@@ -16,7 +16,7 @@ export const MessageStorePrefix = 'MessageHubDomain.message.';
 import { stripHexPrefix } from 'groupfi-sdk-utils'
 
 @Singleton
-export class MessageHubDomain implements ICycle, IRunnable {
+export class MessageHubDomain implements IDomain, IRunnable {
 
     @Inject
     private combinedStorageService: CombinedStorageService;
@@ -98,12 +98,14 @@ export class MessageHubDomain implements ICycle, IRunnable {
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'MessageHubDomain', 100);
         this._outChannelToInbox = new Channel<IMessage>();
         this._outChannelToConversation = new Channel<IMessage>();
-        this._inChannel = this.EventSourceDomain.outChannel;
 
         console.log('MessageHubDomain bootstraped')
     }
 
-    
+    postInit(): void {
+        this._inChannel = this.EventSourceDomain.outChannel;
+    }
+
     async getMessage(messageId: string): Promise<IMessage | undefined | null> {
         return await this.combinedStorageService.get(this.getMessageKey(messageId), this._lruCache);
     }

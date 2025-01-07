@@ -1,5 +1,5 @@
 import { Inject, Singleton } from "typescript-ioc";
-import { IAddPendingMessageToFrontCommand, ICommandBase, ICycle, IRunnable } from "../types";
+import { IAddPendingMessageToFrontCommand, ICommandBase, IDomain, IRunnable } from "../types";
 import { IMessage } from 'groupfi-sdk-core'
 import { bytesToHex, sleepYield, stripHexPrefix } from 'groupfi-sdk-utils'
 import { ThreadHandler } from "../util/thread";
@@ -48,7 +48,7 @@ interface IPublicMessageOutputWithGroup {
     token: string;
 }
 @Singleton
-export class ConversationDomain implements ICycle, IRunnable {
+export class ConversationDomain implements IDomain, IRunnable {
     @Inject
     private combinedStorageService: CombinedStorageService;
     @Inject
@@ -431,8 +431,6 @@ export class ConversationDomain implements ICycle, IRunnable {
     async bootstrap() {
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'ConversationDomain', 100);
         this._inChannel = this.messageHubDomain.outChannelToConversation;
-        this.eventSourceDomain.conversationDomainCmdChannel = this._cmdChannel;
-        this.groupMemberDomain.conversationDomainCmdChannel = this._cmdChannel;
         this._lruCache = new LRUCache<IConversationGroupMessageList>(50);
 
         console.log('ConversationDomain bootstraped')
@@ -459,5 +457,11 @@ export class ConversationDomain implements ICycle, IRunnable {
         this.threadHandler.destroy();
         //@ts-ignore
         this._lruCache = undefined;
+    }
+
+    // Add postInit method for wiring logic
+    postInit(): void {
+        this.eventSourceDomain.conversationDomainCmdChannel = this._cmdChannel;
+        this.groupMemberDomain.conversationDomainCmdChannel = this._cmdChannel;
     }
 }
