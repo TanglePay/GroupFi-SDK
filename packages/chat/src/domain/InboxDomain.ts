@@ -9,7 +9,7 @@ import EventEmitter from "events";
 import { LRUCache } from "../util/lru";
 import { CombinedStorageService } from "../service/CombinedStorageService";
 import { IInboxGroup } from "../types";
-import { sleepYield } from "groupfi-sdk-utils";
+import { getCurrentEpochInSeconds, sleepYield } from "groupfi-sdk-utils";
 import { GroupMemberDomain } from "./GroupMemberDomain";
 import { throttle } from "../util/misc";
 // maintain list of groupid, order matters
@@ -177,6 +177,8 @@ export class InboxDomain implements ICycle, IRunnable {
         const group = await this.getGroup(groupId);
         group.unreadCount = 0;
         group.lastTimeReadLatestMessageTimestamp = group.latestMessage?.timestamp??0;
+        const currentTime = getCurrentEpochInSeconds()
+        group.lastTimeReadLatestMessageTimestamp = Math.max(currentTime, group.lastTimeReadLatestMessageTimestamp)
         this.setGroup(groupId, group);
     }
 
