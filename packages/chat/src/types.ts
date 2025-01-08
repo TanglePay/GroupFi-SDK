@@ -160,3 +160,18 @@ export interface IEncryptedPairX {
     publicKey: string
     privateKeyEncrypted: string
 }
+
+export enum CommandType {
+    AcquirePublicKey = 1,
+    JoinGroup = 2,
+    SendMessage = 4, 
+    LeaveGroup = 6,
+    EnterGroup = 7,
+    RegisterPairX = 8,
+    MarkGroup = 9,
+    VoteGroup = 10,
+    MuteGroupMember = 11,
+    Login = 12,
+    LikeGroupMember = 13,
+    SelectProfile = 14
+}

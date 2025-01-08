@@ -12,6 +12,7 @@ import { IInboxGroup } from "../types";
 import { getCurrentEpochInSeconds, sleepYield } from "groupfi-sdk-utils";
 import { GroupMemberDomain } from "./GroupMemberDomain";
 import { throttle } from "../util/misc";
+import { GroupFiService } from "../service/GroupFiService";
 // maintain list of groupid, order matters
 // maintain state of each group, including group name, last message, unread count, etc
 // restore from local storage on start, then update on new message from inbox message hub domain
@@ -29,6 +30,8 @@ export class InboxDomain implements ICycle, IRunnable {
     @Inject
     private combinedStorageService: CombinedStorageService;
 
+    @Inject
+    private groupFiService: GroupFiService;
     @Inject
     private groupMemberDomain: GroupMemberDomain;
     @Inject
@@ -300,10 +303,18 @@ export class InboxDomain implements ICycle, IRunnable {
     private _syncGroupThrottled(groupId: string) {
         const throttledFn = throttle(
             () => {
-                const group = this._getGroupFromCacheOnly(groupId);
-                if (group) {
-                    this.groupMemberDomain.syncGroupStateTimestamps([group]);
+                const fn = () => {
+                    // get all groups
+                    const groups = this._groups.values();
+                    
+                    return this.groupMemberDomain.syncGroupStateTimestamps(groups);
                 }
+                // 1 minute
+                this.groupFiService.addLowPriorityTask(
+                    `group-state-sync`,
+                    fn,
+                    60
+                )
             },
             1000,
             `inbox-sync-${groupId}`

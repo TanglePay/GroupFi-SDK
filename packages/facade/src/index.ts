@@ -75,6 +75,16 @@ import auxiliaryService from './auxiliaryService';
 import { AuxiliaryService, config, ChainList, ChainInfo } from './auxiliaryService';
 import { IBasicOutput } from '@iota/iota.js';
 
+interface TaskOutputs {
+  created: IBasicOutput[];
+  consumed: BasicOutputWrapper[];
+}
+
+interface LowPriorityTask {
+  task: () => TaskOutputs;
+  expireTime: number;
+}
+
 export { SimpleDataExtended };
 export * from './types';
 
@@ -100,6 +110,8 @@ class GroupFiSDKFacade {
 
   // A storage solution like browser localStorage or other custom storage mechanisms.
   private _storage: StorageFacade | null = null
+
+  private _lowPriorityTasks: Map<string, LowPriorityTask> = new Map();
 
   // Returns the current mode if it is defined.
   get currentMode() {
@@ -228,7 +240,7 @@ class GroupFiSDKFacade {
         imMessage: resUnwrapped.message,
         messageId: resUnwrapped.messageId,
         sender: resUnwrapped.sender,
-        // Mqtt lacks a milestoneTimestamp; use the receiver’s timestamp instead.
+        // Mqtt lacks a milestoneTimestamp; use the receiver's timestamp instead.
         milestoneTimestamp: getCurrentEpochInSeconds()
       })
       // const message: IMessage = {
@@ -571,6 +583,8 @@ class GroupFiSDKFacade {
     isGroupPublic:boolean,
     memberList?: { addr: string; publicKey: string }[]
   ) {
+    this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
     tracer.startStep('sendMessageToGroup','facade sendMessage');
     const address: Address = {
       type: ShimmerBech32Addr,
@@ -600,8 +614,14 @@ class GroupFiSDKFacade {
     return await this._client!.getAllGroupStateSyncs(this._address!);
   }
   // call persistGroupStateSyncs
-  async persistGroupStateSyncs(groupStateSyncs: GroupStateSyncItem[], consumedOutputWrapper?: BasicOutputWrapper): Promise<void> {  
-    await this._client!.persistGroupStateSyncs(groupStateSyncs, consumedOutputWrapper);
+  persistGroupStateSyncs(
+    groupStateSyncs: GroupStateSyncItem[],
+    consumedOutputWrapper?: BasicOutputWrapper
+  ): {
+    created: IBasicOutput[];
+    consumed: BasicOutputWrapper[];
+  } {
+    return this._client!.persistGroupStateSyncs(groupStateSyncs, consumedOutputWrapper);
   }
   // async batchOutputIdToOutput(outputIds:string[]){
   async batchOutputIdToOutput(outputIds: string[]) {
@@ -1114,6 +1134,7 @@ class GroupFiSDKFacade {
 
   async voteGroup(groupId: string, vote: number) {
     this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
     groupId = prefixedGroupIdToGroupId(groupId);
     const res = (await this._client!.voteGroup(
       groupId,
@@ -1168,8 +1189,9 @@ class GroupFiSDKFacade {
   }
 
   async markGroup(groupId: string) {
-    groupId = prefixedGroupIdToGroupId(groupId);
     this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const res = (await this._client!.markGroup({
       groupId,
       userAddress: this._address!,
@@ -1190,8 +1212,9 @@ class GroupFiSDKFacade {
     isGroupPublic: boolean;
     qualifyList?: { addr: string; publicKey: string }[];
   }) {
-    groupId = prefixedGroupIdToGroupId(groupId);
     this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const isAlreadyInMemberList = memberList.find(
       (o) => o.addr === this._address!
     );
@@ -1245,8 +1268,9 @@ class GroupFiSDKFacade {
     return await this._client!._getEvmQualify(groupId, addressList, signature, addressType,timestamp);
   }
   async leaveOrUnMarkGroup(groupId: string) {
-    groupId = prefixedGroupIdToGroupId(groupId);
     this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
+    groupId = prefixedGroupIdToGroupId(groupId);
     const res = (await this._client!.unmarkGroup(groupId, this._address!)) as
       | TransactionRes
       | undefined;
@@ -1407,6 +1431,7 @@ class GroupFiSDKFacade {
 
   async muteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
     groupId = prefixedGroupIdToGroupId(groupId);
     const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(memberAddress)
@@ -1427,6 +1452,7 @@ class GroupFiSDKFacade {
   // likeGroupMember
   async likeGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
     groupId = prefixedGroupIdToGroupId(groupId);
     const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(memberAddress)
@@ -1445,6 +1471,7 @@ class GroupFiSDKFacade {
   // unlikeGroupMember
   async unlikeGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
     groupId = prefixedGroupIdToGroupId(groupId);
     const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256Hash(memberAddress)
@@ -1462,6 +1489,7 @@ class GroupFiSDKFacade {
   
   async unMuteGroupMember(groupId: string, memberAddress: string) {
     this._ensureWalletConnected();
+    this.tryHandleOneLowPriorityTask();
     groupId = prefixedGroupIdToGroupId(groupId);
     const memberAddrHash = GroupFiSDKObj._addHexPrefixIfAbsent(
       GroupFiSDKObj._sha256HashAddress(memberAddress)
@@ -1747,6 +1775,92 @@ class GroupFiSDKFacade {
       console.log('fetchPublicMessageOutputListBatch error', error);
       throw error;
     }
+  }
+
+  // Sends temporary outputs through the client
+  async sendTempOutputs(outputs: IBasicOutput[]) {
+    this._ensureWalletConnected();
+    return await this._client!._sendBasicOutput(outputs);
+  }
+
+  /**
+   * Adds a low priority task that creates and consumes outputs
+   * @param key Unique identifier for deduplication
+   * @param task Function that returns created and consumed outputs
+   * @param ttlSeconds Time to live in seconds before the task expires
+   */
+  addLowPriorityTask(key: string, task: () => TaskOutputs, ttlSeconds: number = 3600) {
+    // Add new task with expiration time, overriding any existing task with the same key
+    this._lowPriorityTasks.set(key, {
+      task,
+      expireTime: Date.now() + (ttlSeconds * 1000)
+    });
+  }
+
+  /**
+   * Attempts to handle one low priority task from the queue
+   * @returns true if a task was handled, false if no tasks were available
+   */
+  tryHandleOneLowPriorityTask(): boolean {
+    // Get first task from map
+    const firstEntry = this._lowPriorityTasks.entries().next();
+    if (firstEntry.done) {
+      return false;
+    }
+
+    const [key, taskInfo] = firstEntry.value;
+    
+    try {
+      // Execute the task
+      const outputs = taskInfo.task();
+      
+      // Store the outputs using client
+      this._client!.storeTempOutputs(outputs.created, outputs.consumed);
+
+      // Remove the completed task
+      this._lowPriorityTasks.delete(key);
+      return true;
+      
+    } catch (error) {
+      console.error(`Error executing low priority task ${key}:`, error);
+      // Remove failed task
+      this._lowPriorityTasks.delete(key);
+      return false;
+    }
+  }
+
+  /**
+   * Attempts to clean one expired low priority task from the queue
+   * @returns true if an expired task was cleaned, false if no expired tasks were found
+   */
+  async tryCleanOneExpiredLowPriorityTask(): Promise<boolean> {
+    // Find first expired task
+    const now = Date.now();
+    for (const [key, taskInfo] of this._lowPriorityTasks) {
+      if (taskInfo.expireTime <= now) {
+        try {
+          // Execute the expired task
+          const outputs = taskInfo.task();
+          
+          // Store the outputs
+          this._client!.storeTempOutputs(outputs.created, outputs.consumed);
+
+          // Send the outputs
+          await this._client!.sendTempOutputs();
+
+          // Remove the completed task
+          this._lowPriorityTasks.delete(key);
+          return true;
+          
+        } catch (error) {
+          console.error(`Error cleaning expired task ${key}:`, error);
+          // Remove failed task
+          this._lowPriorityTasks.delete(key);
+          return false;
+        }
+      }
+    }
+    return false;
   }
 }
 

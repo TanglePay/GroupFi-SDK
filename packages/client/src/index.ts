@@ -2232,12 +2232,20 @@ export class GroupfiSdkClient {
             ],
             features: []
         };
-        return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs, [consolidatedBasicOutput])
+        return await this._sendBasicOutput([consolidatedBasicOutput], consumedOutputs)
     }
     async _sendBasicOutput(basicOutputs:(IBasicOutput | INftOutput)[],extraOutputsToBeConsumed:BasicOutputWrapper[] = []){
+        // Use temp outputs if they exist and merge with provided outputs
+        const allCreatedOutputs = [...this._tempCreatedOutputs, ...basicOutputs];
+        const allConsumedOutputs = [...this._tempConsumedOutputs, ...extraOutputsToBeConsumed];
+        
+        // Clear temp storage immediately to avoid reuse
+        this._tempCreatedOutputs = [];
+        this._tempConsumedOutputs = [];
+
         const createdOutputs:(IBasicOutput | INftOutput)[] = []
         let amountToSend = bigInt('0')
-        for (const basicOutput of basicOutputs) {
+        for (const basicOutput of allCreatedOutputs) {
             const amountToSend_ = this._getAmount(basicOutput)
             basicOutput.amount = amountToSend_.toString()
             createdOutputs.push(basicOutput)
@@ -2247,7 +2255,7 @@ export class GroupfiSdkClient {
         // get first output with amount > amountToSend
         let depositFromExtraOutputs = bigInt('0')
 
-        for (const extraOutput of extraOutputsToBeConsumed) {
+        for (const extraOutput of allConsumedOutputs) {
             const amount = bigInt(extraOutput.output.amount)
             depositFromExtraOutputs = depositFromExtraOutputs.add(amount)
         }
@@ -2280,7 +2288,7 @@ export class GroupfiSdkClient {
             if (!consumedOutputWrapper ) {
                 // log get cash from unspent outputs on the fly
                 console.log('get cash from unspent outputs on the fly');
-                const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
+                const idsForFiltering = new Set(allConsumedOutputs.map(output=>output.outputId))
                 const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
                 // console.log('unspent Outputs', outputs);
                 if (!outputs || outputs.length === 0) throw GroupFiSDKObj.makeErrorForUserDoesNotHasEnoughToken()
@@ -2288,7 +2296,7 @@ export class GroupfiSdkClient {
                 consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
             }
             if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
-            extraOutputsToBeConsumed.push(consumedOutputWrapper)
+            allConsumedOutputs.push(consumedOutputWrapper)
             const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
             consumedCashOutputId = consumedOutputId
             console.log('ConsumedOutput', consumedOutput);
@@ -2296,7 +2304,7 @@ export class GroupfiSdkClient {
             createdOutputs.push(remainderBasicOutput)
             console.log("Remainder Basic Output: ", remainderBasicOutput);
         }
-        const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(extraOutputsToBeConsumed, createdOutputs)
+        const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(allConsumedOutputs, createdOutputs)
         console.log('===> send transaction res', res)
         const {blockId,outputIds,transactionId } = res
         // Add transaction to pending transactions
@@ -2305,8 +2313,6 @@ export class GroupfiSdkClient {
         const consumedOutputIds = consumedCashOutputId ? [consumedCashOutputId] : []
         this._addPendingTransaction(transactionId, consumedOutputIds, filteredOutputIds);
         
-        
-    
         // Remove the spent UTXO from _remainderHintSet using the index
         if (remainderIndex !== -1) {
             this._remainderHintSet.splice(remainderIndex, 1);
@@ -2388,7 +2394,7 @@ export class GroupfiSdkClient {
             // Optionally implement retry logic or alerting mechanisms
         }
     }
-    private async handleTransactionConfirmation(txId: string): Promise<void> {
+    private handleTransactionConfirmation(txId: string) {
         const pendingTx = this._pendingTransactions.get(txId);
         if (pendingTx) {
             // Remove inputs from pending spent outputs
@@ -2412,7 +2418,7 @@ export class GroupfiSdkClient {
      * Handles failed transactions by removing them from pending sets and re-adding UTXOs to the pool.
      * @param txId The transaction ID to handle.
      */
-    private async handleTransactionFailure(txId: string): Promise<void> {
+    private  handleTransactionFailure(txId: string) {
         const pendingTx = this._pendingTransactions.get(txId);
         if (pendingTx) {
             // Remove inputs from pending spent outputs and re-add to UTXO pool if applicable
@@ -2844,7 +2850,7 @@ export class GroupfiSdkClient {
     }:{list:IMUserMarkedGroupId[],extraOutputs?:IBasicOutput[],outputWrapper?:BasicOutputWrapper}){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMARKTAG)}`
         const data = serializeUserMarkedGroupIds(list)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         console.log('created and consumed', basicOutput, toBeConsumed);
         const createdOutputs = extraOutputs ? [basicOutput, ...extraOutputs] : [basicOutput]
@@ -2859,7 +2865,7 @@ export class GroupfiSdkClient {
     async _persistSelectedProfile(metadataJsonStr: string, outputIdToBeConsumed?: string) {
         const tag = `0x${Converter.utf8ToHex(GROUPFIPROFILETAG)}`
         const metadataHex = Converter.utf8ToHex(metadataJsonStr, true)
-        const basicOutput = await this._dataAndTagToBasicOutput(metadataHex, tag)
+        const basicOutput = this._dataAndTagToBasicOutput(metadataHex, tag)
         let toBeConsumed: BasicOutputWrapper[] = []
         if (outputIdToBeConsumed) {
             const outputResponse = await this._client!.output(outputIdToBeConsumed)
@@ -2896,7 +2902,7 @@ export class GroupfiSdkClient {
         }
     }
 
-    async _dataAndTagToBasicOutput(data:Uint8Array | HexEncodedString,tag:string):Promise<IBasicOutput>{
+    _dataAndTagToBasicOutput(data:Uint8Array | HexEncodedString,tag:string):IBasicOutput{
         const tagFeature: ITagFeature = {
             type: 3,
             tag
@@ -2946,7 +2952,7 @@ export class GroupfiSdkClient {
     async _persistUserMuteGroupMembers(list:IMUserMuteGroupMember[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMUTETAG)}`
         const data = serializeUserMuteGroupMembers(list)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
@@ -2994,16 +3000,20 @@ export class GroupfiSdkClient {
 
     
     // persist group state syncs
-    async persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper){
+    persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper){
         this._ensureClientInited()
         this._ensureWalletInited()
         // log method
         console.log('persistGroupStateSyncs',groupStateSyncs)
         const data = serializeGroupStateSync(groupStateSyncs)
         const tag = Converter.utf8ToHex(GROUPFIGROUPSTATESYNCTAG)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = consumedOutputWrapper ? [consumedOutputWrapper] : []
-        return await this._sendBasicOutput([basicOutput],toBeConsumed);
+        // Return created and consumed outputs instead of sending transaction
+        return {
+            created: [basicOutput],
+            consumed: toBeConsumed
+        }
     }
     // same sets of function for user like group members
     async likeGroupMember(groupId:string,addrSha256Hash:string, userAddress: string){
@@ -3028,7 +3038,7 @@ export class GroupfiSdkClient {
     async _persistUserLikeGroupMembers(list:IMUserLikeGroupMember[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFILIKETAG)}`
         const data = serializeUserLikeGroupMembers(list)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
@@ -3083,7 +3093,7 @@ export class GroupfiSdkClient {
     async _persistUserVoteGroups(list:IMUserVoteGroup[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFIVOTETAG)}`
         const data = serializeUserVoteGroups(list)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
@@ -3116,7 +3126,7 @@ export class GroupfiSdkClient {
         }
 
         const data = await serializeEvmQualify(groupId,addressList,signature,addressType,timestamp, func)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const twoWeekSecs =  60 * 60 * 24 * 14
         this._addTimeUnlockToBasicOutput(basicOutput, twoWeekSecs)
         this._addMinimalAmountToBasicOutput(basicOutput)
@@ -3263,99 +3273,53 @@ export class GroupfiSdkClient {
         };
         return collectionOutput
     }
-    // async createPairXNftOutput(evmAddress: string, pairX: PairX) {
-    //     if (!this._requestAdapter) {
-    //         throw new Error('request dapter is undefined')
-    //     }
+    // Add these properties near the top of the GroupfiSdkClient class
+    private _tempCreatedOutputs: IBasicOutput[] = [];
+    private _tempConsumedOutputs: BasicOutputWrapper[] = [];
 
-    //     const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
+    // Add this new method to the class
+    /**
+     * Stores created and consumed outputs temporarily in memory for later usage
+     * @param created Array of created outputs
+     * @param consumed Array of consumed outputs
+     */
+    storeTempOutputs(created: IBasicOutput[], consumed: BasicOutputWrapper[]) {
+        this._tempCreatedOutputs = [...this._tempCreatedOutputs, ...created];
+        this._tempConsumedOutputs = [...this._tempConsumedOutputs, ...consumed];
+        console.log('Stored temp outputs - Created:', this._tempCreatedOutputs.length, 'Consumed:', this._tempConsumedOutputs.length);
+    }
 
-    //     const encryptionPublicKey = await proxyModeRequestAdapter.getEncryptionPublicKey()
+    /**
+     * Sends all temporarily stored outputs in a transaction
+     * @returns Promise resolving to boolean - true if sent successfully, false if no outputs to send
+     */
+    async sendTempOutputs(): Promise<boolean> {
+        // Check if there are any temporary outputs to send
+        if (this._tempCreatedOutputs.length === 0 && this._tempConsumedOutputs.length === 0) {
+            console.log('No temporary outputs to send');
+            return false;
+        }
 
-    //     // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
-    //     // only the first 32 bytes can be encrypted
-    //     const first32BytesOfPrivateKeyHex = Converter.bytesToHex(pairX.privateKey.slice(0, 32))
-    //     console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
+        // Log the number of outputs being sent
+        console.log('Sending temp outputs - Created:', this._tempCreatedOutputs.length, 'Consumed:', this._tempConsumedOutputs.length);
 
-    //     const encryptedPrivateKeyHex = EthEncrypt({
-    //         publicKey: encryptionPublicKey,
-    //         dataTobeEncrypted: first32BytesOfPrivateKeyHex
-    //     })
-
-    //     console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
-
-    //     const tagFeature: ITagFeature = {
-    //         type: 3,
-    //         tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
-    //     };
-
-    //     const metadataObj = {
-    //         encryptedPrivateKey: encryptedPrivateKeyHex,
-    //         pairXPublicKey: Converter.bytesToHex(pairX.publicKey, true),
-    //         evmAddress: evmAddress,
-    //         timestamp: getCurrentEpochInSeconds(),
-    //         // 1: tp  2: mm
-    //         scenery: 1
-    //     }
-            
-    //     console.log('===> metadataObj', metadataObj)
-
-    //     const dataTobeSignedStr = [
-    //         metadataObj.encryptedPrivateKey,
-    //         metadataObj.evmAddress,
-    //         metadataObj.pairXPublicKey,
-    //         metadataObj.scenery,
-    //         metadataObj.timestamp
-    //     ].join('')
-
-    //     console.log('===> dataToBeSignedStr', dataTobeSignedStr)
-
-    //     const dataToBeSignedHex = Converter.utf8ToHex(dataTobeSignedStr, true)
-    //     const signature = await proxyModeRequestAdapter.ethSign({dataToBeSignedHex})
-
-    //     console.log('===> signature', signature)
-
-    //     const metadata = Converter.utf8ToHex(JSON.stringify({
-    //         ...metadataObj,
-    //         signature,
-    //     }), true)
-
-    //     console.log('===> metadata final', metadata)
-
-    //     const collectionOutput: INftOutput = {
-    //         type: NFT_OUTPUT_TYPE,
-    //         amount: '',
-    //         nativeTokens: [],
-    //         nftId:
-    //             '0x0000000000000000000000000000000000000000000000000000000000000000',
-    //         unlockConditions: [
-    //             {
-    //                 type: ADDRESS_UNLOCK_CONDITION_TYPE,
-    //                 address: {
-    //                     type: ED25519_ADDRESS_TYPE,
-    //                     pubKeyHash: this._accountHexAddress!
-    //                 }
-    //             }
-    //         ],
-    //         features: [
-    //             tagFeature
-    //         ],
-    //         immutableFeatures: [
-    //             {
-    //             type: ISSUER_FEATURE_TYPE,
-    //             address: {
-    //                 type: ED25519_ADDRESS_TYPE,
-    //                 pubKeyHash: this._accountHexAddress!
-    //             },
-    //             },
-    //             {
-    //             type: METADATA_FEATURE_TYPE,
-    //             data: metadata
-    //             },
-    //         ],
-    //     };
-    //     return collectionOutput
-    // }
+        try {
+            // Use _sendBasicOutput which will automatically use and clear the temp outputs
+            const result = await this._sendBasicOutput([], []);
+            console.log('Temp outputs sent successfully:', {
+                blockId: result.blockId,
+                transactionId: result.transactionId,
+                outputIds: result.outputIds
+            });
+            return true;
+        } catch (error) {
+            // Clear temp storage on error to prevent reuse of failed transaction outputs
+            this._tempCreatedOutputs = [];
+            this._tempConsumedOutputs = [];
+            console.error('Failed to send temp outputs:', error);
+            throw error;
+        }
+    }
 }
 
 
