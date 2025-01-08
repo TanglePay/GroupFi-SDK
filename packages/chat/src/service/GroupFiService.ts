@@ -572,10 +572,35 @@ export class GroupFiService {
   }
 
   // Persist group state syncs
-  async persistGroupStateSyncs(
+  persistGroupStateSyncs(
     groupStateSyncs: GroupStateSyncItem[], 
     consumedOutputWrapper?: BasicOutputWrapper
-  ): Promise<void> {
-    await GroupFiSDKFacade.persistGroupStateSyncs(groupStateSyncs, consumedOutputWrapper);
+  ): {
+    created: IBasicOutput[];
+    consumed: BasicOutputWrapper[];
+  } {
+    return GroupFiSDKFacade.persistGroupStateSyncs(groupStateSyncs, consumedOutputWrapper);
+  }
+
+  /**
+   * Adds a low priority task that creates and consumes outputs
+   * @param key Unique identifier for deduplication
+   * @param task Function that returns created and consumed outputs
+   * @param ttlSeconds Time to live in seconds before task expires
+   */
+  addLowPriorityTask(
+    key: string, 
+    task: () => { created: IBasicOutput[], consumed: BasicOutputWrapper[] },
+    ttlSeconds: number = 3600
+  ) {
+    return GroupFiSDKFacade.addLowPriorityTask(key, task, ttlSeconds);
+  }
+
+  /**
+   * Attempts to clean one expired low priority task from the queue
+   * @returns Promise<boolean> true if an expired task was cleaned, false if no expired tasks were found
+   */
+  async tryCleanOneExpiredLowPriorityTask(): Promise<boolean> {
+    return await GroupFiSDKFacade.tryCleanOneExpiredLowPriorityTask();
   }
 }

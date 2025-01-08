@@ -4,7 +4,7 @@ import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageComman
 import { ThreadHandler } from "../util/thread";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
-import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual, GroupStateSyncSchemaVersion} from "groupfi-sdk-core";
+import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual, GroupStateSyncSchemaVersion, BasicOutputWrapper} from "groupfi-sdk-core";
 import { objectId, bytesToHex, compareHex } from "groupfi-sdk-utils";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
@@ -16,6 +16,7 @@ import {
     ImInboxEventTypeGroupStateSync, 
     EventGroupStateSyncChanged 
 } from "groupfi-sdk-core";
+import { IBasicOutput } from "@iota/iota.js";
 
 export const StoragePrefixGroupMinMaxToken = 'GroupMemberDomain.groupMinMaxToken';
 export interface IGroupMember {
@@ -1087,7 +1088,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
 
     // Update the sync method to work with IInboxGroup[]
-    syncGroupStateTimestamps(inboxGroups: IInboxGroup[]) {
+    syncGroupStateTimestamps(inboxGroups: IInboxGroup[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
         
         // Convert current state to timestamps map
         const currentTimestamps: Record<string, number> = {};
@@ -1122,8 +1123,11 @@ export class GroupMemberDomain implements ICycle, IRunnable {
                 groupId,
                 lastTimeReadLatestMessageTimestamp: timestamp
             }));
-            this._isDirtyGroupStateSyncs = true;
+            return this.groupFiService.persistGroupStateSyncs(this._groupStateSyncs.items, this._groupStateSyncs.outputWrapper);
         }
+        
+        // Add return for no changes case
+        return {created: [], consumed: []};
     }
 
     async _handleGroupStateSyncChangedEvent(event: EventGroupStateSyncChanged) {

@@ -12,7 +12,7 @@ import { EventSourceDomain } from "./EventSourceDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
 import { UserProfileDomain } from "./UserProfileDomain";
 import { SharedContext } from './SharedContext'
-import { Mode, Profile } from '../types'
+import { Mode, Profile, CommandType } from '../types'
 
 export const PublicKeyChangedEventKey = 'OutputSendingDomain.publicKeyChanged';
 export const NotEnoughCashTokenEventKey = 'OutputSendingDomain.notEnoughCashToken';
@@ -368,19 +368,17 @@ export class OutputSendingDomain implements ICycle, IRunnable {
         const cmd = this._inChannel.poll();
         if (cmd) {
             console.log('OutputSendingDomain command received', cmd);
-            if (cmd.type === 1) {
+            if (cmd.type === CommandType.AcquirePublicKey) {
                 await this._tryAquirePublicKey();
                 await sleep(cmd.sleepAfterFinishInMs);
-            } else if (cmd.type === 2) {
-                //TODO
-                //if (!this._isHasPublicKey) return false;
+            } else if (cmd.type === CommandType.JoinGroup) {
                 const {groupId, sleepAfterFinishInMs} = cmd as IJoinGroupCommand;
                 const isGroupPublic = this.groupMemberDomain.isGroupPublicLite(groupId)
                 const memberList = await this.groupMemberDomain.getGroupMember(groupId)??[];
                 const param = {groupId,memberList,publicKey:this._publicKey!,qualifyList:undefined as any,isGroupPublic}
                 await this.groupFiService.joinGroup(param)
                 await sleep(sleepAfterFinishInMs);
-            } else if (cmd.type === 4) {
+            } else if (cmd.type === CommandType.SendMessage) {
                 tracer.startStep('sendMessageToGroup', 'OutputSendingDomain poll, sendMessageToGroup cmd received')
                 const {groupId,message,sleepAfterFinishInMs} = cmd as ISendMessageCommand;
                 const memberList = await this.groupMemberDomain.getGroupMember(groupId)??[];
@@ -407,12 +405,11 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                     console.log('OutputSendingDomain poll, sendMessageToGroup, blockId:', blockId);
                 }
                 await sleep(sleepAfterFinishInMs);
-            } else if (cmd.type === 6) {
-                //if (!this._isHasPublicKey) return false;
+            } else if (cmd.type === CommandType.LeaveGroup) {
                 const {groupId, sleepAfterFinishInMs} = cmd as ILeaveGroupCommand;
                 await this.groupFiService.leaveOrUnMarkGroup(groupId);
                 await sleep(sleepAfterFinishInMs);
-            } else if (cmd.type === 7) {
+            } else if (cmd.type === CommandType.EnterGroup) {
                 const {groupId, sleepAfterFinishInMs} = cmd as IEnterGroupCommand;
                 // log enterGroup command
                 console.log('OutputSendingDomain poll, enterGroup, groupId:', groupId);
@@ -452,21 +449,21 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                     }
                 }
                 await sleep(sleepAfterFinishInMs);
-            } else if (cmd.type === 8) {
+            } else if (cmd.type === CommandType.RegisterPairX) {
                 const { encryptionPublicKey } = cmd as IRegisterPairXCommand
                 await this._tryRegisterPairX(encryptionPublicKey);
                 this._loadProxyAddressAndPairXInterval = 1000*2
                 await sleep(cmd.sleepAfterFinishInMs);
-            } else if (cmd.type === 9) {
+            } else if (cmd.type === CommandType.MarkGroup) {
                 const {groupId,sleepAfterFinishInMs} = cmd as IMarkGroupCommend;
                 await this.groupFiService.markGroup(groupId)
                 await sleep(sleepAfterFinishInMs);
-            } else if (cmd.type === 10) {
+            } else if (cmd.type === CommandType.VoteGroup) {
                 const {groupId,sleepAfterFinishInMs, vote} = cmd as IVoteGroupCommend
                 const res = await this.groupFiService.voteOrUnVoteGroup(groupId, vote)
                 this._events.emit(VoteOrUnVoteGroupLiteEventKey, {outputId: res.outputId, groupId})
                 await sleep(sleepAfterFinishInMs)
-            } else if (cmd.type === 11) {
+            } else if (cmd.type === CommandType.MuteGroupMember) {
                 const {groupId, address, sleepAfterFinishInMs, isMuteOperation } = cmd as IMuteGroupMemberCommend
                 if (isMuteOperation) {
                     await this.groupFiService.muteGroupMember(groupId, address)
@@ -474,24 +471,18 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                     await this.groupFiService.unMuteGroupMember(groupId, address)
                 }
                 await sleep(sleepAfterFinishInMs)
-            } else if (cmd.type === 12) {
-                if (!this._context.encryptedPairX) {
-                    return false
+            } else if (cmd.type === CommandType.Login) {
+                const cmd = {
+                    type: 12,
+                    sleepAfterFinishInMs: 2000
                 }
-                const { password, pairX } = await this.groupFiService.login(this._context.encryptedPairXObj!)
-                if (pairX) {
-                    this._context.setPairX(pairX, 'login cmd', 'login success')
-                    return false
-                }
-                const registerPairXCmd: IRegisterPairXCommand = {
-                    type: 8,
-                    sleepAfterFinishInMs: 2000,
-                    encryptionPublicKey: password
-                }
-                this._inChannel.push(registerPairXCmd)
-                // await this._tryRegisterPairX(password)
-                // await sleep(cmd.sleepAfterFinishInMs)
-            } else if (cmd.type === 13) {
+                this._inChannel.push(cmd)
+                // if (!this._context.encryptedPairX) {
+                //     return
+                // }
+                // const pairX = await this.groupFiService.login(this._context.encryptedPairXObj!)
+                // this._context.setPairX(pairX, 'login func', 'user login')
+            } else if (cmd.type === CommandType.LikeGroupMember) {
                 const { groupId, address, isLikeOperation, sleepAfterFinishInMs } = cmd as ILikeGroupMemberCommend
                 if (isLikeOperation) {
                     await this.groupFiService.likeGroupMember(groupId, address)
@@ -499,7 +490,7 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                     await this.groupFiService.unlikeGroupMember(groupId, address)
                 }
                 await sleep(sleepAfterFinishInMs)
-            } else if (cmd.type === 14) {
+            } else if (cmd.type === CommandType.SelectProfile) {
                 const { profile, sleepAfterFinishInMs, shouldMint } = cmd as ISelectProfileCommand
                 await Promise.all([this.groupFiService.setProfile(profile), shouldMint ? this.groupFiService.mintProxyNicknameNft(profile.name) : undefined])
                 await sleep(sleepAfterFinishInMs)
