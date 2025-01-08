@@ -385,7 +385,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             items: []
         };
         this._isGroupStateSyncInited = false;
-        this._isDirtyGroupStateSyncs = false;
         this._isGroupStateSyncOutputUsed = false;
     }
     async bootstrap(): Promise<void> {
@@ -460,15 +459,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     _forMeGroupIdsLastUpdateTimestamp: Record<string,number> = {};
     _processedPublicGroupIds: Set<string>;
 
-    private async _tryRefreshGroupStateSyncs(): Promise<boolean> {
-        // Only refresh if dirty and output has not been used
-        if (this._isDirtyGroupStateSyncs && !this._isGroupStateSyncOutputUsed) {
-            await this.persistDirtyGroupStateSyncs();
-            return true;
-        }
-        return false;
-    }
-
     async poll(): Promise<boolean> {
         const cmd = this._groupMemberDomainCmdChannel.poll();
         if (cmd) {
@@ -519,12 +509,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
 
         const isAddressStatusUpdated = await this.tryRefreshAddressStatusForAll();
         if (isAddressStatusUpdated) {
-            return false;
-        }
-
-        // Add the new check here
-        const isGroupStateSyncsUpdated = await this._tryRefreshGroupStateSyncs();
-        if (isGroupStateSyncsUpdated) {
             return false;
         }
 
@@ -584,12 +568,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             return false;
         }
         await this._checkForMeGroupIdsLastUpdateTimestamp();
-
-        // Handle dirty group state syncs
-        if (this._isDirtyGroupStateSyncs) {
-            await this.persistDirtyGroupStateSyncs();
-            return false;
-        }
 
         return true;
     }
@@ -1024,7 +1002,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         schemaVersion: GroupStateSyncSchemaVersion,
         items: []
     };
-    private _isDirtyGroupStateSyncs: boolean = false;
     private _isGroupStateSyncOutputUsed: boolean = false;
 
     // Add these near the top with other private fields
@@ -1043,49 +1020,6 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         return timestamps;
     }
 
-    // Update a specific group's timestamp
-    async updateGroupStateTimestamp(groupId: string, timestamp: number): Promise<void> {
-
-        const existingItemIndex = this._groupStateSyncs.items.findIndex(
-            item => item.groupId === groupId
-        );
-
-        if (existingItemIndex >= 0) {
-            // Update existing item if timestamp is newer
-            if (this._groupStateSyncs.items[existingItemIndex].lastTimeReadLatestMessageTimestamp < timestamp) {
-                this._groupStateSyncs.items[existingItemIndex].lastTimeReadLatestMessageTimestamp = timestamp;
-                this._isDirtyGroupStateSyncs = true;
-            }
-        } else {
-            // Add new item
-            this._groupStateSyncs.items.push({
-                groupId,
-                lastTimeReadLatestMessageTimestamp: timestamp
-            });
-            this._isDirtyGroupStateSyncs = true;
-        }
-    }
-
-    // Persist dirty state syncs
-    async persistDirtyGroupStateSyncs(): Promise<void> {
-        if (!this._isDirtyGroupStateSyncs || !this._groupStateSyncs) {
-            return;
-        }
-
-        // log enter persistDirtyGroupStateSyncs
-        console.log('enter persistDirtyGroupStateSyncs, starting to persist');
-        try {
-            await this.groupFiService.persistGroupStateSyncs(
-                this._groupStateSyncs.items,
-                this._groupStateSyncs.outputWrapper
-            );
-            this._isDirtyGroupStateSyncs = false;
-            this._isGroupStateSyncOutputUsed = true;
-        } catch (error) {
-            console.error('Error persisting group state syncs:', error);
-            throw error;
-        }
-    }
 
     // Update the sync method to work with IInboxGroup[]
     syncGroupStateTimestamps(inboxGroups: IInboxGroup[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
@@ -1123,7 +1057,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
                 groupId,
                 lastTimeReadLatestMessageTimestamp: timestamp
             }));
-            return this.groupFiService.persistGroupStateSyncs(this._groupStateSyncs.items, this._groupStateSyncs.outputWrapper);
+            if (!this._isGroupStateSyncOutputUsed) {
+                this._isGroupStateSyncOutputUsed = true
+                return this.groupFiService.persistGroupStateSyncs(this._groupStateSyncs.items, this._groupStateSyncs.outputWrapper);
+            }
         }
         
         // Add return for no changes case

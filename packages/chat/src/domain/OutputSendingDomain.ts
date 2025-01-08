@@ -525,7 +525,8 @@ export class OutputSendingDomain implements ICycle, IRunnable {
         if (isPrepareRemainderHintDoingSomeWork) return false;
         const isHasDelegationModeNameNft = await this.checkDelegationModeNameNft()
         if (!isHasDelegationModeNameNft) return true
-
+        const isDoneSomeLowPriorityTask = await this.groupFiService.tryCleanOneExpiredLowPriorityTask()
+        if (isDoneSomeLowPriorityTask) return false
         this._isReadyToChat = true
         return true
     }
