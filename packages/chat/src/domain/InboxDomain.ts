@@ -315,6 +315,10 @@ export class InboxDomain implements ICycle, IRunnable {
                     fn,
                     60
                 )
+                const group = this._getGroupFromCacheOnly(groupId)
+                if (group) {
+                    this.groupMemberDomain.updateGroupStateTimestampsInMemory([group]);
+                }
             },
             1000,
             `inbox-sync-${groupId}`

@@ -28,7 +28,8 @@ import {
   isGroupIdEqual,
   GroupStateSyncItem,
   BasicOutputWrapper,
-  ImInboxEventTypeGroupStateSync
+  ImInboxEventTypeGroupStateSync,
+  IInboxGroup
 }   from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
