@@ -449,14 +449,13 @@ export class ConversationDomain implements ICycle, IRunnable {
             console.log('ConversationDomain message received', message);
             let { groupId, messageId, timestamp, isFromSelf } = message;
             groupId = stripHexPrefix(groupId)
+            await this.handleNewMessageToFirstPartGroupMessageList(groupId, messageId, timestamp);
             const delta = isFromSelf ? 60 : 3;
             const currentTime = getCurrentEpochInSeconds() + delta; 
-            timestamp = Math.max(currentTime, timestamp);
-            await this.handleNewMessageToFirstPartGroupMessageList(groupId, messageId, timestamp);
-
+            const timestampForRead  = Math.max(currentTime, timestamp);
             // Add sync for messages from current group
             if (groupId == this._currentGroupIdOnUi) {
-                this._syncGroupStateDebounced(groupId, timestamp);
+                this._syncGroupStateDebounced(groupId, timestampForRead);
             }
 
             await sleepYield(); 
