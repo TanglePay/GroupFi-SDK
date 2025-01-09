@@ -311,6 +311,8 @@ export class InboxDomain implements ICycle, IRunnable {
                 }
                 const groups = this._groups.values();
                 const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory(groups);
+                // log 
+                console.log('InboxDomain syncGroupThrottled,groupId', groupId, 'hasChanges', hasChanges, 'groups', groups);
                 if (hasChanges) {
                     // 1 minute
                     this.groupFiService.addLowPriorityTask(
