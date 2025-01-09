@@ -395,6 +395,7 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                     // trace start await sentMessagePromise
                     tracer.startStep('sendMessageToGroup', 'OutputSendingDomain poll, sendMessageToGroup, sentMessagePromise start await')
                     const sentMessage = await sentMessagePromise;
+                    sentMessage.isFromSelf = true
                     this.eventSourceDomain.handleIncommingMessage([sentMessage],true)
                     // trace start emit MessageSentEventKey
                     tracer.startStep('sendMessageToGroup', 'OutputSendingDomain poll, sendMessageToGroup, sentMessagePromise end await')

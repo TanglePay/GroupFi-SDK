@@ -165,10 +165,10 @@ export class InboxDomain implements ICycle, IRunnable {
             return undefined;
         }
     }
-    setGroup(groupId: string, group: IInboxGroup) {
+    setGroup(groupId: string, group: IInboxGroup, delay?: number) {
         const key = this.getGroupStoreKey(groupId);
         this.combinedStorageService.setSingleThreaded(key, group, this._groups);
-        this._syncGroupThrottled(groupId);
+        this._syncGroupThrottled(groupId, delay);
     }
     _persistGroupIfInCache(groupId: string) {
         const group = this._getGroupFromCacheOnly(groupId);
@@ -190,7 +190,7 @@ export class InboxDomain implements ICycle, IRunnable {
         group.unreadCount = unreadCount
         const currentTime = getCurrentEpochInSeconds() + 15
         group.lastTimeReadLatestMessageTimestamp = Math.max(currentTime, lastTimeReadLatestMessageTimestamp)
-        this.setGroup(groupId, group);
+        this.setGroup(groupId, group, 20);
     }
     
     async poll(): Promise<boolean> {
@@ -301,7 +301,8 @@ export class InboxDomain implements ICycle, IRunnable {
 
     
 
-    private _syncGroupThrottled(groupId: string) {
+    private _syncGroupThrottled(groupId: string, delay?: number) {
+        delay = delay ?? 60;
         const throttledFn = throttle(
             () => {
                 const fn = () => {
@@ -319,7 +320,7 @@ export class InboxDomain implements ICycle, IRunnable {
                     this.groupFiService.addLowPriorityTask(
                         `group-state-sync`,
                         fn,
-                        60
+                        delay
                     )
                 }
             },

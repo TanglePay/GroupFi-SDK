@@ -355,8 +355,6 @@ export class ConversationDomain implements ICycle, IRunnable {
                         lastTimeReadLatestMessageTimestamp
                     }]);
                 }
-                const currentTime = getCurrentEpochInSeconds() + 3; 
-                lastTimeReadLatestMessageTimestamp = Math.max(currentTime, lastTimeReadLatestMessageTimestamp);
                 const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory([{
                     groupId, 
                     lastTimeReadLatestMessageTimestamp
@@ -449,8 +447,11 @@ export class ConversationDomain implements ICycle, IRunnable {
         if (message) {
             // log message received
             console.log('ConversationDomain message received', message);
-            let { groupId, messageId, timestamp} = message;
+            let { groupId, messageId, timestamp, isFromSelf } = message;
             groupId = stripHexPrefix(groupId)
+            const delta = isFromSelf ? 60 : 3;
+            const currentTime = getCurrentEpochInSeconds() + delta; 
+            timestamp = Math.max(currentTime, timestamp);
             await this.handleNewMessageToFirstPartGroupMessageList(groupId, messageId, timestamp);
 
             // Add sync for messages from current group

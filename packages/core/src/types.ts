@@ -274,6 +274,7 @@ export type IMessage = {
     token?: string
     name?: string
     avatar?: string
+    isFromSelf?: boolean
 }
 export type EventItemFromFacade = EventGroupMemberChanged | IMessage | EventGroupMarkChanged | EventGroupMuteChanged | EventGroupLikeChanged | ProfileChangedEvent | EventGroupIsPublicChanged | EventGroupStateSyncChanged 
 export interface IGroupFiSDK {
