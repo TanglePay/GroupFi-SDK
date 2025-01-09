@@ -1791,6 +1791,8 @@ class GroupFiSDKFacade {
    */
   addLowPriorityTask(key: string, task: () => TaskOutputs, ttlSeconds: number = 3600) {
     // Add new task with expiration time, overriding any existing task with the same key
+    // log method name, key, ttlSeconds
+    console.log('addLowPriorityTask, key', key, 'ttlSeconds', ttlSeconds);
     this._lowPriorityTasks.set(key, {
       task,
       expireTime: Date.now() + (ttlSeconds * 1000)

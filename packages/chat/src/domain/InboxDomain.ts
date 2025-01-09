@@ -318,14 +318,14 @@ export class InboxDomain implements ICycle, IRunnable {
                 if (hasChanges) {
                     // 1 minute
                     this.groupFiService.addLowPriorityTask(
-                        `group-state-sync`,
+                        `group-state-persist`,
                         fn,
                         delay
                     )
                 }
             },
             1000,
-            `inbox-sync-${groupId}`
+            `inbox-persist`
         );
         throttledFn();
     }

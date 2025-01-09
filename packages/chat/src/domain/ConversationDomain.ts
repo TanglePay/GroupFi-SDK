@@ -362,14 +362,14 @@ export class ConversationDomain implements ICycle, IRunnable {
                 if (hasChanges) {
                     // 1 minute delay
                     this.groupFiService.addLowPriorityTask(
-                        `group-state-sync-${groupId}`,
+                        `group-state-persist`,
                         fn,
                         60
                     );
                 }
             },
             20, // 20 seconds
-            `conversation-sync-${groupId}`
+            `conversation-sync`
         );
         debouncedFn();
         // log debouncedFn
