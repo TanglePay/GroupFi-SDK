@@ -1,18 +1,18 @@
 import { Inject, Singleton } from "typescript-ioc";
 import { IAddPendingMessageToFrontCommand, ICommandBase, ICycle, IRunnable } from "../types";
 import { IMessage } from 'groupfi-sdk-core'
-import { bytesToHex, sleepYield, stripHexPrefix } from 'groupfi-sdk-utils'
+import { bytesToHex, getCurrentEpochInSeconds, sleepYield, stripHexPrefix } from 'groupfi-sdk-utils'
 import { ThreadHandler } from "../util/thread";
 import { Channel } from "../util/channel";
 import { MessageHubDomain } from "./MessageHubDomain";
 import { CombinedStorageService } from "../service/CombinedStorageService";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
-import EventEmitter from "events";
 import { EventSourceDomain } from "./EventSourceDomain";
 import { GroupMemberDomain } from "./GroupMemberDomain";
 import { OutputSendingDomain } from "./OutputSendingDomain";
 import { DebouncedEventEmitter } from "../util/debounced";
+import { clearAll, debounce } from "../util/misc";
 // persist and retrieve message id of all conversation
 // in memory maintain the message id of single active conversation
 export const ConversationGroupMessageListStorePrefix = 'ConversationDomain.groupMessageList.';
@@ -69,10 +69,12 @@ export class ConversationDomain implements ICycle, IRunnable {
     
     private _events: DebouncedEventEmitter = new DebouncedEventEmitter(100);
     private _lruCache: LRUCache<IConversationGroupMessageList>;
+    private _currentGroupIdOnUi?: string;
     cacheClear() {
         if (this._lruCache) {
             this._lruCache.clear();
         }
+        clearAll();
     }
     _storeGroupMessageList(groupId:string,groupMessageList: IConversationGroupMessageList,key:string) {
         const storeKey = this.getGroupMessageListStoreKey(groupId,key);
@@ -342,6 +344,35 @@ export class ConversationDomain implements ICycle, IRunnable {
         const suffix = key ? `.${key}` : '';
         return `${ConversationGroupMessageListStorePrefix}${groupId}${suffix}`;        
     }
+    private _syncGroupStateDebounced(groupId: string, lastTimeReadLatestMessageTimestamp: number) {
+        const debouncedFn = debounce(
+            () => {
+                const fn = () => {
+                    return this.groupMemberDomain.syncGroupStateTimestamps([{
+                        groupId, 
+                        lastTimeReadLatestMessageTimestamp
+                    }]);
+                }
+                const currentTime = getCurrentEpochInSeconds() + 3; 
+                lastTimeReadLatestMessageTimestamp = Math.max(currentTime, lastTimeReadLatestMessageTimestamp);
+                const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory([{
+                    groupId, 
+                    lastTimeReadLatestMessageTimestamp
+                }]);
+                if (hasChanges) {
+                    // 1 minute delay
+                    this.groupFiService.addLowPriorityTask(
+                        `group-state-sync-${groupId}`,
+                        fn,
+                        60
+                    );
+                }
+            },
+            15, // 15 seconds
+            `conversation-sync-${groupId}`
+        );
+        debouncedFn();
+    }
     async poll(): Promise<boolean> {
         const cmd = this._cmdChannel.poll();
         if (cmd) {
@@ -417,6 +448,12 @@ export class ConversationDomain implements ICycle, IRunnable {
             let { groupId, messageId, timestamp} = message;
             groupId = stripHexPrefix(groupId)
             await this.handleNewMessageToFirstPartGroupMessageList(groupId, messageId, timestamp);
+
+            // Add sync for messages from current group
+            if (groupId == this._currentGroupIdOnUi) {
+                this._syncGroupStateDebounced(groupId, timestamp);
+            }
+
             await sleepYield(); 
             return false;
         } else {
@@ -459,5 +496,13 @@ export class ConversationDomain implements ICycle, IRunnable {
         this.threadHandler.destroy();
         //@ts-ignore
         this._lruCache = undefined;
+    }
+
+    setCurrentGroupIdOnUi(groupId: string | undefined) {
+        if (groupId) {
+            this._currentGroupIdOnUi = stripHexPrefix(groupId);
+        } else {
+            this._currentGroupIdOnUi = undefined;
+        }
     }
 }

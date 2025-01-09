@@ -11,7 +11,7 @@ import { CombinedStorageService } from "../service/CombinedStorageService";
 import { IInboxGroup } from "../types";
 import { getCurrentEpochInSeconds, sleepYield } from "groupfi-sdk-utils";
 import { GroupMemberDomain } from "./GroupMemberDomain";
-import { throttle } from "../util/misc";
+import { clearAll, throttle } from "../util/misc";
 import { GroupFiService } from "../service/GroupFiService";
 // maintain list of groupid, order matters
 // maintain state of each group, including group name, last message, unread count, etc
@@ -289,6 +289,7 @@ export class InboxDomain implements ICycle, IRunnable {
     async switchAddress() {
         await this._loadGroupIdsListFromLocalStorage();
         this._events.emit(EventInboxUpdated);
+        clearAll();
         console.log('InboxDomain event emitted', EventInboxLoaded);
     }
 

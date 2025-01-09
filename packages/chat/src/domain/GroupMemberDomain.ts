@@ -1020,14 +1020,12 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         return timestamps;
     }
 
-
-    // Update the sync method to work with IInboxGroup[]
     // Updates timestamps in memory and returns if changes were made
-    updateGroupStateTimestampsInMemory(inboxGroups: IInboxGroup[]): boolean {
+    updateGroupStateTimestampsInMemory(groups: { groupId: string; lastTimeReadLatestMessageTimestamp?: number }[]): boolean {
         // Convert current state to timestamps map
         const currentTimestamps: Record<string, number> = {};
         this._groupStateSyncs.items.forEach(item => {
-            if (item && item.groupId) {  // Add null check for item
+            if (item && item.groupId) {
                 currentTimestamps[item.groupId] = item.lastTimeReadLatestMessageTimestamp;
             }
         });
@@ -1035,8 +1033,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         let hasChanges = false;
 
         // Update timestamps in place if needed
-        for (const group of inboxGroups) {
-            if (!group || !group.groupId) continue;  // Add null check for group
+        for (const group of groups) {
+            if (!group || !group.groupId) continue;
             
             // Prefix the groupId using _gid method
             const prefixedGroupId = this._gid(group.groupId);
@@ -1046,7 +1044,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
                 currentTimestamps[prefixedGroupId] = timestamp;
                 hasChanges = true;
             } else if (currentTimestamps[prefixedGroupId] > timestamp) {
-                // Update the inbox group's timestamp if current state has a newer timestamp
+                // Update the group's timestamp if current state has a newer timestamp
                 group.lastTimeReadLatestMessageTimestamp = currentTimestamps[prefixedGroupId];
             }
         }
@@ -1062,8 +1060,9 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         return hasChanges;
     }
 
-    syncGroupStateTimestamps(inboxGroups: IInboxGroup[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
-        this.updateGroupStateTimestampsInMemory(inboxGroups);
+    syncGroupStateTimestamps(groups: { groupId: string; lastTimeReadLatestMessageTimestamp?: number }[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
+        this.updateGroupStateTimestampsInMemory(groups);
+        
         // log enter
         console.log('GroupMemberDomain syncGroupStateTimestamps, enter, this._isGroupStateSyncOutputUsed', this._isGroupStateSyncOutputUsed);
         if (!this._isGroupStateSyncOutputUsed) {

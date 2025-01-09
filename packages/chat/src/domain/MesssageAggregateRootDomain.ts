@@ -375,6 +375,7 @@ export class MessageAggregateRootDomain implements ICycle {
             tasks.push(this.groupMemberDomain._refreshGroupEvmQualifyAsync(groupId))
         }
         await Promise.all(tasks);
+        this.conversationDomain.setCurrentGroupIdOnUi(groupId)
         this.outputSendingDomain.enterGroup(groupId)
         if (this._context.isWalletConnected) {
             this.groupFiService.enablePreparedRemainderHint()
@@ -388,6 +389,7 @@ export class MessageAggregateRootDomain implements ICycle {
     // navigate away from group
     navigateAwayFromGroup(groupId: string) {
         groupId = prefixedGroupIdToGroupId(groupId)
+        this.conversationDomain.setCurrentGroupIdOnUi(undefined)
         // check is wallet connected
         if (this._context.isWalletConnected) {
             this.groupFiService.disablePreparedRemainderHint()
