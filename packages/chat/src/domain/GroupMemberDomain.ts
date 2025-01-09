@@ -1076,6 +1076,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     async _handleGroupStateSyncChangedEvent(event: EventGroupStateSyncChanged) {
         try {
             // Refresh the group state when a sync event is received
+            // log
+            console.log('GroupMemberDomain _handleGroupStateSyncChangedEvent', event)
             await this._fetchGroupState();
         } catch (error) {
             console.error('Error handling group state sync event:', error);
