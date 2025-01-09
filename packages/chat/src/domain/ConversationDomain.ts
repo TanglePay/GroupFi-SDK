@@ -347,6 +347,8 @@ export class ConversationDomain implements ICycle, IRunnable {
     private _syncGroupStateDebounced(groupId: string, lastTimeReadLatestMessageTimestamp: number) {
         const debouncedFn = debounce(
             () => {
+                // log actual debouncedFn
+                console.log('ConversationDomain _syncGroupStateDebounced actual debouncedFn');
                 const fn = () => {
                     return this.groupMemberDomain.syncGroupStateTimestamps([{
                         groupId, 
@@ -368,10 +370,12 @@ export class ConversationDomain implements ICycle, IRunnable {
                     );
                 }
             },
-            15, // 15 seconds
+            20, // 20 seconds
             `conversation-sync-${groupId}`
         );
         debouncedFn();
+        // log debouncedFn
+        console.log('ConversationDomain _syncGroupStateDebounced', `conversation-sync-${groupId}`);
     }
     async poll(): Promise<boolean> {
         const cmd = this._cmdChannel.poll();
