@@ -1063,9 +1063,9 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     }
 
     syncGroupStateTimestamps(inboxGroups: IInboxGroup[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
-        const hasChanges = this.updateGroupStateTimestampsInMemory(inboxGroups);
+        this.updateGroupStateTimestampsInMemory(inboxGroups);
         
-        if (hasChanges && !this._isGroupStateSyncOutputUsed) {
+        if (!this._isGroupStateSyncOutputUsed) {
             this._isGroupStateSyncOutputUsed = true;
             return this.groupFiService.persistGroupStateSyncs(this._groupStateSyncs.items, this._groupStateSyncs.outputWrapper);
         }

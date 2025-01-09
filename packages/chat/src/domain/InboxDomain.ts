@@ -309,15 +309,15 @@ export class InboxDomain implements ICycle, IRunnable {
                     
                     return this.groupMemberDomain.syncGroupStateTimestamps(groups);
                 }
-                // 1 minute
-                this.groupFiService.addLowPriorityTask(
-                    `group-state-sync`,
-                    fn,
-                    60
-                )
-                const group = this._getGroupFromCacheOnly(groupId)
-                if (group) {
-                    this.groupMemberDomain.updateGroupStateTimestampsInMemory([group]);
+                const groups = this._groups.values();
+                const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory(groups);
+                if (hasChanges) {
+                    // 1 minute
+                    this.groupFiService.addLowPriorityTask(
+                        `group-state-sync`,
+                        fn,
+                        60
+                    )
                 }
             },
             1000,
