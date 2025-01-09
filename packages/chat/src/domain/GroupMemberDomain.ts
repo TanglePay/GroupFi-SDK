@@ -1094,7 +1094,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     async _fetchGroupState(): Promise<void> {
         try {
             const newGroupStateSyncs = await this.groupFiService.getAllGroupStateSyncs();
-            console.log('Fetched group state syncs:', newGroupStateSyncs);
+            console.log('Fetched group state syncs:newGroupStateSyncs', newGroupStateSyncs, 'this._groupStateSyncs', this._groupStateSyncs, 'is outputid changed', this._groupStateSyncs.outputWrapper?.outputId != newGroupStateSyncs?.outputWrapper?.outputId);
             if (newGroupStateSyncs) {
                 this._groupStateSyncs = newGroupStateSyncs;
                 this._isGroupStateSyncInited = true; // Set to true after successful fetch
