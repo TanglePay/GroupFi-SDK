@@ -472,17 +472,24 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                 }
                 await sleep(sleepAfterFinishInMs)
             } else if (cmd.type === CommandType.Login) {
-                const cmd = {
-                    type: 12,
-                    sleepAfterFinishInMs: 2000
+                if (!this._context.encryptedPairX) {
+                    return false
                 }
-                this._inChannel.push(cmd)
-                // if (!this._context.encryptedPairX) {
-                //     return
-                // }
-                // const pairX = await this.groupFiService.login(this._context.encryptedPairXObj!)
-                // this._context.setPairX(pairX, 'login func', 'user login')
+                const { password, pairX } = await this.groupFiService.login(this._context.encryptedPairXObj!)
+                if (pairX) {
+                    this._context.setPairX(pairX, 'login cmd', 'login success')
+                    return false
+                }
+                const registerPairXCmd: IRegisterPairXCommand = {
+                    type: 8,
+                    sleepAfterFinishInMs: 2000,
+                    encryptionPublicKey: password
+                }
+                this._inChannel.push(registerPairXCmd)
+                // await this._tryRegisterPairX(password)
+                // await sleep(cmd.sleepAfterFinishInMs)
             } else if (cmd.type === CommandType.LikeGroupMember) {
+                this._inChannel.push(cmd)
                 const { groupId, address, isLikeOperation, sleepAfterFinishInMs } = cmd as ILikeGroupMemberCommend
                 if (isLikeOperation) {
                     await this.groupFiService.likeGroupMember(groupId, address)
