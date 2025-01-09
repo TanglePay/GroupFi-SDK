@@ -1022,8 +1022,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
 
 
     // Update the sync method to work with IInboxGroup[]
-    syncGroupStateTimestamps(inboxGroups: IInboxGroup[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
-        
+    // Updates timestamps in memory and returns if changes were made
+    updateGroupStateTimestampsInMemory(inboxGroups: IInboxGroup[]): boolean {
         // Convert current state to timestamps map
         const currentTimestamps: Record<string, number> = {};
         this._groupStateSyncs.items.forEach(item => {
@@ -1057,13 +1057,19 @@ export class GroupMemberDomain implements ICycle, IRunnable {
                 groupId,
                 lastTimeReadLatestMessageTimestamp: timestamp
             }));
-            if (!this._isGroupStateSyncOutputUsed) {
-                this._isGroupStateSyncOutputUsed = true
-                return this.groupFiService.persistGroupStateSyncs(this._groupStateSyncs.items, this._groupStateSyncs.outputWrapper);
-            }
+        }
+
+        return hasChanges;
+    }
+
+    syncGroupStateTimestamps(inboxGroups: IInboxGroup[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
+        const hasChanges = this.updateGroupStateTimestampsInMemory(inboxGroups);
+        
+        if (hasChanges && !this._isGroupStateSyncOutputUsed) {
+            this._isGroupStateSyncOutputUsed = true;
+            return this.groupFiService.persistGroupStateSyncs(this._groupStateSyncs.items, this._groupStateSyncs.outputWrapper);
         }
         
-        // Add return for no changes case
         return {created: [], consumed: []};
     }
 
