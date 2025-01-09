@@ -1096,14 +1096,14 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             const newGroupStateSyncs = await this.groupFiService.getAllGroupStateSyncs();
             console.log('Fetched group state syncs:newGroupStateSyncs', newGroupStateSyncs, 'this._groupStateSyncs', this._groupStateSyncs, 'is outputid changed', this._groupStateSyncs.outputWrapper?.outputId != newGroupStateSyncs?.outputWrapper?.outputId);
             if (newGroupStateSyncs) {
-                this._groupStateSyncs = newGroupStateSyncs;
-                this._isGroupStateSyncInited = true; // Set to true after successful fetch
                 // case outputid changed, compare to newGroupStateSyncs
                 if (this._groupStateSyncs.outputWrapper && this._groupStateSyncs.outputWrapper.outputId != newGroupStateSyncs.outputWrapper?.outputId) {
                     this._isGroupStateSyncOutputUsed = false;
                     // log reset
                     console.log('GroupMemberDomain _fetchGroupState, outputId changed, reset _isGroupStateSyncOutputUsed to false');
                 }
+                this._groupStateSyncs = newGroupStateSyncs;
+                this._isGroupStateSyncInited = true; // Set to true after successful fetch
             }
         } catch (error) {
             console.error('Error fetching group state syncs:', error);
