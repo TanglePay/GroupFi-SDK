@@ -1064,7 +1064,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
 
     syncGroupStateTimestamps(inboxGroups: IInboxGroup[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
         this.updateGroupStateTimestampsInMemory(inboxGroups);
-        
+        // log enter
+        console.log('GroupMemberDomain syncGroupStateTimestamps, enter, this._isGroupStateSyncOutputUsed', this._isGroupStateSyncOutputUsed);
         if (!this._isGroupStateSyncOutputUsed) {
             this._isGroupStateSyncOutputUsed = true;
             return this.groupFiService.persistGroupStateSyncs(this._groupStateSyncs.items, this._groupStateSyncs.outputWrapper);
@@ -1100,6 +1101,8 @@ export class GroupMemberDomain implements ICycle, IRunnable {
                 // case outputid changed, compare to newGroupStateSyncs
                 if (this._groupStateSyncs.outputWrapper && this._groupStateSyncs.outputWrapper.outputId != newGroupStateSyncs.outputWrapper?.outputId) {
                     this._isGroupStateSyncOutputUsed = false;
+                    // log reset
+                    console.log('GroupMemberDomain _fetchGroupState, outputId changed, reset _isGroupStateSyncOutputUsed to false');
                 }
             }
         } catch (error) {
