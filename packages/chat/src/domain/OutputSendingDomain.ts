@@ -489,7 +489,6 @@ export class OutputSendingDomain implements ICycle, IRunnable {
                 // await this._tryRegisterPairX(password)
                 // await sleep(cmd.sleepAfterFinishInMs)
             } else if (cmd.type === CommandType.LikeGroupMember) {
-                this._inChannel.push(cmd)
                 const { groupId, address, isLikeOperation, sleepAfterFinishInMs } = cmd as ILikeGroupMemberCommend
                 if (isLikeOperation) {
                     await this.groupFiService.likeGroupMember(groupId, address)
