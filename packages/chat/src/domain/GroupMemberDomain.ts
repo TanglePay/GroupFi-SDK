@@ -1097,6 +1097,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             if (newGroupStateSyncs) {
                 this._groupStateSyncs = newGroupStateSyncs;
                 this._isGroupStateSyncInited = true; // Set to true after successful fetch
+                // case outputid changed, compare to newGroupStateSyncs
+                if (this._groupStateSyncs.outputWrapper && this._groupStateSyncs.outputWrapper.outputId != newGroupStateSyncs.outputWrapper?.outputId) {
+                    this._isGroupStateSyncOutputUsed = false;
+                }
             }
         } catch (error) {
             console.error('Error fetching group state syncs:', error);
