@@ -85,3 +85,33 @@ export function clearAll(): void {
   clearAllThrottles();
   clearAllDebounces();
 }
+
+/**
+ * Clears throttle state and result for a specific key
+ * @param key The key to clear throttle for
+ */
+export function clearThrottleByKey(key: string): void {
+  inThrottleMap.delete(key);
+  lastResultMap.delete(key);
+}
+
+/**
+ * Clears debounce timeout and state for a specific key
+ * @param key The key to clear debounce for
+ */
+export function clearDebounceByKey(key: string): void {
+  const timeout = timeoutMap.get(key);
+  if (timeout) {
+    clearTimeout(timeout);
+    timeoutMap.delete(key);
+  }
+}
+
+/**
+ * Clears both throttle and debounce states for a specific key
+ * @param key The key to clear states for
+ */
+export function clearByKey(key: string): void {
+  clearThrottleByKey(key);
+  clearDebounceByKey(key);
+}

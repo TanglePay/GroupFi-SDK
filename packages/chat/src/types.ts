@@ -175,3 +175,5 @@ export enum CommandType {
     LikeGroupMember = 13,
     SelectProfile = 14
 }
+
+export const GROUP_STATE_PERSIST_KEY = 'group-state-persist'    

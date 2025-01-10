@@ -1,5 +1,5 @@
 import { Inject, Singleton } from "typescript-ioc";
-import { IAddPendingMessageToFrontCommand, ICommandBase, ICycle, IRunnable } from "../types";
+import { GROUP_STATE_PERSIST_KEY, IAddPendingMessageToFrontCommand, ICommandBase, ICycle, IRunnable } from "../types";
 import { IMessage } from 'groupfi-sdk-core'
 import { bytesToHex, getCurrentEpochInSeconds, sleepYield, stripHexPrefix } from 'groupfi-sdk-utils'
 import { ThreadHandler } from "../util/thread";
@@ -362,14 +362,14 @@ export class ConversationDomain implements ICycle, IRunnable {
                 if (hasChanges) {
                     // 1 minute delay
                     this.groupFiService.addLowPriorityTask(
-                        `group-state-persist`,
+                        GROUP_STATE_PERSIST_KEY,
                         fn,
                         60
                     );
                 }
             },
             20, // 20 seconds
-            `conversation-sync`
+            GROUP_STATE_PERSIST_KEY
         );
         debouncedFn();
         // log debouncedFn

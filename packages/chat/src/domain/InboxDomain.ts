@@ -2,7 +2,7 @@ import { Inject, Singleton } from "typescript-ioc";
 import { IMessage, GroupFiSDKObj } from 'groupfi-sdk-core'
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { MessageHubDomain } from "./MessageHubDomain";
-import { ICycle, IInboxMessage, IRunnable } from "../types";
+import { GROUP_STATE_PERSIST_KEY, ICycle, IInboxMessage, IRunnable } from "../types";
 import { Channel } from "../util/channel";
 import { ThreadHandler } from "../util/thread";
 import EventEmitter from "events";
@@ -11,7 +11,7 @@ import { CombinedStorageService } from "../service/CombinedStorageService";
 import { IInboxGroup } from "../types";
 import { getCurrentEpochInSeconds, sleepYield } from "groupfi-sdk-utils";
 import { GroupMemberDomain } from "./GroupMemberDomain";
-import { clearAll, throttle } from "../util/misc";
+import { clearAll, clearByKey, throttle } from "../util/misc";
 import { GroupFiService } from "../service/GroupFiService";
 // maintain list of groupid, order matters
 // maintain state of each group, including group name, last message, unread count, etc
@@ -190,7 +190,9 @@ export class InboxDomain implements ICycle, IRunnable {
         group.unreadCount = unreadCount
         const currentTime = getCurrentEpochInSeconds() + 15
         group.lastTimeReadLatestMessageTimestamp = Math.max(currentTime, lastTimeReadLatestMessageTimestamp)
-        this.setGroup(groupId, group, 20);
+        this.setGroup(groupId, group);
+        clearByKey(GROUP_STATE_PERSIST_KEY)
+        this._syncGroupState(groupId, 20);
     }
     
     async poll(): Promise<boolean> {
@@ -299,33 +301,33 @@ export class InboxDomain implements ICycle, IRunnable {
         return groups;
     }
 
-    
+    private _syncGroupState(groupId: string, delay?: number) {
+        const fn = () => {
+            // get all groups
+            const groups = this._groups.values();
+            
+            return this.groupMemberDomain.syncGroupStateTimestamps(groups);
+        }
+        const groups = this._groups.values();
+        const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory(groups);
+        // log 
+        console.log('InboxDomain syncGroupThrottled,groupId', groupId, 'hasChanges', hasChanges, 'groups', groups);
+        if (hasChanges) {
+            // 1 minute
+            this.groupFiService.addLowPriorityTask(
+                GROUP_STATE_PERSIST_KEY,
+                fn,
+                delay
+            )
+        }
+    }
 
     private _syncGroupThrottled(groupId: string, delay?: number) {
         delay = delay ?? 60;
         const throttledFn = throttle(
-            () => {
-                const fn = () => {
-                    // get all groups
-                    const groups = this._groups.values();
-                    
-                    return this.groupMemberDomain.syncGroupStateTimestamps(groups);
-                }
-                const groups = this._groups.values();
-                const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory(groups);
-                // log 
-                console.log('InboxDomain syncGroupThrottled,groupId', groupId, 'hasChanges', hasChanges, 'groups', groups);
-                if (hasChanges) {
-                    // 1 minute
-                    this.groupFiService.addLowPriorityTask(
-                        `group-state-persist`,
-                        fn,
-                        delay
-                    )
-                }
-            },
+            this._syncGroupState.bind(this, groupId, delay),
             1000,
-            `inbox-persist`
+            GROUP_STATE_PERSIST_KEY
         );
         throttledFn();
     }
