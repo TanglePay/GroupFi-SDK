@@ -11,7 +11,7 @@ import { CombinedStorageService } from "../service/CombinedStorageService";
 import { IInboxGroup } from "../types";
 import { getCurrentEpochInSeconds, sleepYield } from "groupfi-sdk-utils";
 import { GroupMemberDomain } from "./GroupMemberDomain";
-import { clearAll, clearByKey, throttle, debounce } from "../util/misc";
+import { clearAll, clearByKey } from "../util/misc";
 import { GroupFiService } from "../service/GroupFiService";
 // maintain list of groupid, order matters
 // maintain state of each group, including group name, last message, unread count, etc
@@ -153,7 +153,7 @@ export class InboxDomain implements ICycle, IRunnable {
             group = this._getDefaultGroup(groupId);
             this._groups.put(key, group);
         }
-        this._syncGroupDebounced(groupId);
+        this._syncGroupState(groupId);
         return group;
     }
     _getGroupFromCacheOnly(groupId: string) {
@@ -168,7 +168,7 @@ export class InboxDomain implements ICycle, IRunnable {
     setGroup(groupId: string, group: IInboxGroup, delay?: number) {
         const key = this.getGroupStoreKey(groupId);
         this.combinedStorageService.setSingleThreaded(key, group, this._groups);
-        this._syncGroupDebounced(groupId, delay);
+        this._syncGroupState(groupId, delay);
     }
     _persistGroupIfInCache(groupId: string) {
         const group = this._getGroupFromCacheOnly(groupId);
@@ -304,6 +304,7 @@ export class InboxDomain implements ICycle, IRunnable {
     }
 
     private _syncGroupState(groupId: string, delay?: number) {
+        delay = delay ?? 60;
         const fn = () => {
             // get all groups
             const groups = this._groups.values();
@@ -313,26 +314,14 @@ export class InboxDomain implements ICycle, IRunnable {
         const groups = this._groups.values();
         const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory(groups);
         // log 
-        console.log('InboxDomain syncGroupDebounced,groupId', groupId, 'hasChanges', hasChanges, 'groups', groups);
+        console.log('InboxDomain syncGroupState,groupId', groupId, 'hasChanges', hasChanges, 'groups', groups);
         if (hasChanges) {
-            // 1 minute
+            // Add task directly without debounce
             this.groupFiService.addLowPriorityTask(
                 GROUP_STATE_PERSIST_KEY,
                 fn,
                 delay
-            )
+            );
         }
-    }
-
-    private _syncGroupDebounced(groupId: string, delay?: number) {
-        delay = delay ?? 60;
-        const debouncedFn = debounce(
-            () => {
-                this._syncGroupState(groupId, delay);
-            },
-            1, // 1 second debounce time
-            GROUP_STATE_PERSIST_KEY
-        );
-        debouncedFn();
     }
 }
