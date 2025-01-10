@@ -551,7 +551,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             } else if (type === ImInboxEventTypeGroupIsPublicChanged) {
                 this._handleGroupIsPublicChangedEvent(event as EventGroupIsPublicChanged);
             } else if (type === ImInboxEventTypeGroupStateSync) {
-                this._handleGroupStateSyncChangedEvent(event as EventGroupStateSyncChanged);
+                await this._handleGroupStateSyncChangedEvent(event as EventGroupStateSyncChanged);
             }
             return false;
         } 

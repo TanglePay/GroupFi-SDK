@@ -325,7 +325,9 @@ export class InboxDomain implements ICycle, IRunnable {
     private _syncGroupThrottled(groupId: string, delay?: number) {
         delay = delay ?? 60;
         const throttledFn = throttle(
-            this._syncGroupState.bind(this, groupId, delay),
+            () => {
+                this._syncGroupState(groupId, delay);
+            },
             1000,
             GROUP_STATE_PERSIST_KEY
         );
