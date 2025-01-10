@@ -192,9 +192,7 @@ export class InboxDomain implements ICycle, IRunnable {
         group.unreadCount = unreadCount
         const currentTime = getCurrentEpochInSeconds() + 15
         group.lastTimeReadLatestMessageTimestamp = Math.max(currentTime, lastTimeReadLatestMessageTimestamp)
-        this.setGroup(groupId, group);
-        clearByKey(GROUP_STATE_PERSIST_KEY)
-        this._syncGroupState(groupId, 20);
+        this.setGroup(groupId, group, 20);
     }
     
     async poll(): Promise<boolean> {
