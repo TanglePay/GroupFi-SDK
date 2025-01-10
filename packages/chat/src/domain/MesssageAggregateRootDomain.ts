@@ -18,8 +18,8 @@ import { Mode, IIncludesAndExcludes, Profile } from '../types'
 import { SharedContext } from "./SharedContext";
 import { prefixedGroupIdToGroupId } from "groupfi-sdk-core";
 
-import { stripHexPrefix } from 'groupfi-sdk-utils'
-import { tracer } from '@groupfi/util'
+import { stripHexPrefix, tracer } from 'groupfi-sdk-utils'
+
 
 // serving as a facade for all message related domain, also in charge of bootstraping
 // after bootstraping, each domain should subscribe to the event, then push event into array for buffering, and 
