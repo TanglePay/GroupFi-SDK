@@ -225,6 +225,7 @@ export class MessageAggregateRootDomain implements ICycle {
             await domain.start();
         }
         tracer.endStep('MessageAggregateRootDomain', 'start')
+        tracer.dumpLogs()
     }
     gidEquals(groupId1: string, groupId2: string) {
         return this.groupFiService.addHexPrefixIfAbsent(groupId1) === this.groupFiService.addHexPrefixIfAbsent(groupId2)
