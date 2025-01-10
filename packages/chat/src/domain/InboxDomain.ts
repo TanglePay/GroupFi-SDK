@@ -182,6 +182,8 @@ export class InboxDomain implements ICycle, IRunnable {
         group.lastTimeReadLatestMessageTimestamp = group.latestMessage?.timestamp??0;
         const currentTime = getCurrentEpochInSeconds() + 3
         group.lastTimeReadLatestMessageTimestamp = Math.max(currentTime, group.lastTimeReadLatestMessageTimestamp)
+        // log set group from clearUnreadCount, with group
+        console.log('InboxDomain set group from clearUnreadCount', JSON.stringify(group));
         this.setGroup(groupId, group);
     }
 
