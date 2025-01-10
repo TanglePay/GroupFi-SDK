@@ -551,7 +551,7 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             } else if (type === ImInboxEventTypeGroupIsPublicChanged) {
                 this._handleGroupIsPublicChangedEvent(event as EventGroupIsPublicChanged);
             } else if (type === ImInboxEventTypeGroupStateSync) {
-                await this._handleGroupStateSyncChangedEvent(event as EventGroupStateSyncChanged);
+                this._handleGroupStateSyncChangedEvent(event as EventGroupStateSyncChanged);
             }
             return false;
         } 
@@ -568,7 +568,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             return false;
         }
         await this._checkForMeGroupIdsLastUpdateTimestamp();
-
+        if (this._shouldLoadGroupState) {
+            await this._fetchGroupState();
+            return false;
+        }
         return true;
     }
     // persist dirty group max min token
@@ -1007,6 +1010,9 @@ export class GroupMemberDomain implements ICycle, IRunnable {
     // Add these near the top with other private fields
     private _isGroupStateSyncInited: boolean = false;
 
+    // Add these near the top with other private fields
+    private _shouldLoadGroupState: boolean = false;
+
     // Add these methods after other similar methods
 
     // Get all group state syncs with their timestamps
@@ -1075,10 +1081,9 @@ export class GroupMemberDomain implements ICycle, IRunnable {
 
     async _handleGroupStateSyncChangedEvent(event: EventGroupStateSyncChanged) {
         try {
-            // Refresh the group state when a sync event is received
-            // log
-            console.log('GroupMemberDomain _handleGroupStateSyncChangedEvent', event)
-            await this._fetchGroupState();
+            // Set flag to true when sync event is received
+            this._shouldLoadGroupState = true;
+            console.log('GroupMemberDomain _handleGroupStateSyncChangedEvent, set _shouldLoadGroupState to true');
         } catch (error) {
             console.error('Error handling group state sync event:', error);
         }
@@ -1102,7 +1107,10 @@ export class GroupMemberDomain implements ICycle, IRunnable {
                     console.log('GroupMemberDomain _fetchGroupState, outputId changed, reset _isGroupStateSyncOutputUsed to false');
                 }
                 this._groupStateSyncs = newGroupStateSyncs;
-                this._isGroupStateSyncInited = true; // Set to true after successful fetch
+                this._isGroupStateSyncInited = true;
+                // Reset the flag after successful fetch
+                this._shouldLoadGroupState = false;
+                console.log('GroupMemberDomain _fetchGroupState, set _shouldLoadGroupState to false');
             }
         } catch (error) {
             console.error('Error fetching group state syncs:', error);
