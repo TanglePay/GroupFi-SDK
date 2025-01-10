@@ -19,6 +19,7 @@ import { SharedContext } from "./SharedContext";
 import { prefixedGroupIdToGroupId } from "groupfi-sdk-core";
 
 import { stripHexPrefix } from 'groupfi-sdk-utils'
+import { tracer } from '@groupfi/util'
 
 // serving as a facade for all message related domain, also in charge of bootstraping
 // after bootstraping, each domain should subscribe to the event, then push event into array for buffering, and 
@@ -80,11 +81,13 @@ export class MessageAggregateRootDomain implements ICycle {
         await this.groupFiService.browseModeSetupClient()
     }
     async bootstrap() {
+        tracer.startStep('MessageAggregateRootDomain', 'bootstrap')
         this._cycleableDomains = [this.eventSourceDomain, this.outputSendingDomain, this.messageHubDomain, this.inboxDomain, this.conversationDomain, this.groupMemberDomain];
         //this._cycleableDomains = [this.eventSourceDomain, this.messageHubDomain, this.inboxDomain]
         for (const domain of this._cycleableDomains) {
             await domain.bootstrap();
         }
+        tracer.endStep('MessageAggregateRootDomain', 'bootstrap')
     }
     _groupMemberChangedCallback: (param:{groupId: string,isNewMember:boolean,address:string}) => void
     async joinGroup(groupId:string) {
@@ -216,10 +219,12 @@ export class MessageAggregateRootDomain implements ICycle {
         this.groupMemberDomain.off(EventGroupMemberChangedKey, callback)
     }
     async start(): Promise<void> {
+        tracer.startStep('MessageAggregateRootDomain', 'start')
         this._cycleableDomains = [this.outputSendingDomain, this.groupMemberDomain, this.inboxDomain, this.conversationDomain, this.messageHubDomain, this.eventSourceDomain]
         for (const domain of this._cycleableDomains) {
             await domain.start();
         }
+        tracer.endStep('MessageAggregateRootDomain', 'start')
     }
     gidEquals(groupId1: string, groupId2: string) {
         return this.groupFiService.addHexPrefixIfAbsent(groupId1) === this.groupFiService.addHexPrefixIfAbsent(groupId2)
