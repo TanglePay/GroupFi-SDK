@@ -28,7 +28,8 @@ import {
   isGroupIdEqual,
   GroupStateSyncItem,
   BasicOutputWrapper,
-  ImInboxEventTypeGroupStateSync
+  ImInboxEventTypeGroupStateSync,
+  StorageFacade
 }   from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -45,7 +46,6 @@ import {
   IProxyModeRequestAdapter,
   AddressMappingStore,
   nameMappingCache,
-  StorageFacade,
   GroupStateSyncStorageExtended
 } from 'groupfi-sdk-client';
 import { Web3 } from 'web3';
@@ -92,6 +92,9 @@ const TP_SHIMMER_MAINNET_ID = 102;
 
 // Prefix text displayed to the user during the pairx signing process.
 const PAIRX_SIGN_PREFIX_TEXT = 'Creating account... '
+
+// Add this constant near the top of the file
+const CHAIN_LIST_STORAGE_KEY = 'groupfi_chain_list';
 
 class GroupFiSDKFacade {
   private _address: string | undefined;
@@ -757,8 +760,14 @@ class GroupFiSDKFacade {
       this._client.setupStorage(this._storage)
       GroupfiWalletEmbedded.setupStorage(this._storage)
     }
-    const nodeManager = new NodeManager(process.env.AUXILIARY_SERVICE_DOMAIN!);
-    await nodeManager.fetchUrlFromBackend();
+    const nodeManager = new NodeManager(process.env.AUXILIARY_SERVICE_DOMAIN!, this._storage!);
+    
+    // Run nodeManager fetch and client setup in parallel
+    await Promise.all([
+      nodeManager.fetchUrlFromBackend(),
+      this._client!.setup()
+    ]);
+
     console.log('nodeManager.getUrl()', nodeManager.getUrl());
     this._client!.setNodeManager(nodeManager);
     GroupFiSDKObj.setNodeManager(nodeManager);
@@ -767,14 +776,9 @@ class GroupFiSDKFacade {
     GroupFiSDKObj.recreateMqttClient();
     // log after recreateMqttClient
     console.log('after recreateMqttClient');
-    await this._client!.setup();
   }
 
   async browseModeSetupClient() {
-    await Promise.all([this.setupGroupfiSdkClient(), this.fetchChainList()])
-    // this._client = new GroupfiSdkClient();
-    // await this._client!.setup();
-
     this._address = undefined
     this._proxyAddress = undefined
     this._nodeId = undefined
@@ -785,7 +789,9 @@ class GroupFiSDKFacade {
   setupStorage(storage: StorageFacade) {
     this._storage = storage
   }
-
+  async initializeClientAndChainList() {
+    await Promise.all([this.setupGroupfiSdkClient(), this.fetchChainList()])
+  }
   async bootstrap(
     walletType: WalletType,
     metaMaskAccountFromDapp: string | undefined
@@ -794,9 +800,6 @@ class GroupFiSDKFacade {
     mode: Mode;
     nodeId: number | undefined;
   }> {
-    await Promise.all([this.setupGroupfiSdkClient(), this.fetchChainList()])
-    // this._client = new GroupfiSdkClient();
-    // await this._client!.setup();
 
     let res:
       | {
@@ -1605,7 +1608,44 @@ class GroupFiSDKFacade {
   _chainList?:ChainList = undefined
   async fetchChainList() {
     if (this._chainList === undefined) {
-      this._chainList = await this._auxiliaryService.getChainList()
+      // Start API call early but don't await it yet
+      const apiPromise = this._auxiliaryService.getChainList();
+
+      // Try to load from storage first
+      if (this._storage) {
+        const storedChainList = await this._storage.get(CHAIN_LIST_STORAGE_KEY);
+        if (storedChainList) {
+          try {
+            this._chainList = JSON.parse(storedChainList);
+          } catch (error) {
+            console.warn('Failed to parse stored chain list:', error);
+          }
+        }
+      }
+
+      // If we have storage data, update in background
+      if (this._chainList !== undefined) {
+        apiPromise
+          .then(apiChainList => {
+            this._chainList = apiChainList;
+            if (this._storage) {
+              return this._storage.set(CHAIN_LIST_STORAGE_KEY, JSON.stringify(apiChainList));
+            }
+          })
+          .catch(error => {
+            console.warn('Failed to fetch latest chain list:', error);
+          });
+      } else {
+        // No storage data, wait for API call
+        try {
+          this._chainList = await apiPromise;
+          if (this._storage) {
+            await this._storage.set(CHAIN_LIST_STORAGE_KEY, JSON.stringify(this._chainList));
+          }
+        } catch (error) {
+          throw error;
+        }
+      }
     }
   }
   _ensureChainList() {

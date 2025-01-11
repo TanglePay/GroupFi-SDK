@@ -66,7 +66,8 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     GroupStateSyncStorage,
     BasicOutputWrapper,
     NftOutputWrapper,
-    OutputWrapper
+    OutputWrapper,
+    StorageFacade
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions, sleep } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
@@ -133,12 +134,6 @@ setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
 setCryptoJS(CryptoJS)
 const tag = Converter.utf8ToBytes(GROUPFITAG)
 
-export interface StorageFacade {
-    prefix: string;
-    get(key: string): Promise<string | null>;
-    set(key: string, value: string): Promise<void>;
-    remove(key: string): Promise<void>;
-}
 type OutputResponseWrapper = {
     output: IOutputResponse;
     outputId: string;

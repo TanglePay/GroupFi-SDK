@@ -603,4 +603,8 @@ export class GroupFiService {
   async tryCleanOneExpiredLowPriorityTask(): Promise<boolean> {
     return await GroupFiSDKFacade.tryCleanOneExpiredLowPriorityTask();
   }
+
+  async initializeClientAndChainList() {
+    await GroupFiSDKFacade.initializeClientAndChainList();
+  }
 }

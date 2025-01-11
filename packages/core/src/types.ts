@@ -264,6 +264,12 @@ export class UserDoesNotHasEnoughTokenError extends Error {
         }
     }
 }
+export interface StorageFacade {
+    prefix: string;
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string): Promise<void>;
+    remove(key: string): Promise<void>;
+}
 export type IMessage = {
     type: typeof ImInboxEventTypeNewMessage
     messageId: string
