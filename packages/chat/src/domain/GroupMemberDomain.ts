@@ -1,6 +1,6 @@
 import { Inject, Singleton } from "typescript-ioc";
 import { CombinedStorageService } from "../service/CombinedStorageService";
-import { IClearCommandBase, ICommandBase, ICycle, IFetchPublicGroupMessageCommand, IRunnable, IIncludesAndExcludes, IInboxGroup } from "../types";
+import { IClearCommandBase, ICommandBase, IDomain, IFetchPublicGroupMessageCommand, IRunnable, IIncludesAndExcludes, IInboxGroup } from "../types";
 import { ThreadHandler } from "../util/thread";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
@@ -33,7 +33,7 @@ export const EventGroupLikeChangedLiteKey = 'GroupMemberDomain.groupLikeChangedL
 export const EventGroupIsPublicChangedKey = 'GroupMemberDomain.groupIsPublicChanged';
 
 @Singleton
-export class GroupMemberDomain implements ICycle, IRunnable {
+export class GroupMemberDomain implements IDomain, IRunnable {
     private _lruCache: LRUCache<IGroupMember>;
     private _evmQualifyCache: LRUCache<{addr:string,publicKey:string}[]>;
     private _processingGroupIds: Map<string,NodeJS.Timeout>;
@@ -392,6 +392,12 @@ export class GroupMemberDomain implements ICycle, IRunnable {
         this._lruCache = new LRUCache<IGroupMember>(100);
         this._evmQualifyCache = new LRUCache<{addr:string,publicKey:string}[]>(100);
         this._groupMaxMinTokenLruCache = new LRUCache<{max?:string,min?:string}>(100);
+        
+        // log
+        console.log('GroupMemberDomain bootstraped');
+    }
+
+    postInit(): void {
         this._onIncludesAndExcludesChangedHandler = () => {
             this._lastTimeRefreshForMeGroupConfigs = 0;
             this._lastTimeUpdateAllGroupIdsWithinContext = 0;
@@ -403,10 +409,9 @@ export class GroupMemberDomain implements ICycle, IRunnable {
             this._lastTimeUpdateAllGroupIdsWithinContext = 0;
         }
         this._inChannel = this.eventSourceDomain.outChannelToGroupMemberDomain;
-        this.eventSourceDomain.setGroupMemberDomain(this);  
-        // log
-        console.log('GroupMemberDomain bootstraped');
+        this.eventSourceDomain.setGroupMemberDomain(this);
     }
+
     @Inject
     private combinedStorageService: CombinedStorageService;
 
