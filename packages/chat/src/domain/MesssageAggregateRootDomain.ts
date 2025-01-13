@@ -18,7 +18,8 @@ import { Mode, IIncludesAndExcludes, Profile } from '../types'
 import { SharedContext } from "./SharedContext";
 import { prefixedGroupIdToGroupId } from "groupfi-sdk-core";
 
-import { stripHexPrefix } from 'groupfi-sdk-utils'
+import { stripHexPrefix, tracer } from 'groupfi-sdk-utils'
+
 
 // serving as a facade for all message related domain, also in charge of bootstraping
 // after bootstraping, each domain should subscribe to the event, then push event into array for buffering, and 
@@ -80,6 +81,7 @@ export class MessageAggregateRootDomain implements ICycle {
         await this.groupFiService.browseModeSetupClient()
     }
     async bootstrap() {
+        tracer.startStep('MessageAggregateRootDomain', 'bootstrap')
         this._cycleableDomains = [this.eventSourceDomain, this.outputSendingDomain, this.messageHubDomain, this.inboxDomain, this.conversationDomain, this.groupMemberDomain];
         //this._cycleableDomains = [this.eventSourceDomain, this.messageHubDomain, this.inboxDomain]
         
@@ -90,6 +92,7 @@ export class MessageAggregateRootDomain implements ICycle {
         for (const domain of this._cycleableDomains) {
             domain.postInit();
         }
+        tracer.endStep('MessageAggregateRootDomain', 'bootstrap')
     }
     _groupMemberChangedCallback: (param:{groupId: string,isNewMember:boolean,address:string}) => void
     async joinGroup(groupId:string) {
@@ -221,10 +224,13 @@ export class MessageAggregateRootDomain implements ICycle {
         this.groupMemberDomain.off(EventGroupMemberChangedKey, callback)
     }
     async start(): Promise<void> {
+        tracer.startStep('MessageAggregateRootDomain', 'start')
         this._cycleableDomains = [this.outputSendingDomain, this.groupMemberDomain, this.inboxDomain, this.conversationDomain, this.messageHubDomain, this.eventSourceDomain]
         for (const domain of this._cycleableDomains) {
             await domain.start();
         }
+        tracer.endStep('MessageAggregateRootDomain', 'start')
+        tracer.dumpLogs()
     }
     gidEquals(groupId1: string, groupId2: string) {
         return this.groupFiService.addHexPrefixIfAbsent(groupId1) === this.groupFiService.addHexPrefixIfAbsent(groupId2)
@@ -380,6 +386,7 @@ export class MessageAggregateRootDomain implements ICycle {
             tasks.push(this.groupMemberDomain._refreshGroupEvmQualifyAsync(groupId))
         }
         await Promise.all(tasks);
+        this.conversationDomain.setCurrentGroupIdOnUi(groupId)
         this.outputSendingDomain.enterGroup(groupId)
         if (this._context.isWalletConnected) {
             this.groupFiService.enablePreparedRemainderHint()
@@ -393,6 +400,7 @@ export class MessageAggregateRootDomain implements ICycle {
     // navigate away from group
     navigateAwayFromGroup(groupId: string) {
         groupId = prefixedGroupIdToGroupId(groupId)
+        this.conversationDomain.setCurrentGroupIdOnUi(undefined)
         // check is wallet connected
         if (this._context.isWalletConnected) {
             this.groupFiService.disablePreparedRemainderHint()

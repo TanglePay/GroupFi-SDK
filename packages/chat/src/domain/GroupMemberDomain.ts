@@ -4,7 +4,7 @@ import { IClearCommandBase, ICommandBase, IDomain, IFetchPublicGroupMessageComma
 import { ThreadHandler } from "../util/thread";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
-import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual, GroupStateSyncSchemaVersion} from "groupfi-sdk-core";
+import { GroupConfig, GroupConfigPlus, EvmQualifyChangedEvent,EventGroupMemberChanged, EventGroupUpdateMinMaxToken,DomainGroupUpdateMinMaxToken, ImInboxEventTypeGroupMemberChanged,ImInboxEventTypeMarkChanged, ImInboxEventTypeEvmQualifyChanged, PushedEvent, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, EventGroupMuteChanged, ImInboxEventTypeLikeChanged, EventGroupLikeChanged, EventGroupIsPublicChanged, ImInboxEventTypeGroupIsPublicChanged, isGroupIdEqual, GroupStateSyncSchemaVersion, BasicOutputWrapper} from "groupfi-sdk-core";
 import { objectId, bytesToHex, compareHex } from "groupfi-sdk-utils";
 import { Channel } from "../util/channel";
 import { EventSourceDomain } from "./EventSourceDomain";
@@ -16,6 +16,7 @@ import {
     ImInboxEventTypeGroupStateSync, 
     EventGroupStateSyncChanged 
 } from "groupfi-sdk-core";
+import { IBasicOutput } from "@iota/iota.js";
 
 export const StoragePrefixGroupMinMaxToken = 'GroupMemberDomain.groupMinMaxToken';
 export interface IGroupMember {
@@ -384,7 +385,6 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             items: []
         };
         this._isGroupStateSyncInited = false;
-        this._isDirtyGroupStateSyncs = false;
         this._isGroupStateSyncOutputUsed = false;
     }
     async bootstrap(): Promise<void> {
@@ -464,15 +464,6 @@ export class GroupMemberDomain implements IDomain, IRunnable {
     _forMeGroupIdsLastUpdateTimestamp: Record<string,number> = {};
     _processedPublicGroupIds: Set<string>;
 
-    private async _tryRefreshGroupStateSyncs(): Promise<boolean> {
-        // Only refresh if dirty and output has not been used
-        if (this._isDirtyGroupStateSyncs && !this._isGroupStateSyncOutputUsed) {
-            await this.persistDirtyGroupStateSyncs();
-            return true;
-        }
-        return false;
-    }
-
     async poll(): Promise<boolean> {
         const cmd = this._groupMemberDomainCmdChannel.poll();
         if (cmd) {
@@ -523,12 +514,6 @@ export class GroupMemberDomain implements IDomain, IRunnable {
 
         const isAddressStatusUpdated = await this.tryRefreshAddressStatusForAll();
         if (isAddressStatusUpdated) {
-            return false;
-        }
-
-        // Add the new check here
-        const isGroupStateSyncsUpdated = await this._tryRefreshGroupStateSyncs();
-        if (isGroupStateSyncsUpdated) {
             return false;
         }
 
@@ -588,13 +573,10 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             return false;
         }
         await this._checkForMeGroupIdsLastUpdateTimestamp();
-
-        // Handle dirty group state syncs
-        if (this._isDirtyGroupStateSyncs) {
-            await this.persistDirtyGroupStateSyncs();
+        if (this._shouldLoadGroupState) {
+            await this._fetchGroupState();
             return false;
         }
-
         return true;
     }
     // persist dirty group max min token
@@ -1028,11 +1010,13 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         schemaVersion: GroupStateSyncSchemaVersion,
         items: []
     };
-    private _isDirtyGroupStateSyncs: boolean = false;
     private _isGroupStateSyncOutputUsed: boolean = false;
 
     // Add these near the top with other private fields
     private _isGroupStateSyncInited: boolean = false;
+
+    // Add these near the top with other private fields
+    private _shouldLoadGroupState: boolean = false;
 
     // Add these methods after other similar methods
 
@@ -1047,57 +1031,12 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         return timestamps;
     }
 
-    // Update a specific group's timestamp
-    async updateGroupStateTimestamp(groupId: string, timestamp: number): Promise<void> {
-
-        const existingItemIndex = this._groupStateSyncs.items.findIndex(
-            item => item.groupId === groupId
-        );
-
-        if (existingItemIndex >= 0) {
-            // Update existing item if timestamp is newer
-            if (this._groupStateSyncs.items[existingItemIndex].lastTimeReadLatestMessageTimestamp < timestamp) {
-                this._groupStateSyncs.items[existingItemIndex].lastTimeReadLatestMessageTimestamp = timestamp;
-                this._isDirtyGroupStateSyncs = true;
-            }
-        } else {
-            // Add new item
-            this._groupStateSyncs.items.push({
-                groupId,
-                lastTimeReadLatestMessageTimestamp: timestamp
-            });
-            this._isDirtyGroupStateSyncs = true;
-        }
-    }
-
-    // Persist dirty state syncs
-    async persistDirtyGroupStateSyncs(): Promise<void> {
-        if (!this._isDirtyGroupStateSyncs || !this._groupStateSyncs) {
-            return;
-        }
-
-        // log enter persistDirtyGroupStateSyncs
-        console.log('enter persistDirtyGroupStateSyncs, starting to persist');
-        try {
-            await this.groupFiService.persistGroupStateSyncs(
-                this._groupStateSyncs.items,
-                this._groupStateSyncs.outputWrapper
-            );
-            this._isDirtyGroupStateSyncs = false;
-            this._isGroupStateSyncOutputUsed = true;
-        } catch (error) {
-            console.error('Error persisting group state syncs:', error);
-            throw error;
-        }
-    }
-
-    // Update the sync method to work with IInboxGroup[]
-    syncGroupStateTimestamps(inboxGroups: IInboxGroup[]) {
-        
+    // Updates timestamps in memory and returns if changes were made
+    updateGroupStateTimestampsInMemory(groups: { groupId: string; lastTimeReadLatestMessageTimestamp?: number }[]): boolean {
         // Convert current state to timestamps map
         const currentTimestamps: Record<string, number> = {};
         this._groupStateSyncs.items.forEach(item => {
-            if (item && item.groupId) {  // Add null check for item
+            if (item && item.groupId) {
                 currentTimestamps[item.groupId] = item.lastTimeReadLatestMessageTimestamp;
             }
         });
@@ -1105,8 +1044,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         let hasChanges = false;
 
         // Update timestamps in place if needed
-        for (const group of inboxGroups) {
-            if (!group || !group.groupId) continue;  // Add null check for group
+        for (const group of groups) {
+            if (!group || !group.groupId) continue;
             
             // Prefix the groupId using _gid method
             const prefixedGroupId = this._gid(group.groupId);
@@ -1116,7 +1055,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 currentTimestamps[prefixedGroupId] = timestamp;
                 hasChanges = true;
             } else if (currentTimestamps[prefixedGroupId] > timestamp) {
-                // Update the inbox group's timestamp if current state has a newer timestamp
+                // Update the group's timestamp if current state has a newer timestamp
                 group.lastTimeReadLatestMessageTimestamp = currentTimestamps[prefixedGroupId];
             }
         }
@@ -1127,14 +1066,29 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 groupId,
                 lastTimeReadLatestMessageTimestamp: timestamp
             }));
-            this._isDirtyGroupStateSyncs = true;
         }
+
+        return hasChanges;
+    }
+
+    syncGroupStateTimestamps(groups: { groupId: string; lastTimeReadLatestMessageTimestamp?: number }[]): {created: IBasicOutput[], consumed: BasicOutputWrapper[]} {
+        this.updateGroupStateTimestampsInMemory(groups);
+        
+        // log enter
+        console.log('GroupMemberDomain syncGroupStateTimestamps, enter, this._isGroupStateSyncOutputUsed', this._isGroupStateSyncOutputUsed);
+        if (!this._isGroupStateSyncOutputUsed) {
+            this._isGroupStateSyncOutputUsed = true;
+            return this.groupFiService.persistGroupStateSyncs(this._groupStateSyncs.items, this._groupStateSyncs.outputWrapper);
+        }
+        
+        return {created: [], consumed: []};
     }
 
     async _handleGroupStateSyncChangedEvent(event: EventGroupStateSyncChanged) {
         try {
-            // Refresh the group state when a sync event is received
-            await this._fetchGroupState();
+            // Set flag to true when sync event is received
+            this._shouldLoadGroupState = true;
+            console.log('GroupMemberDomain _handleGroupStateSyncChangedEvent, set _shouldLoadGroupState to true');
         } catch (error) {
             console.error('Error handling group state sync event:', error);
         }
@@ -1149,10 +1103,19 @@ export class GroupMemberDomain implements IDomain, IRunnable {
     async _fetchGroupState(): Promise<void> {
         try {
             const newGroupStateSyncs = await this.groupFiService.getAllGroupStateSyncs();
-            console.log('Fetched group state syncs:', newGroupStateSyncs);
+            console.log('Fetched group state syncs:newGroupStateSyncs', newGroupStateSyncs, 'this._groupStateSyncs', this._groupStateSyncs, 'is outputid changed', this._groupStateSyncs.outputWrapper?.outputId != newGroupStateSyncs?.outputWrapper?.outputId);
             if (newGroupStateSyncs) {
+                // case outputid changed, compare to newGroupStateSyncs
+                if (this._groupStateSyncs.outputWrapper && this._groupStateSyncs.outputWrapper.outputId != newGroupStateSyncs.outputWrapper?.outputId) {
+                    this._isGroupStateSyncOutputUsed = false;
+                    // log reset
+                    console.log('GroupMemberDomain _fetchGroupState, outputId changed, reset _isGroupStateSyncOutputUsed to false');
+                }
                 this._groupStateSyncs = newGroupStateSyncs;
-                this._isGroupStateSyncInited = true; // Set to true after successful fetch
+                this._isGroupStateSyncInited = true;
+                // Reset the flag after successful fetch
+                this._shouldLoadGroupState = false;
+                console.log('GroupMemberDomain _fetchGroupState, set _shouldLoadGroupState to false');
             }
         } catch (error) {
             console.error('Error fetching group state syncs:', error);

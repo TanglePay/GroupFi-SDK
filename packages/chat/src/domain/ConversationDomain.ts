@@ -1,18 +1,18 @@
 import { Inject, Singleton } from "typescript-ioc";
-import { IAddPendingMessageToFrontCommand, ICommandBase, IDomain, IRunnable } from "../types";
+import { GROUP_STATE_PERSIST_KEY, IAddPendingMessageToFrontCommand, ICommandBase, IDomain, IRunnable } from "../types";
 import { IMessage } from 'groupfi-sdk-core'
-import { bytesToHex, sleepYield, stripHexPrefix } from 'groupfi-sdk-utils'
+import { bytesToHex, getCurrentEpochInSeconds, sleepYield, stripHexPrefix } from 'groupfi-sdk-utils'
 import { ThreadHandler } from "../util/thread";
 import { Channel } from "../util/channel";
 import { MessageHubDomain } from "./MessageHubDomain";
 import { CombinedStorageService } from "../service/CombinedStorageService";
 import { LRUCache } from "../util/lru";
 import { GroupFiService } from "../service/GroupFiService";
-import EventEmitter from "events";
 import { EventSourceDomain } from "./EventSourceDomain";
 import { GroupMemberDomain } from "./GroupMemberDomain";
 import { OutputSendingDomain } from "./OutputSendingDomain";
 import { DebouncedEventEmitter } from "../util/debounced";
+import { clearAll, debounce } from "../util/misc";
 // persist and retrieve message id of all conversation
 // in memory maintain the message id of single active conversation
 export const ConversationGroupMessageListStorePrefix = 'ConversationDomain.groupMessageList.';
@@ -69,10 +69,12 @@ export class ConversationDomain implements IDomain, IRunnable {
     
     private _events: DebouncedEventEmitter = new DebouncedEventEmitter(100);
     private _lruCache: LRUCache<IConversationGroupMessageList>;
+    private _currentGroupIdOnUi?: string;
     cacheClear() {
         if (this._lruCache) {
             this._lruCache.clear();
         }
+        clearAll();
     }
     _storeGroupMessageList(groupId:string,groupMessageList: IConversationGroupMessageList,key:string) {
         const storeKey = this.getGroupMessageListStoreKey(groupId,key);
@@ -342,6 +344,37 @@ export class ConversationDomain implements IDomain, IRunnable {
         const suffix = key ? `.${key}` : '';
         return `${ConversationGroupMessageListStorePrefix}${groupId}${suffix}`;        
     }
+    private _syncGroupStateDebounced(groupId: string, lastTimeReadLatestMessageTimestamp: number) {
+        const debouncedFn = debounce(
+            () => {
+                // log actual debouncedFn
+                console.log('ConversationDomain _syncGroupStateDebounced actual debouncedFn');
+                const fn = () => {
+                    return this.groupMemberDomain.syncGroupStateTimestamps([{
+                        groupId, 
+                        lastTimeReadLatestMessageTimestamp
+                    }]);
+                }
+                const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory([{
+                    groupId, 
+                    lastTimeReadLatestMessageTimestamp
+                }]);
+                if (hasChanges) {
+                    // 1 minute delay
+                    this.groupFiService.addLowPriorityTask(
+                        GROUP_STATE_PERSIST_KEY,
+                        fn,
+                        60
+                    );
+                }
+            },
+            20, // 20 seconds
+            GROUP_STATE_PERSIST_KEY
+        );
+        debouncedFn();
+        // log debouncedFn
+        console.log('ConversationDomain _syncGroupStateDebounced', `conversation-sync-${groupId}`);
+    }
     async poll(): Promise<boolean> {
         const cmd = this._cmdChannel.poll();
         if (cmd) {
@@ -414,9 +447,17 @@ export class ConversationDomain implements IDomain, IRunnable {
         if (message) {
             // log message received
             console.log('ConversationDomain message received', message);
-            let { groupId, messageId, timestamp} = message;
+            let { groupId, messageId, timestamp, isFromSelf } = message;
             groupId = stripHexPrefix(groupId)
             await this.handleNewMessageToFirstPartGroupMessageList(groupId, messageId, timestamp);
+            const delta = isFromSelf ? 60 : 3;
+            const currentTime = getCurrentEpochInSeconds() + delta; 
+            const timestampForRead  = Math.max(currentTime, timestamp);
+            // Add sync for messages from current group
+            if (groupId == this._currentGroupIdOnUi) {
+                this._syncGroupStateDebounced(groupId, timestampForRead);
+            }
+
             await sleepYield(); 
             return false;
         } else {
@@ -463,5 +504,12 @@ export class ConversationDomain implements IDomain, IRunnable {
     postInit(): void {
         this.eventSourceDomain.conversationDomainCmdChannel = this._cmdChannel;
         this.groupMemberDomain.conversationDomainCmdChannel = this._cmdChannel;
+    }
+    setCurrentGroupIdOnUi(groupId: string | undefined) {
+        if (groupId) {
+            this._currentGroupIdOnUi = stripHexPrefix(groupId);
+        } else {
+            this._currentGroupIdOnUi = undefined;
+        }
     }
 }

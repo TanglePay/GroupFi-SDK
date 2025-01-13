@@ -2,16 +2,17 @@ import { Inject, Singleton } from "typescript-ioc";
 import { IMessage, GroupFiSDKObj } from 'groupfi-sdk-core'
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { MessageHubDomain } from "./MessageHubDomain";
-import { IDomain, IInboxMessage, IRunnable } from "../types";
+import { GROUP_STATE_PERSIST_KEY, IDomain, IInboxMessage, IRunnable } from "../types";
 import { Channel } from "../util/channel";
 import { ThreadHandler } from "../util/thread";
 import EventEmitter from "events";
 import { LRUCache } from "../util/lru";
 import { CombinedStorageService } from "../service/CombinedStorageService";
 import { IInboxGroup } from "../types";
-import { sleepYield } from "groupfi-sdk-utils";
+import { getCurrentEpochInSeconds, sleepYield } from "groupfi-sdk-utils";
 import { GroupMemberDomain } from "./GroupMemberDomain";
-import { throttle } from "../util/misc";
+import { clearAll, clearByKey } from "../util/misc";
+import { GroupFiService } from "../service/GroupFiService";
 // maintain list of groupid, order matters
 // maintain state of each group, including group name, last message, unread count, etc
 // restore from local storage on start, then update on new message from inbox message hub domain
@@ -30,6 +31,8 @@ export class InboxDomain implements IDomain, IRunnable {
     private combinedStorageService: CombinedStorageService;
 
     @Inject
+    private groupFiService: GroupFiService;
+    @Inject
     private groupMemberDomain: GroupMemberDomain;
     @Inject
     private localStorageRepository: LocalStorageRepository;
@@ -39,7 +42,7 @@ export class InboxDomain implements IDomain, IRunnable {
     private _pendingGroupIdsListUpdate: boolean = false;
     private _pendingGroupsUpdateGroupIds: Set<string> = new Set<string>();
     private _firstUpdateEmitted: boolean = false;
-    private _syncGroupThrottles: Map<string, Function> = new Map();
+    private _syncGroupDebounces: Map<string, Function> = new Map();
 
     cacheClear() {
         if (this._groups) {
@@ -70,7 +73,7 @@ export class InboxDomain implements IDomain, IRunnable {
 
     async destroy() {
         this.threadHandler.destroy();
-        this._syncGroupThrottles.clear();
+        this._syncGroupDebounces.clear();
         //@ts-ignore
         this._groups = undefined;
     }
@@ -150,7 +153,7 @@ export class InboxDomain implements IDomain, IRunnable {
             group = this._getDefaultGroup(groupId);
             this._groups.put(key, group);
         }
-        this._syncGroupThrottled(groupId);
+        this._syncGroupState(groupId);
         return group;
     }
     _getGroupFromCacheOnly(groupId: string) {
@@ -162,10 +165,10 @@ export class InboxDomain implements IDomain, IRunnable {
             return undefined;
         }
     }
-    setGroup(groupId: string, group: IInboxGroup) {
+    setGroup(groupId: string, group: IInboxGroup, delay?: number) {
         const key = this.getGroupStoreKey(groupId);
         this.combinedStorageService.setSingleThreaded(key, group, this._groups);
-        this._syncGroupThrottled(groupId);
+        this._syncGroupState(groupId, delay);
     }
     _persistGroupIfInCache(groupId: string) {
         const group = this._getGroupFromCacheOnly(groupId);
@@ -177,14 +180,19 @@ export class InboxDomain implements IDomain, IRunnable {
         const group = await this.getGroup(groupId);
         group.unreadCount = 0;
         group.lastTimeReadLatestMessageTimestamp = group.latestMessage?.timestamp??0;
+        const currentTime = getCurrentEpochInSeconds() + 3
+        group.lastTimeReadLatestMessageTimestamp = Math.max(currentTime, group.lastTimeReadLatestMessageTimestamp)
+        // log set group from clearUnreadCount, with group
+        console.log('InboxDomain set group from clearUnreadCount', JSON.stringify(group));
         this.setGroup(groupId, group);
     }
 
     async setUnreadCount(groupId: string, unreadCount: number, lastTimeReadLatestMessageTimestamp: number) {
         const group = await this.getGroup(groupId);
         group.unreadCount = unreadCount
-        group.lastTimeReadLatestMessageTimestamp = lastTimeReadLatestMessageTimestamp
-        this.setGroup(groupId, group);
+        const currentTime = getCurrentEpochInSeconds() + 15
+        group.lastTimeReadLatestMessageTimestamp = Math.max(currentTime, lastTimeReadLatestMessageTimestamp)
+        this.setGroup(groupId, group, 20);
     }
     
     async poll(): Promise<boolean> {
@@ -287,6 +295,7 @@ export class InboxDomain implements IDomain, IRunnable {
     async switchAddress() {
         await this._loadGroupIdsListFromLocalStorage();
         this._events.emit(EventInboxUpdated);
+        clearAll();
         console.log('InboxDomain event emitted', EventInboxLoaded);
     }
 
@@ -296,19 +305,25 @@ export class InboxDomain implements IDomain, IRunnable {
         return groups;
     }
 
-    
-
-    private _syncGroupThrottled(groupId: string) {
-        const throttledFn = throttle(
-            () => {
-                const group = this._getGroupFromCacheOnly(groupId);
-                if (group) {
-                    this.groupMemberDomain.syncGroupStateTimestamps([group]);
-                }
-            },
-            1000,
-            `inbox-sync-${groupId}`
-        );
-        throttledFn();
+    private _syncGroupState(groupId: string, delay?: number) {
+        delay = delay ?? 60;
+        const fn = () => {
+            // get all groups
+            const groups = this._groups.values();
+            
+            return this.groupMemberDomain.syncGroupStateTimestamps(groups);
+        }
+        const groups = this._groups.values();
+        const hasChanges = this.groupMemberDomain.updateGroupStateTimestampsInMemory(groups);
+        // log 
+        console.log('InboxDomain syncGroupState,groupId', groupId, 'hasChanges', hasChanges, 'groups', groups);
+        if (hasChanges) {
+            // Add task directly without debounce
+            this.groupFiService.addLowPriorityTask(
+                GROUP_STATE_PERSIST_KEY,
+                fn,
+                delay
+            );
+        }
     }
 }
