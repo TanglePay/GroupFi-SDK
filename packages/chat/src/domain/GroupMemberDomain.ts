@@ -243,7 +243,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             return false;
         }
         if (this._isShouldRefreshForMeGroupConfigs()) {
-            if (!this._isStartRefreshForMeGroupConfigs) {
+            if (!this._isStartRefreshForMeGroupConfigs && !this._context.isForMeGroupsLoading) {
                 this._context.setIsForMeGroupsLoading(true, 'tryRefreshForMeGroupConfigs', 'start loading forme groups')
             }
             this._isStartRefreshForMeGroupConfigs = true
@@ -1254,7 +1254,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         if (idsString) {
             this._markedGroupIds = JSON.parse(idsString);
             // emit event
-            await this.warmUpMarkedGroupConfigs();
+            const isAllHit = await this.warmUpMarkedGroupConfigs();
+            if (!isAllHit) return;
             this._events.emit(EventMarkedGroupConfigChangedKey);
             // log loaded
             console.log('GroupMemberDomain loadMarkedGroupIds, loaded', this._markedGroupIds);
@@ -1268,8 +1269,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         const includesAndExcludes = this._context.includesAndExcludes; 
         // log enter
         console.log('GroupMemberDomain _onIncludesAndExcludesChangedHandler, enter, includesAndExcludes', includesAndExcludes);
-        const isFirstTime = !this._isStartRefreshForMeGroupConfigs
-        if (isFirstTime) 
+        const isFirstTime = !this._isStartRefreshForMeGroupConfigs;
+        if (isFirstTime && !this._isStartRefreshForMeGroupConfigs && !this._context.isForMeGroupsLoading)
         {   
             this._isStartRefreshForMeGroupConfigs = true;
             this._context.setIsForMeGroupsLoading(true, 'loadForMeGroupConfigsFromDiskCache', 'start loading forme groups')
@@ -1278,16 +1279,15 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         
    
         // Emit event to notify of changes
-        this.warmUpForMeGroupConfigs().then(() => {
-            if (isFirstTime) {
-                this._context.setIsForMeGroupsLoading(false, 'loadForMeGroupConfigsFromDiskCache', 'finish loading forme groups');
-            }
+        this.warmUpForMeGroupConfigs().then((isAllHit) => {
+            if (!isAllHit) return;
+            this._context.setIsForMeGroupsLoading(false, 'loadForMeGroupConfigsFromDiskCache', 'finish loading forme groups');
             this._events.emit(EventForMeGroupConfigChangedKey);
         });
     }
 
     // Add method to warm up for me group configs
-    async warmUpForMeGroupConfigs() {
+    async warmUpForMeGroupConfigs(): Promise<boolean> {
         // Log enter
         console.log('warmUpForMeGroupConfigs enter', this._formeGroupIds);
         
@@ -1304,14 +1304,22 @@ export class GroupMemberDomain implements IDomain, IRunnable {
 
         // Log cache miss rate
         console.log(`warmUpForMeGroupConfigs cache miss rate: ${(cacheMisses/total * 100).toFixed(1)}% (${cacheMisses}/${total})`);
+        const isAllHit = cacheMisses <= 0;
+        return isAllHit;
     }
 
     // Add method to warm up marked group configs
-    async warmUpMarkedGroupConfigs() {
+    async warmUpMarkedGroupConfigs(): Promise<boolean> {
+        let cacheMisses = 0;
         await Promise.all(this._markedGroupIds.map(async groupId => {
             const config = await this.getGroupConfig(groupId);
+            if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
+                cacheMisses++;
+            }
             return config;
         }));
+        const isAllHit = cacheMisses <= 0;
+        return isAllHit;
     }
 
     // Get group config from cache only

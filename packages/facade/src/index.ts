@@ -116,6 +116,9 @@ class GroupFiSDKFacade {
 
   private _lowPriorityTasks: Map<string, LowPriorityTask> = new Map();
 
+  // Add this near the top of the file with other private fields
+  private _initializationPromise: Promise<void> | null = null;
+
   // Returns the current mode if it is defined.
   get currentMode() {
     if (this._mode === undefined) {
@@ -614,6 +617,7 @@ class GroupFiSDKFacade {
   }
   // call getAllGroupStateSyncs
   async getAllGroupStateSyncs(): Promise<GroupStateSyncStorageExtended | undefined> {
+    await this.waitForInitialization()
     return await this._client!.getAllGroupStateSyncs(this._address!);
   }
   // call persistGroupStateSyncs
@@ -628,6 +632,7 @@ class GroupFiSDKFacade {
   }
   // async batchOutputIdToOutput(outputIds:string[]){
   async batchOutputIdToOutput(outputIds: string[]) {
+    await this.waitForInitialization()
     const res = await this._client!.batchOutputIdToOutput(outputIds);
     return res;
   }
@@ -694,6 +699,7 @@ class GroupFiSDKFacade {
   
   // fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn
   async fetchForMeGroupConfigsWithoutProcessGroupConfigBeforeReturn({includes}: {includes?: IIncludesAndExcludes[]}): Promise<Array<GroupConfigPlus & {isMember?: boolean}>> {
+    await this.waitForInitialization()
     const res = await GroupFiSDKObj.fetchForMeGroupConfigs({address: this._address!, includes})
     if (!this._address) {
       return res
@@ -741,10 +747,11 @@ class GroupFiSDKFacade {
   // fetchAddressMarkedGroupConfigs
   async fetchAddressMarkedGroupConfigs() {
     this._ensureWalletConnected();
-    const res = await GroupFiSDKObj.fetchAddressMarkedGroupConfigs(
+    await this.waitForInitialization();
+    const markedGroups = await GroupFiSDKObj.fetchAddressMarkGroups(
       this._address!
     );
-    return res;
+    return markedGroups;
   }
   _client?: GroupfiSdkClient;
 
@@ -790,8 +797,43 @@ class GroupFiSDKFacade {
     this._storage = storage
   }
   async initializeClientAndChainList() {
-    await Promise.all([this.setupGroupfiSdkClient(), this.fetchChainList()])
+    // If already initializing, return existing promise
+    if (this._initializationPromise) {
+      return this._initializationPromise;
+    }
+
+    // Create and store the initialization promise
+    this._initializationPromise = (async () => {
+      try {
+        await Promise.all([
+          this.setupGroupfiSdkClient(),
+          this.fetchChainList()
+        ]);
+      } catch (error) {
+        // Clear the promise on error so initialization can be retried
+        this._initializationPromise = null;
+        throw error;
+      }
+    })();
+
+    return this._initializationPromise;
   }
+
+  async waitForInitialization() {
+    // If initialization hasn't started yet, start it
+    if (!this._initializationPromise) {
+      throw new Error('Initialization promise is not set.');
+    }
+    
+    // Otherwise wait for existing initialization to complete
+    try {
+      await this._initializationPromise;
+    } catch (error) {
+      console.error('===>waitForInitialization error:', error)
+      throw error;
+    }
+  }
+
   async bootstrap(
     walletType: WalletType,
     metaMaskAccountFromDapp: string | undefined
@@ -838,6 +880,7 @@ class GroupFiSDKFacade {
       }
     | undefined
   > {
+    await this.waitForInitialization()
     const res = await GroupFiSDKObj.fetchAddressPairX(this._address!);
     if (!res) {
       return undefined;
@@ -1331,7 +1374,8 @@ class GroupFiSDKFacade {
     return GroupFiSDKObj._addHexPrefixIfAbsent(str);
   }
   async fetchAddressMarkedGroups() {
-    // call sdkobj fetchAddressMarkGroups
+    this._ensureWalletConnected();
+    await this.waitForInitialization();
     const markedGroups = await GroupFiSDKObj.fetchAddressMarkGroups(
       this._address!
     );
@@ -1387,6 +1431,8 @@ class GroupFiSDKFacade {
   }
 
   async loadAddressMemberGroups(address: string) {
+
+    await this.waitForInitialization();
     let groupIds = await GroupFiSDKObj.fetchAddressMemberGroups(
       address
     );
@@ -1398,12 +1444,15 @@ class GroupFiSDKFacade {
   }
   
   async loadGroupMemberAddresses(groupId: string) {
+
+    await this.waitForInitialization();
     groupId = prefixedGroupIdToGroupId(groupId);
     return await GroupFiSDKObj.fetchGroupMemberAddresses(groupId);
   }
 
   async loadAddressPublicKey() {
     this._ensureWalletConnected();
+    await this.waitForInitialization();
     return await GroupFiSDKObj.fetchAddressPublicKey(this._proxyAddress!);
   }
   async sendAnyOneToSelf() {
@@ -1578,6 +1627,7 @@ class GroupFiSDKFacade {
     endToken?: string,
     size = 10
   ) {
+    await this.waitForInitialization();
     groupId = prefixedGroupIdToGroupId(groupId);
     const res = await GroupFiSDKObj.fetchPublicMessageOutputList(
       groupId,
@@ -1690,6 +1740,7 @@ class GroupFiSDKFacade {
 
   async getGroupFiProfile(): Promise<Profile | null> {
     this._ensureWalletConnected();
+    await this.waitForInitialization();
     const res = await this.fetchAddressNames([this._address!])
     const profile = res[this._address!]
     if (!profile) {
