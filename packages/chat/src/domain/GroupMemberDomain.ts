@@ -1295,8 +1295,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         const total = this._formeGroupIds.length;
         
         await Promise.all(this._formeGroupIds.map(async groupId => {
-            const legacyGroupId = getLegacyGroupIdFromGroupId(groupId);
-            await Promise.all([this.getGroupConfig(groupId),this.getGroupConfig(legacyGroupId)]);
+            await this.getGroupConfig(groupId);
             if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
                 cacheMisses++;
             }
@@ -1324,6 +1323,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
 
     // Get group config from cache only
     getGroupConfigFromCache(groupId: string): GroupConfig | null {
-        return this._groupConfigCache.get(this._getGroupConfigKey(groupId)) || null;
+        const result = this._groupConfigCache.get(this._getGroupConfigKey(groupId)) || null;
+        console.log('getGroupConfigFromCache enter, groupId', groupId, 'result', result);
+        return result;
     }
 }
