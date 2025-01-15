@@ -1295,11 +1295,11 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         const total = this._formeGroupIds.length;
         
         await Promise.all(this._formeGroupIds.map(async groupId => {
-            const config = await this.getGroupConfig(groupId);
+            const legacyGroupId = getLegacyGroupIdFromGroupId(groupId);
+            await Promise.all([this.getGroupConfig(groupId),this.getGroupConfig(legacyGroupId)]);
             if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
                 cacheMisses++;
             }
-            return config;
         }));
 
         // Log cache miss rate
