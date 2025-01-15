@@ -1,5 +1,5 @@
 import { Channel } from "../util/channel";
-import { ICycle, IJoinGroupCommand, IMessage, IOutputCommandBase, IRunnable, ISendMessageCommand, ILeaveGroupCommand, IEnterGroupCommand, IMarkGroupCommend, IVoteGroupCommend, IMuteGroupMemberCommend, ProxyMode, DelegationMode, ImpersonationMode, ShimmerMode, RegisteredInfo, ILikeGroupMemberCommend, ISelectProfileCommand, IRegisterPairXCommand} from "../types";
+import { IDomain, IJoinGroupCommand, IMessage, IOutputCommandBase, IRunnable, ISendMessageCommand, ILeaveGroupCommand, IEnterGroupCommand, IMarkGroupCommend, IVoteGroupCommend, IMuteGroupMemberCommend, ProxyMode, DelegationMode, ImpersonationMode, ShimmerMode, RegisteredInfo, ILikeGroupMemberCommend, ISelectProfileCommand, IRegisterPairXCommand} from "../types";
 import { ThreadHandler } from "../util/thread";
 import { GroupFiService } from "../service/GroupFiService";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
@@ -28,7 +28,7 @@ const profileKey = 'OutputSendingDomain.profileList'
 export const ProfileListChangedEventkey = 'OutputSendingDomain.profileListChanged' 
 
 @Singleton
-export class OutputSendingDomain implements ICycle, IRunnable {
+export class OutputSendingDomain implements IDomain, IRunnable {
     
     @Inject
     private groupMemberDomain: GroupMemberDomain;
@@ -108,12 +108,15 @@ export class OutputSendingDomain implements ICycle, IRunnable {
 
     private _inChannel: Channel<IOutputCommandBase<number>>
     async bootstrap(): Promise<void> {
-        this.eventSourceDomain.setOutputSendingDomain(this);
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'OutputSendingDomain', 100);
         this._inChannel = new Channel<IOutputCommandBase<number>>();
 
         // log
         console.log('OutputSendingDomain bootstraped');
+    }
+
+    postInit(): void {
+        this.eventSourceDomain.setOutputSendingDomain(this);
     }
 
     _lastEmittedNotEnoughCashTokenEventTime:number = 0;

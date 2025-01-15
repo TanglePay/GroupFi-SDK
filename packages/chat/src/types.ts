@@ -33,6 +33,12 @@ export interface ICycle {
     destroy(): Promise<void>; // de allocation
 }
 
+export interface IPostInitializable {
+    postInit(): void; // synchronous post-initialization wiring logic
+}
+
+export interface IDomain extends ICycle, IPostInitializable {}
+
 export interface IRunnable {
     poll(): Promise<boolean>; // return true if should pause
 }

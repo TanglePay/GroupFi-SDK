@@ -2,7 +2,7 @@ import { Inject, Singleton } from "typescript-ioc";
 import { IMessage, GroupFiSDKObj } from 'groupfi-sdk-core'
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { MessageHubDomain } from "./MessageHubDomain";
-import { GROUP_STATE_PERSIST_KEY, ICycle, IInboxMessage, IRunnable } from "../types";
+import { GROUP_STATE_PERSIST_KEY, IDomain, IInboxMessage, IRunnable } from "../types";
 import { Channel } from "../util/channel";
 import { ThreadHandler } from "../util/thread";
 import EventEmitter from "events";
@@ -25,7 +25,7 @@ export const MaxGroupInInbox = 500;
 export const MaxUnReadInInbox = 20
 
 @Singleton
-export class InboxDomain implements ICycle, IRunnable {
+export class InboxDomain implements IDomain, IRunnable {
 
     @Inject
     private combinedStorageService: CombinedStorageService;
@@ -283,9 +283,13 @@ export class InboxDomain implements ICycle, IRunnable {
     private _inChannel: Channel<IMessage>;
     async bootstrap() {
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'InboxDomain', 100);
-        this._inChannel = this.messageHubDomain.outChannelToInbox;
         this._groups = new LRUCache<IInboxGroup>(100);
         console.log('InboxDomain bootstraped')
+    }
+
+    postInit() {
+        // Move wiring logic here from bootstrap
+        this._inChannel = this.messageHubDomain.outChannelToInbox;
     }
 
     async switchAddress() {
