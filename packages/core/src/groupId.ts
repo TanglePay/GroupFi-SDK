@@ -19,6 +19,12 @@ export const isGroupIdEqual = (groupIdCouldBeLegacy: string, groupIdFromApi: str
     const sha256HashOfGroupIdCurrent = hashHexStringToSha256(groupIdFromApiWithoutPrefixString)
     return sha256HashOfGroupIdCurrent === groupIdCouldBeLegacyWithoutPrefixString;
 }
+// get legacy groupId from groupId
+export const getLegacyGroupIdFromGroupId = (groupId: string) => {
+    const groupIdWithoutPrefixString = prefixedGroupIdToGroupId(groupId);
+    const legacyGroupId = hashHexStringToSha256(groupIdWithoutPrefixString);
+    return legacyGroupId;
+}
 function hashHexStringToSha256(hexString:string) {
     // remove 0x prefix if it exists
     if (hexString.startsWith('0x')) {
