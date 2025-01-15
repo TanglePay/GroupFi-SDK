@@ -149,7 +149,7 @@ export interface MessageGroupMeta {
     icon?: string
     customFields?: CustomField[]
 }
-export type GroupConfig = MessageGroupMeta & { groupId: string }
+export type GroupConfig = MessageGroupMeta & { groupId: string, actualGroupId?: string }
 export type MessageGroupMetaPlus = MessageGroupMeta & { isPublic: boolean }
 export type GroupConfigPlus = GroupConfig & { isPublic: boolean }
 export type PushedNewMessage = { type: typeof ImInboxEventTypeNewMessage; groupId: string; sender: string; meta: string }
