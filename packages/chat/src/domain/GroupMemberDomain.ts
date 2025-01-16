@@ -276,15 +276,16 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             ...(this._lastTimeRefreshAddressStatusMap.size === 0 ? [
                 this.tryRefreshAddressStatusForAll()
             ] : []),
-            this.groupFiService.fetchAddressMarkedGroupConfigs()
+            this.groupFiService.fetchMarkedGroupConfigs()
         ];
 
-        const configs = (await Promise.all(promises))[promises.length - 1] as GroupConfig[];
+        const configs = (await Promise.all(promises))[promises.length - 1] as GroupConfigPlus[];
 
         const newMarkedGroupIds = configs.map(config => config.groupId);
         // set group for marked group ids
         for (const config of configs) {
-            this.setGroupConfig(config.groupId, config);
+            const {isPublic, ...rest} = config;
+            this.setGroupConfig(config.groupId, rest);
         }
         // Check if marked group IDs have changed
         if (JSON.stringify(this._markedGroupIds) !== JSON.stringify(newMarkedGroupIds)) {

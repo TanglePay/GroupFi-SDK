@@ -753,8 +753,18 @@ class GroupFiSDKFacade {
     );
     return markedGroups;
   }
-  _client?: GroupfiSdkClient;
 
+  // fetchMarkedGroupConfigs
+  async fetchMarkedGroupConfigs() {
+    this._ensureWalletConnected();
+    await this.waitForInitialization();
+    const markedGroups = await GroupFiSDKObj.fetchAddressMarkedGroupConfigs(
+      this._address!
+    );
+    return markedGroups;
+  }
+
+  _client?: GroupfiSdkClient
   _walletClient: any;
 
   setWalletClient(walletClient: any) {

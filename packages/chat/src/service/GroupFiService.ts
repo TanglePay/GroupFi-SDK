@@ -487,7 +487,10 @@ export class GroupFiService {
   async fetchAddressMarkedGroupConfigs() {
     return await GroupFiSDKFacade.fetchAddressMarkedGroupConfigs()
   }
-
+  // fetchMarkedGroupConfigs
+  async fetchMarkedGroupConfigs() {
+    return await GroupFiSDKFacade.fetchMarkedGroupConfigs()
+  }
   // syncAllTopics
   syncAllTopics(newAllTopics: string[]) {
     GroupFiSDKFacade.syncAllTopics(newAllTopics)
