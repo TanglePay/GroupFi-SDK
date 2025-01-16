@@ -1307,6 +1307,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             const config = await this.getGroupConfig(groupId);
             if (config && config.actualGroupId) {
                 this.setGroupConfigToCache(config.actualGroupId, config);
+                this.groupFiService.storeGroupConfigToCache(groupId, config);
+                this.groupFiService.storeGroupConfigToCache(config.actualGroupId, config);
             }
             if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
                 cacheMisses++;
@@ -1324,6 +1326,9 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         let cacheMisses = 0;
         await Promise.all(this._markedGroupIds.map(async groupId => {
             const config = await this.getGroupConfig(groupId);
+            if (config) {
+                this.groupFiService.storeGroupConfigToCache(groupId, config);
+            }
             if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
                 cacheMisses++;
             }

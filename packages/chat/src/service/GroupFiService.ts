@@ -16,7 +16,8 @@ import {
   GroupConfigPlus,
   PublicMessageBatchResponse,
   BasicOutputWrapper,
-  GroupStateSyncItem
+  GroupStateSyncItem,
+  GroupConfig
 } from 'groupfi-sdk-core'
 // IMMessage <-> UInt8Array
 // IRecipient <-> UInt8Array
@@ -490,6 +491,10 @@ export class GroupFiService {
   // fetchMarkedGroupConfigs
   async fetchMarkedGroupConfigs() {
     return await GroupFiSDKFacade.fetchMarkedGroupConfigs()
+  }
+  // storeGroupConfigToCache
+  storeGroupConfigToCache(groupId: string, meta: GroupConfig) {
+    GroupFiSDKFacade.storeGroupConfigToCache(groupId, meta)
   }
   // syncAllTopics
   syncAllTopics(newAllTopics: string[]) {

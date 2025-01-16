@@ -29,7 +29,8 @@ import {
   GroupStateSyncItem,
   BasicOutputWrapper,
   ImInboxEventTypeGroupStateSync,
-  StorageFacade
+  StorageFacade,
+  GroupConfig
 }   from 'groupfi-sdk-core';
 import GroupfiWalletEmbedded from 'groupfi-walletembed';
 
@@ -754,6 +755,10 @@ class GroupFiSDKFacade {
     return markedGroups;
   }
 
+  // storeGroupConfigToCache
+  storeGroupConfigToCache(groupId: string, meta: GroupConfig): void {
+    GroupFiSDKObj.storeGroupConfigToCache(groupId, meta);
+  }
   // fetchMarkedGroupConfigs
   async fetchMarkedGroupConfigs() {
     this._ensureWalletConnected();

@@ -81,6 +81,14 @@ class GroupFiSDK {
         const groupIdPrefixed = this._addHexPrefixIfAbsent(groupId)
         return this._groupConfigMap[groupIdPrefixed]
     }
+    storeGroupConfigToCache(groupId: string, meta: MessageGroupMeta): void {
+        const groupIdPrefixed = this._addHexPrefixIfAbsent(groupId)
+        if (!this._groupConfigMap[groupIdPrefixed]) {
+            this._groupConfigMap[groupIdPrefixed] = meta
+            // Log for debugging
+            console.log('Stored group config to cache:', {groupId: groupIdPrefixed, meta})
+        }
+    }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
         const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
         // filter included fields
