@@ -287,6 +287,10 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             const {isPublic, ...rest} = config;
             this.setGroupConfig(config.groupId, rest);
         }
+        // set isPublic to _isGroupPublic
+        for (const config of configs) {
+            this._isGroupPublic.set(config.groupId, config.isPublic);
+        }
         // Check if marked group IDs have changed
         if (JSON.stringify(this._markedGroupIds) !== JSON.stringify(newMarkedGroupIds)) {
             this._markedGroupIds = newMarkedGroupIds;
