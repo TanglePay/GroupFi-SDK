@@ -287,6 +287,13 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         for (const config of configs) {
             const {isPublic, ...rest} = config;
             this.setGroupConfig(config.groupId, rest);
+            const legacyGroupId = getLegacyGroupIdFromGroupId(config.groupId);
+            // set legacy groupId
+            const legacyConfig = {
+                ...rest,
+                actualGroupId: config.groupId
+            }
+            this.setGroupConfig(legacyGroupId, legacyConfig);
         }
         // set isPublic to _isGroupPublic
         for (const config of configs) {
@@ -1307,10 +1314,18 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         await Promise.all(this._formeGroupIds.map(async groupId => {
             const config = await this.getGroupConfig(groupId);
             if (config && config.actualGroupId) {
-                this.setGroupConfigToCache(config.actualGroupId, config);
-                this.groupFiService.storeGroupConfigToCache(groupId, config);
-                this.groupFiService.storeGroupConfigToCache(config.actualGroupId, config);
+                const {actualGroupId, ...rest} = config;
+                this.setGroupConfigToCache(actualGroupId, rest);
+                this.setGroupConfigToCache(groupId, rest);
+                this.groupFiService.storeGroupConfigToCache(actualGroupId, rest);
+                this.groupFiService.storeGroupConfigToCache(groupId, rest);
                 // Event already emitted by setGroupConfigToCache
+            } else if (config) {
+                const legacyGroupId = getLegacyGroupIdFromGroupId(groupId);
+                this.setGroupConfigToCache(legacyGroupId, config);
+                this.setGroupConfigToCache(groupId, config);
+                this.groupFiService.storeGroupConfigToCache(legacyGroupId, config);
+                this.groupFiService.storeGroupConfigToCache(groupId, config);
             }
             if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
                 cacheMisses++;
@@ -1329,7 +1344,15 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         await Promise.all(this._markedGroupIds.map(async groupId => {
             const config = await this.getGroupConfig(groupId);
             if (config) {
-                this.groupFiService.storeGroupConfigToCache(groupId, config);
+                if (config.actualGroupId) {
+                    const {actualGroupId, ...rest} = config;
+                    this.groupFiService.storeGroupConfigToCache(actualGroupId, rest);
+                    this.groupFiService.storeGroupConfigToCache(groupId, rest);
+                } else {
+                    const legacyGroupId = getLegacyGroupIdFromGroupId(groupId);
+                    this.groupFiService.storeGroupConfigToCache(legacyGroupId, config);
+                    this.groupFiService.storeGroupConfigToCache(groupId, config);
+                }
                 // Event already emitted by storeGroupConfigToCache
             }
             if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
