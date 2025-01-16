@@ -393,27 +393,21 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             }
             this._processingGroupIds.clear();
         }
-        if (this._groupMaxMinTokenLruCache) {
-            this._groupMaxMinTokenLruCache.clear();
-        }
-        this._forMeGroupIdsLastUpdateTimestamp = {}
+        
+        this._forMeGroupIdsLastUpdateTimestamp = {};
         
         if (this._isGroupMaxMinTokenCacheDirtyGroupIds) {
             this._isGroupMaxMinTokenCacheDirtyGroupIds.clear();
-        }
-        if (this._groupMaxMinTokenLruCache) {
-            this._groupMaxMinTokenLruCache.clear();
         }
         if (this._evmQualifyCache) {
             this._evmQualifyCache.clear();
         }
         // clear for me group configs
-        this._formeGroupIds = []
+        this._formeGroupIds = [];
 
         // clear marked group configs
-        this._markedGroupIds = []
-        this._markedGroupIdsDirty = false
-
+        this._markedGroupIds = [];
+        this._markedGroupIdsDirty = false;
 
         if (this._addressStatusCache) {
             Object.keys(this._addressStatusCache).forEach(type => {
@@ -432,13 +426,13 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         this._isGroupStateSyncInited = false;
         this._isGroupStateSyncOutputUsed = false;
 
-        if (this._groupConfigCache) {
-            this._groupConfigCache.clear();
-        }
-
-        // Clear group public statuses
-        this._isGroupPublic.clear();
-        this._isGroupPublicDirty = false;
+        // Do not clear global caches
+        // Keep _groupConfigCache and _isGroupPublic intact
+        // if (this._groupConfigCache) {
+        //     this._groupConfigCache.clear();
+        // }
+        // this._isGroupPublic.clear();
+        // this._isGroupPublicDirty = false;
     }
     async bootstrap(): Promise<void> {
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 100);
@@ -1198,14 +1192,14 @@ export class GroupMemberDomain implements IDomain, IRunnable {
     // Add method to get a single forme group config
     async getForMeGroupConfig(groupId: string): Promise<GroupConfig | null> {
         const key = this._getGroupConfigKey(groupId);
-        return await this.combinedStorageService.get(key, this._groupConfigCache);
+        return await this.combinedStorageService.getGlobal(key, this._groupConfigCache);
     }
 
     // Add method to get/set group config
     async getGroupConfig(groupId: string): Promise<GroupConfig | null> {
         // First check cache
         const key = this._getGroupConfigKey(groupId);
-        let config = await this.combinedStorageService.get(key, this._groupConfigCache);
+        let config = await this.combinedStorageService.getGlobal(key, this._groupConfigCache);
         console.log('getGroupConfig enter, key', key, 'config', config);
         // emit event, since combinedStorageService will load config into cache
         if (config) {
@@ -1217,7 +1211,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
     setGroupConfig(groupId: string, config: GroupConfig): void {
         const key = this._getGroupConfigKey(groupId);
         console.log('setGroupConfig enter, key', key, 'config', config);
-        this.combinedStorageService.setSingleThreaded(key, config, this._groupConfigCache);
+        this.combinedStorageService.setGlobalSingleThreaded(key, config, this._groupConfigCache);
         // Emit event when config is set
         this._events.emit(`${EventGroupConfigReadyKey}.${groupId}`);
     }
@@ -1234,13 +1228,13 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         }
         
         const statuses = Object.fromEntries(this._isGroupPublic);
-        await this.localStorageRepository.set(this._getGroupPublicKey(), JSON.stringify(statuses));
+        await this.localStorageRepository.setGlobal(this._getGroupPublicKey(), JSON.stringify(statuses));
         this._isGroupPublicDirty = false;
     }
 
     // Add method to load group public statuses
     private async loadGroupPublicStatuses() {
-        const statusesString = await this.localStorageRepository.get(this._getGroupPublicKey());
+        const statusesString = await this.localStorageRepository.getGlobal(this._getGroupPublicKey());
         if (statusesString) {
             const statuses = JSON.parse(statusesString);
             this._isGroupPublic = new Map(Object.entries(statuses));
