@@ -11,7 +11,7 @@ import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
 import { EventGroupMemberChanged, GroupFiSDKObj, IMessage, isGroupIdEqual } from "groupfi-sdk-core";
 import { EventItemFromFacade } from "groupfi-sdk-core";
-import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey, EventGroupIsPublicChangedKey } from "./GroupMemberDomain";
+import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey, EventGroupIsPublicChangedKey, EventGroupConfigReadyKey } from "./GroupMemberDomain";
 import { AquiringPublicKeyEventKey, DelegationModeNameNftChangedEventKey, NotEnoughCashTokenEventKey, OutputSendingDomain, PairXChangedEventKey, PublicKeyChangedEventKey, VoteOrUnVoteGroupLiteEventKey } from "./OutputSendingDomain";
 
 import { Mode, IIncludesAndExcludes, Profile } from '../types'
@@ -683,5 +683,36 @@ export class MessageAggregateRootDomain implements ICycle {
         return this.groupMemberDomain.setAddressStatusInGroup(groupId, type, newValue);
     }
 
+    async waitForGroupConfigReady(groupId: string, timeoutMs: number = 7000): Promise<boolean> {
+        groupId = prefixedGroupIdToGroupId(groupId);
+        
+        // First check if config is already in cache
+        const config = this.getGroupConfigFromCache(groupId);
+        if (config) {
+            return true;
+        }
+
+        // If not in cache, wait for it to be ready
+        return new Promise((resolve) => {
+            const eventKey = `${EventGroupConfigReadyKey}.${groupId}`;
+            
+            // Set timeout
+            const timeoutHandle = setTimeout(() => {
+                this.groupMemberDomain.off(eventKey, handler);
+                resolve(false);
+            }, timeoutMs);
+
+            // Event handler
+            const handler = ({groupId: eventGroupId}: {groupId: string}) => {
+                if (this.gidEquals(eventGroupId, groupId)) {
+                    clearTimeout(timeoutHandle);
+                    resolve(true);
+                }
+            };
+
+            // Start listening
+            this.groupMemberDomain.once(eventKey, handler);
+        });
+    }
 
 }

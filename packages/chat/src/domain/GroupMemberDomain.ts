@@ -23,6 +23,7 @@ export const StoragePrefixGroupMinMaxToken = 'GroupMemberDomain.groupMinMaxToken
 export const StoragePrefixGroupConfig = 'GroupMemberDomain.groupConfig';
 export const StoragePrefixGroupPublic = 'GroupMemberDomain.groupPublic';
 export const StoragePrefixMarkedGroupIds = 'GroupMemberDomain.markedGroupIds';
+export const EventGroupConfigReadyKey = 'GroupMemberDomain.groupConfigReady';
 export interface IGroupMember {
     groupId: string;
     memberAddressList: {addr:string,publicKey:string}[];
@@ -1202,10 +1203,14 @@ export class GroupMemberDomain implements IDomain, IRunnable {
 
     // Add method to get/set group config
     async getGroupConfig(groupId: string): Promise<GroupConfig | null> {
-        // Then check regular group config cache
+        // First check cache
         const key = this._getGroupConfigKey(groupId);
-        const config = await this.combinedStorageService.get(key, this._groupConfigCache);
+        let config = await this.combinedStorageService.get(key, this._groupConfigCache);
         console.log('getGroupConfig enter, key', key, 'config', config);
+        // emit event, since combinedStorageService will load config into cache
+        if (config) {
+            this._events.emit(`${EventGroupConfigReadyKey}.${groupId}`);
+        }
         return config;
     }
 
@@ -1213,6 +1218,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         const key = this._getGroupConfigKey(groupId);
         console.log('setGroupConfig enter, key', key, 'config', config);
         this.combinedStorageService.setSingleThreaded(key, config, this._groupConfigCache);
+        // Emit event when config is set
+        this._events.emit(`${EventGroupConfigReadyKey}.${groupId}`);
     }
 
     // Add method to get storage key for group public status
@@ -1309,6 +1316,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 this.setGroupConfigToCache(config.actualGroupId, config);
                 this.groupFiService.storeGroupConfigToCache(groupId, config);
                 this.groupFiService.storeGroupConfigToCache(config.actualGroupId, config);
+                // Event already emitted by setGroupConfigToCache
             }
             if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
                 cacheMisses++;
@@ -1328,6 +1336,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             const config = await this.getGroupConfig(groupId);
             if (config) {
                 this.groupFiService.storeGroupConfigToCache(groupId, config);
+                // Event already emitted by storeGroupConfigToCache
             }
             if (!this._groupConfigCache.get(this._getGroupConfigKey(groupId))) {
                 cacheMisses++;
@@ -1347,5 +1356,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
     // set group config to cache only
     setGroupConfigToCache(groupId: string, config: GroupConfig): void {
         this._groupConfigCache.put(this._getGroupConfigKey(groupId), config);
+        // Emit event when config is set to cache
+        this._events.emit(`${EventGroupConfigReadyKey}.${groupId}`);
     }
 }
