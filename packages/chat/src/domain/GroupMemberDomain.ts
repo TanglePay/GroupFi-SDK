@@ -433,13 +433,6 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         this._isGroupStateSyncInited = false;
         this._isGroupStateSyncOutputUsed = false;
 
-        // Do not clear global caches
-        // Keep _groupConfigCache and _isGroupPublic intact
-        // if (this._groupConfigCache) {
-        //     this._groupConfigCache.clear();
-        // }
-        // this._isGroupPublic.clear();
-        // this._isGroupPublicDirty = false;
     }
     async bootstrap(): Promise<void> {
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'GroupMemberDomain', 100);

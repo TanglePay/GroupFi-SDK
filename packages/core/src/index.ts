@@ -251,6 +251,8 @@ class GroupFiSDK {
     _subscribeToTopics(topics:string[]){
         if (!this._mqttClient) return
         const filteredTopics = topics.filter(topic=>!this._subscribedTopics.has(topic))
+        // log actual subscribe topics
+        console.log('actual subscribe topics',filteredTopics)
         filteredTopics.forEach(topic=>this._mqttClient!.subscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.add(topic))
     }
