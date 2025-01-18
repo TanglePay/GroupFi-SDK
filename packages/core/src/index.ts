@@ -249,7 +249,10 @@ class GroupFiSDK {
     _subscribedTopics:Set<string> = new Set()
     // subscribe to a topic
     _subscribeToTopics(topics:string[]){
-        if (!this._mqttClient) return
+        if (!this._mqttClient) {
+            console.log('abort subscribing to topics: mqtt client not setup')
+            return
+        }
         const filteredTopics = topics.filter(topic=>!this._subscribedTopics.has(topic))
         // log actual subscribe topics
         console.log('actual subscribe topics',filteredTopics)
