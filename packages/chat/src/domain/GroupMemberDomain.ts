@@ -1225,18 +1225,28 @@ export class GroupMemberDomain implements IDomain, IRunnable {
 
     // Add method to persist group public statuses
     private async persistGroupPublicStatuses() {
+        // log enter
+        console.log('GroupMemberDomain persistGroupPublicStatuses enter, this._isGroupPublicDirty', this._isGroupPublicDirty);
         if (!this._isGroupPublicDirty) {
             return;
         }
         
+
         const statuses = Object.fromEntries(this._isGroupPublic);
-        await this.localStorageRepository.setGlobal(this._getGroupPublicKey(), JSON.stringify(statuses));
+        const key = this._getGroupPublicKey();
+        const value = JSON.stringify(statuses); 
+        await this.localStorageRepository.setGlobal(key, value);
+        // log actually persist， with key and value
+        console.log('GroupMemberDomain persistGroupPublicStatuses actually persist, key', key, 'value', value);
         this._isGroupPublicDirty = false;
     }
 
     // Add method to load group public statuses
     private async loadGroupPublicStatuses() {
-        const statusesString = await this.localStorageRepository.getGlobal(this._getGroupPublicKey());
+        const key = this._getGroupPublicKey();
+        const statusesString = await this.localStorageRepository.getGlobal(key);
+        // log enter, with key and statusesString
+        console.log('GroupMemberDomain loadGroupPublicStatuses enter, key', key, 'statusesString', statusesString);
         if (statusesString) {
             const statuses = JSON.parse(statusesString);
             this._isGroupPublic = new Map(Object.entries(statuses));
