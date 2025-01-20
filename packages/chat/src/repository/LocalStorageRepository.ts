@@ -6,6 +6,7 @@ import { StorageAdaptor } from "../types";
 export class LocalStorageRepository {
     private _storageAdaptor: StorageAdaptor;
     private _storageKeyPrefix: string = '';
+    private readonly GLOBAL_PREFIX = 'global:';
     setStorageAdaptor(storageAdaptor: StorageAdaptor) {
         this._storageAdaptor = storageAdaptor;
     }
@@ -14,6 +15,9 @@ export class LocalStorageRepository {
     }
     private getStorageKey(key: string) {
         return `${this._storageKeyPrefix}${key}`;
+    }
+    private getGlobalStorageKey(key: string) {
+        return `${this.GLOBAL_PREFIX}${key}`;
     }
     async get(key: string): Promise<string|null> {
         const storageKey = this.getStorageKey(key);
@@ -27,6 +31,18 @@ export class LocalStorageRepository {
     // remove
     async remove(key: string) {
         const storageKey = this.getStorageKey(key);
+        await this._storageAdaptor.remove(storageKey);
+    }
+    async getGlobal(key: string): Promise<string|null> {
+        const storageKey = this.getGlobalStorageKey(key);
+        return await this._storageAdaptor.get(storageKey);
+    }
+    async setGlobal(key: string, value: string) {
+        const storageKey = this.getGlobalStorageKey(key);
+        await this._storageAdaptor.set(storageKey, value);
+    }
+    async removeGlobal(key: string) {
+        const storageKey = this.getGlobalStorageKey(key);
         await this._storageAdaptor.remove(storageKey);
     }
 }

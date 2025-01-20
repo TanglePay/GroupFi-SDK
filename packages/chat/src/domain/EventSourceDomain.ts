@@ -1,6 +1,7 @@
 import { Inject, Singleton } from "typescript-ioc";
-import { EventGroupMemberChanged,EventGroupUpdateMinMaxToken, EventItemFromFacade, IMessage, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeNewMessage, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeLikeChanged, MessageResponseItemPlus, ImInboxEventTypeGroupIsPublicChanged } from 'groupfi-sdk-core'
+import { EventGroupMemberChanged,EventGroupUpdateMinMaxToken, EventItemFromFacade, IMessage, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeNewMessage, EventGroupMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeLikeChanged, MessageResponseItemPlus, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupStateSync } from 'groupfi-sdk-core'
 import EventEmitter from "events";
+import { IDomain } from "../types";
 
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { MessageInitStatus } from './MesssageAggregateRootDomain'
@@ -21,6 +22,7 @@ import { OutputSendingDomain } from "./OutputSendingDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
 import { bytesToHex,objectId, sleepYield } from "groupfi-sdk-utils";
 import { SharedContext } from "./SharedContext";
+import { GroupMemberDomain } from "./GroupMemberDomain";
 // act as a source of new message, notice message is write model, and there is only one source which is one addresse's inbox message
 // maintain anchor of inbox message inx api call
 // fetch new message on requested(start or after new message pushed), update anchor
@@ -46,10 +48,11 @@ const InboxApiEvents = [
     ImInboxEventTypeMuteChanged,
     ImInboxEventTypeLikeChanged,
     ImInboxEventTypeProfileChangedEvent,
-    ImInboxEventTypeGroupIsPublicChanged
+    ImInboxEventTypeGroupIsPublicChanged,
+    ImInboxEventTypeGroupStateSync
 ]
 @Singleton
-export class EventSourceDomain implements ICycle,IRunnable{
+export class EventSourceDomain implements IDomain, IRunnable {
     
     
     private anchor: string | undefined
@@ -63,10 +66,15 @@ export class EventSourceDomain implements ICycle,IRunnable{
     
     private outputSendingDomain: OutputSendingDomain
 
+    private groupMemberDomain: GroupMemberDomain
+
     @Inject
     private proxyModeDomain: ProxyModeDomain
     setOutputSendingDomain(outputSendingDomain: OutputSendingDomain) {
         this.outputSendingDomain = outputSendingDomain
+    }
+    setGroupMemberDomain(groupMemberDomain: GroupMemberDomain) {
+        this.groupMemberDomain = groupMemberDomain
     }
     private _seenEventIds: Set<string> = new Set<string>();
     
@@ -142,7 +150,13 @@ export class EventSourceDomain implements ICycle,IRunnable{
         this.threadHandler = new ThreadHandler(this.poll.bind(this), 'EventSourceDomain', 100);
         this._outChannel = new Channel<IMessage>();
         this._outChannelToGroupMemberDomain = new Channel<EventGroupMemberChanged>();
-        this._cmdChannel = new Channel<IClearCommandBase<any>>()
+        this._cmdChannel = new Channel<IClearCommandBase<any>>();
+        
+        console.log('EventSourceDomain initialized');
+    }
+
+    postInit(): void {
+        // Move wiring logic here
         this._onTopicChangedHandler = () => {
             const allGroupIds = this._context.allGroupIds
             let allTopic = [...allGroupIds]
@@ -151,7 +165,6 @@ export class EventSourceDomain implements ICycle,IRunnable{
                 const walletAddressHash = this.groupFiService.sha256Hash(walletAddress)
                 allTopic = [...allTopic, walletAddressHash]
             }
-            // log EventSourceDomain syncAllTopics
             console.log('EventSourceDomain _onTopicChangedHandler', allGroupIds, allTopic);
             const prefixedAllTopic = allTopic.map((topic) => {
                 return `inbox/${topic}`
@@ -161,10 +174,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
         console.log('EventSourceDomain bootstraped');
     }
     async start() {
-        // this.registerMessageConsumedCallback()
         this.switchAddress()
         this.threadHandler.start();
-        // log EventSourceDomain started
         console.log('EventSourceDomain started');
     }
 
@@ -273,7 +284,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
                 ImInboxEventTypeMuteChanged,
                 ImInboxEventTypeLikeChanged,
                 ImInboxEventTypeEvmQualifyChanged,
-                ImInboxEventTypeGroupIsPublicChanged
+                ImInboxEventTypeGroupIsPublicChanged,
+                ImInboxEventTypeGroupStateSync
             ].includes(type)) {
                 this._outChannelToGroupMemberDomain.push(event)
             } else if (type === ImInboxEventTypePairXChanged) {
@@ -309,7 +321,7 @@ export class EventSourceDomain implements ICycle,IRunnable{
     }
     // isCan catch up from api
     isCanCatchUpFromApi() {
-        return this._context.isLoggedIn
+        return this._context.isLoggedIn && this.groupMemberDomain.isGroupStateSyncInited()
     }
     // isshould catch up from api
     isShouldCatchUpFromApi() {
@@ -569,6 +581,8 @@ export class EventSourceDomain implements ICycle,IRunnable{
             console.log('Get profile mqtt event', item)
             this.handleIncommingEvent([item])
         } else if (item.type === ImInboxEventTypeGroupIsPublicChanged) {
+            this.handleIncommingEvent([item])
+        } else if (item.type === ImInboxEventTypeGroupStateSync) {
             this.handleIncommingEvent([item])
         }
     }

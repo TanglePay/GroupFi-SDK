@@ -36,4 +36,34 @@ export class CombinedStorageService {
             this.localStorageRepo.set(key, JSON.stringify(value));
         }, 0);
     }
+
+    async getGlobal<T>(key: string, lruCache: LRUCache<T>): Promise<T | null> {
+        // Try to get value from LRUCache
+        let value = lruCache.get(key);
+        if (value === null) {
+            // If not present in LRUCache, get it from global LocalStorage
+            const valueRaw = await this.localStorageRepo.getGlobal(key);
+            if (valueRaw) {
+                value = JSON.parse(valueRaw) as T;
+                lruCache.put(key, value);
+            }
+        }
+        return value;
+    }
+
+    async setGlobal<T>(key: string, value: T, lruCache: LRUCache<T>): Promise<void> {
+        // Save in global LocalStorage
+        await this.localStorageRepo.setGlobal(key, JSON.stringify(value));
+        // Delete from LRUCache
+        lruCache.delete(key);
+    }
+
+    setGlobalSingleThreaded<T>(key: string, value: T, lruCache: LRUCache<T>): void {
+        // Save in LRUCache
+        lruCache.put(key, value);
+        // Update global LocalStorage asynchronously without waiting
+        setTimeout(() => {
+            this.localStorageRepo.setGlobal(key, JSON.stringify(value));
+        }, 0);
+    }
 }

@@ -14,7 +14,10 @@ import {
   IIncludesAndExcludes,
   MessageResponseItemPlus,
   GroupConfigPlus,
-  PublicMessageBatchResponse
+  PublicMessageBatchResponse,
+  BasicOutputWrapper,
+  GroupStateSyncItem,
+  GroupConfig
 } from 'groupfi-sdk-core'
 // IMMessage <-> UInt8Array
 // IRecipient <-> UInt8Array
@@ -27,6 +30,7 @@ import {
   StorageAdaptor,
   Profile
 } from '../types'
+import { GroupStateSyncStorageExtended } from 'groupfi-sdk-client'
 
 @Singleton
 export class GroupFiService {
@@ -484,7 +488,14 @@ export class GroupFiService {
   async fetchAddressMarkedGroupConfigs() {
     return await GroupFiSDKFacade.fetchAddressMarkedGroupConfigs()
   }
-
+  // fetchMarkedGroupConfigs
+  async fetchMarkedGroupConfigs() {
+    return await GroupFiSDKFacade.fetchMarkedGroupConfigs()
+  }
+  // storeGroupConfigToCache
+  storeGroupConfigToCache(groupId: string, meta: GroupConfig) {
+    GroupFiSDKFacade.storeGroupConfigToCache(groupId, meta)
+  }
   // syncAllTopics
   syncAllTopics(newAllTopics: string[]) {
     GroupFiSDKFacade.syncAllTopics(newAllTopics)
@@ -561,5 +572,47 @@ export class GroupFiService {
 
   async marked(groupId: string) {
     return await GroupFiSDKFacade.marked(groupId)
+  }
+
+  // Get all group state syncs
+  async getAllGroupStateSyncs(): Promise<GroupStateSyncStorageExtended | undefined> {
+    return await GroupFiSDKFacade.getAllGroupStateSyncs();
+  }
+
+  // Persist group state syncs
+  persistGroupStateSyncs(
+    groupStateSyncs: GroupStateSyncItem[], 
+    consumedOutputWrapper?: BasicOutputWrapper
+  ): {
+    created: IBasicOutput[];
+    consumed: BasicOutputWrapper[];
+  } {
+    return GroupFiSDKFacade.persistGroupStateSyncs(groupStateSyncs, consumedOutputWrapper);
+  }
+
+  /**
+   * Adds a low priority task that creates and consumes outputs
+   * @param key Unique identifier for deduplication
+   * @param task Function that returns created and consumed outputs
+   * @param ttlSeconds Time to live in seconds before task expires
+   */
+  addLowPriorityTask(
+    key: string, 
+    task: () => { created: IBasicOutput[], consumed: BasicOutputWrapper[] },
+    ttlSeconds: number = 3600
+  ) {
+    return GroupFiSDKFacade.addLowPriorityTask(key, task, ttlSeconds);
+  }
+
+  /**
+   * Attempts to clean one expired low priority task from the queue
+   * @returns Promise<boolean> true if an expired task was cleaned, false if no expired tasks were found
+   */
+  async tryCleanOneExpiredLowPriorityTask(): Promise<boolean> {
+    return await GroupFiSDKFacade.tryCleanOneExpiredLowPriorityTask();
+  }
+
+  async initializeClientAndChainList() {
+    await GroupFiSDKFacade.initializeClientAndChainList();
   }
 }
