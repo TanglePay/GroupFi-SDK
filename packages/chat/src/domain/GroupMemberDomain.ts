@@ -223,7 +223,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             for (const config of configs) {
                 this._isGroupPublic.set(config.groupId, config.isPublic);
             }
-
+            this._isGroupPublicDirty = true;
             // Get public group IDs from configs
             const publicGroupIds = configs.filter(config => config.isPublic).map(config => config.groupId);
             
@@ -299,6 +299,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         for (const config of configs) {
             this._isGroupPublic.set(config.groupId, config.isPublic);
         }
+        this._isGroupPublicDirty = true;
         // Check if marked group IDs have changed
         if (JSON.stringify(this._markedGroupIds) !== JSON.stringify(newMarkedGroupIds)) {
             this._markedGroupIds = newMarkedGroupIds;
@@ -1299,6 +1300,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         }
         this._formeGroupIds = includesAndExcludes?.map(item => prefixedGroupIdToGroupId(item.groupId)) ?? []; 
         
+        // mark all dirty
+        this._formeGroupIds.map(groupId => this._markGroupIdAsDirty(groupId));
    
         // Emit event to notify of changes
         this.warmUpForMeGroupConfigs().then((isAllHit) => {
