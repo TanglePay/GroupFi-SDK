@@ -1318,11 +1318,12 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         
         let cacheMisses = 0;
         const total = this._formeGroupIds.length;
-        
+        const adjustedFormeGroupIds: string[] = []
         await Promise.all(this._formeGroupIds.map(async groupId => {
             const config = await this.getGroupConfig(groupId);
             if (config && config.actualGroupId) {
                 const {actualGroupId, ...rest} = config;
+                adjustedFormeGroupIds.push(actualGroupId);
                 this.setGroupConfigToCache(actualGroupId, rest);
                 this.setGroupConfigToCache(groupId, rest);
                 this.groupFiService.storeGroupConfigToCache(actualGroupId, rest);
@@ -1330,6 +1331,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 // Event already emitted by setGroupConfigToCache
             } else if (config) {
                 const legacyGroupId = getLegacyGroupIdFromGroupId(groupId);
+                adjustedFormeGroupIds.push(legacyGroupId);
                 this.setGroupConfigToCache(legacyGroupId, config);
                 this.setGroupConfigToCache(groupId, config);
                 this.groupFiService.storeGroupConfigToCache(legacyGroupId, config);
@@ -1339,7 +1341,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 cacheMisses++;
             }
         }));
-
+        this._formeGroupIds = adjustedFormeGroupIds;
         // Log cache miss rate
         console.log(`warmUpForMeGroupConfigs cache miss rate: ${(cacheMisses/total * 100).toFixed(1)}% (${cacheMisses}/${total})`);
         const isAllHit = cacheMisses <= 0;
