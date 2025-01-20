@@ -411,6 +411,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         }
         // clear for me group configs
         this._formeGroupIds = [];
+        // emit
+        this._events.emit(EventForMeGroupConfigChangedKey);
 
         // clear marked group configs
         this._markedGroupIds = [];
