@@ -223,6 +223,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
             for (const config of configs) {
                 this._isGroupPublic.set(config.groupId, config.isPublic);
             }
+            this._isGroupPublicDirty = true;
 
             // Get public group IDs from configs
             const publicGroupIds = configs.filter(config => config.isPublic).map(config => config.groupId);
@@ -299,6 +300,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         for (const config of configs) {
             this._isGroupPublic.set(config.groupId, config.isPublic);
         }
+        this._isGroupPublicDirty = true;
         // Check if marked group IDs have changed
         if (JSON.stringify(this._markedGroupIds) !== JSON.stringify(newMarkedGroupIds)) {
             this._markedGroupIds = newMarkedGroupIds;
@@ -1225,18 +1227,28 @@ export class GroupMemberDomain implements IDomain, IRunnable {
 
     // Add method to persist group public statuses
     private async persistGroupPublicStatuses() {
+        // log enter
+        console.log('GroupMemberDomain persistGroupPublicStatuses enter, this._isGroupPublicDirty', this._isGroupPublicDirty);
         if (!this._isGroupPublicDirty) {
             return;
         }
         
+
         const statuses = Object.fromEntries(this._isGroupPublic);
-        await this.localStorageRepository.setGlobal(this._getGroupPublicKey(), JSON.stringify(statuses));
+        const key = this._getGroupPublicKey();
+        const value = JSON.stringify(statuses); 
+        await this.localStorageRepository.setGlobal(key, value);
+        // log actually persist， with key and value
+        console.log('GroupMemberDomain persistGroupPublicStatuses actually persist, key', key, 'value', value);
         this._isGroupPublicDirty = false;
     }
 
     // Add method to load group public statuses
     private async loadGroupPublicStatuses() {
-        const statusesString = await this.localStorageRepository.getGlobal(this._getGroupPublicKey());
+        const key = this._getGroupPublicKey();
+        const statusesString = await this.localStorageRepository.getGlobal(key);
+        // log enter, with key and statusesString
+        console.log('GroupMemberDomain loadGroupPublicStatuses enter, key', key, 'statusesString', statusesString);
         if (statusesString) {
             const statuses = JSON.parse(statusesString);
             this._isGroupPublic = new Map(Object.entries(statuses));
@@ -1289,6 +1301,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         }
         this._formeGroupIds = includesAndExcludes?.map(item => prefixedGroupIdToGroupId(item.groupId)) ?? []; 
         
+        // mark all dirty
+        this._formeGroupIds.map(groupId => this._markGroupIdAsDirty(groupId));
    
         // Emit event to notify of changes
         this.warmUpForMeGroupConfigs().then((isAllHit) => {
@@ -1305,11 +1319,14 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         
         let cacheMisses = 0;
         const total = this._formeGroupIds.length;
-        
+        const adjustedFormeGroupIds: string[] = []
+
         await Promise.all(this._formeGroupIds.map(async groupId => {
             const config = await this.getGroupConfig(groupId);
             if (config && config.actualGroupId) {
                 const {actualGroupId, ...rest} = config;
+                adjustedFormeGroupIds.push(actualGroupId);
+
                 this.setGroupConfigToCache(actualGroupId, rest);
                 this.setGroupConfigToCache(groupId, rest);
                 this.groupFiService.storeGroupConfigToCache(actualGroupId, rest);
@@ -1317,6 +1334,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 // Event already emitted by setGroupConfigToCache
             } else if (config) {
                 const legacyGroupId = getLegacyGroupIdFromGroupId(groupId);
+                adjustedFormeGroupIds.push(legacyGroupId);
                 this.setGroupConfigToCache(legacyGroupId, config);
                 this.setGroupConfigToCache(groupId, config);
                 this.groupFiService.storeGroupConfigToCache(legacyGroupId, config);
@@ -1326,7 +1344,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 cacheMisses++;
             }
         }));
-
+        this._formeGroupIds = adjustedFormeGroupIds;
         // Log cache miss rate
         console.log(`warmUpForMeGroupConfigs cache miss rate: ${(cacheMisses/total * 100).toFixed(1)}% (${cacheMisses}/${total})`);
         const isAllHit = cacheMisses <= 0;
