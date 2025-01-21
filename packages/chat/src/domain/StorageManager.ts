@@ -57,6 +57,8 @@ export class StorageManager {
                 return this.addressHashes[oldest] < this.addressHashes[current] ? oldest : current;
             });
             await this.deleteEntriesWithHash(oldestHash);
+            // delete from memory
+            delete this.addressHashes[oldestHash];
             await this.persistAddressHashes();
             return;
         }
@@ -67,18 +69,18 @@ export class StorageManager {
     }
 
 
-    async processAllEntries(callback: (key: string, value: string) => Promise<void>): Promise<void> {
+    async processAllEntries(callback: (key: string) => Promise<void>): Promise<void> {
         const adaptor = this.storageAdaptor;
-        if (!adaptor || !('getAllKeys' in adaptor)) {
-            throw new Error('Storage adaptor does not support getAllKeys operation');
+        if (!adaptor) {
+            throw new Error('Storage adaptor not initialized');
         }
 
-        const keys = await adaptor.getAllKeys();
-        for (const key of keys) {
-            const value = await adaptor.get(key);
-            if (value !== null) {
-                await callback(key, value);
-            }
+        let index = 0;
+        let key: string | null;
+        
+        while ((key = adaptor.key(index)) !== null) {
+            await callback(key);
+            index++;
         }
     }
 
@@ -113,7 +115,7 @@ export class StorageManager {
         );
     }
 
-    async cleanStorageEntryOnInit(key: string, value: string): Promise<void> {
+    async cleanStorageEntryOnInit(key: string): Promise<void> {
         if (!this.isValidPrefix(key)) {
             await this.storageAdaptor?.remove(key);
             return;
@@ -139,8 +141,8 @@ export class StorageManager {
     }
 
     async initCleaning(): Promise<void> {
-        await this.processAllEntries((key, value) => 
-            this.cleanStorageEntryOnInit(key, value)
+        await this.processAllEntries((key) => 
+            this.cleanStorageEntryOnInit(key)
         );
     }
 
@@ -158,22 +160,15 @@ export class StorageManager {
 
     async deleteEntriesWithHash(hash: string): Promise<void> {
         const adaptor = this.storageAdaptor;
-        if (!adaptor || !('getAllKeys' in adaptor)) {
-            throw new Error('Storage adaptor does not support getAllKeys operation');
+        if (!adaptor) {
+            throw new Error('Storage adaptor not initialized');
         }
 
-        const keys = await adaptor.getAllKeys();
-        for (const key of keys) {
+        await this.processAllEntries(async (key) => {
             const extractedHash = this.extractAddressHash(key);
             if (extractedHash === hash) {
                 await adaptor.remove(key);
             }
-        }
-
-        // Remove from tracked hashes if present
-        if (hash in this.addressHashes) {
-            delete this.addressHashes[hash];
-            await this.persistAddressHashes();
-        }
+        });
     }
 } 
