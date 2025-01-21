@@ -176,6 +176,10 @@ export class EventSourceDomain implements IDomain, IRunnable {
     async start() {
         this.switchAddress()
         this.threadHandler.start();
+        if (!this._isStartListenningNewMessage) {
+            this.startListenningNewMessage();
+            this._isStartListenningNewMessage = true;
+        }
         console.log('EventSourceDomain started');
     }
 
@@ -375,10 +379,6 @@ export class EventSourceDomain implements IDomain, IRunnable {
                 this._lastCatchUpFromApiHasNoDataTime = 0
             }else {
                 this._lastCatchUpFromApiHasNoDataTime = Date.now()
-                if (!this._isStartListenningNewMessage) {
-                    this.startListenningNewMessage();
-                    this._isStartListenningNewMessage = true;
-                }
             }
         } catch (error) {
             console.error(error);
