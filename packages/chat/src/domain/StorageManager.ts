@@ -34,6 +34,8 @@ export class StorageManager {
     }
     async loadAddressHashes(): Promise<void> {
         const stored = await this.storageAdaptor?.get(this.getKey(StorageManager.ADDRESS_HASHES_KEY));
+        // log method and stored
+        console.log('loadAddressHashes', stored);
         if (stored) {
             this.addressHashes = JSON.parse(stored);
         }
@@ -85,7 +87,12 @@ export class StorageManager {
     }
 
     private isValidPrefix(key: string): boolean {
-        return key.startsWith(GroupfiStorageKeyPrefix) || key.startsWith(GLOBAL_PREFIX);
+        // log invalid prefix
+        const isValid = key.startsWith(GroupfiStorageKeyPrefix) || key.startsWith(GLOBAL_PREFIX);
+        if (!isValid) {
+            console.log('invalid prefix', key);
+        }
+        return isValid;
     }
 
     private extractAddressHash(key: string): string | null {
