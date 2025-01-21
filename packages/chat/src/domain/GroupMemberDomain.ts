@@ -224,6 +224,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 this._isGroupPublic.set(config.groupId, config.isPublic);
             }
             this._isGroupPublicDirty = true;
+
             // Get public group IDs from configs
             const publicGroupIds = configs.filter(config => config.isPublic).map(config => config.groupId);
             
@@ -1319,11 +1320,13 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         let cacheMisses = 0;
         const total = this._formeGroupIds.length;
         const adjustedFormeGroupIds: string[] = []
+
         await Promise.all(this._formeGroupIds.map(async groupId => {
             const config = await this.getGroupConfig(groupId);
             if (config && config.actualGroupId) {
                 const {actualGroupId, ...rest} = config;
                 adjustedFormeGroupIds.push(actualGroupId);
+
                 this.setGroupConfigToCache(actualGroupId, rest);
                 this.setGroupConfigToCache(groupId, rest);
                 this.groupFiService.storeGroupConfigToCache(actualGroupId, rest);
