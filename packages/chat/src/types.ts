@@ -47,6 +47,7 @@ export interface StorageAdaptor {
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
     remove(key: string): Promise<void>;
+    getAllKeys(): Promise<string[]>;
 }
 // { sender, message, timestamp }
 export interface IInboxMessage {
