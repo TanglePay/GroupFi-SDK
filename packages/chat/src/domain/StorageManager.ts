@@ -18,18 +18,20 @@ export class StorageManager {
     }
 
     async isInitialized(): Promise<boolean> {
-        const marker = await this.storageAdaptor?.get(StorageManager.INIT_MARKER_KEY);
+        const marker = await this.storageAdaptor?.get(this.getGlobalKey(StorageManager.INIT_MARKER_KEY));
         return marker === GroupfiStorageKeyPrefix;
     }
 
     async markAsInitialized(): Promise<void> {
-        await this.storageAdaptor?.set(StorageManager.INIT_MARKER_KEY, GroupfiStorageKeyPrefix);
+        await this.storageAdaptor?.set(this.getGlobalKey(StorageManager.INIT_MARKER_KEY), GroupfiStorageKeyPrefix);
     }
 
     getKey(key: string): string {
         return `${GroupfiStorageKeyPrefix}${key}`;
     }
-
+    getGlobalKey(key: string): string {
+        return `${GLOBAL_PREFIX}${key}`;
+    }
     async loadAddressHashes(): Promise<void> {
         const stored = await this.storageAdaptor?.get(this.getKey(StorageManager.ADDRESS_HASHES_KEY));
         if (stored) {
