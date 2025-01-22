@@ -22,7 +22,9 @@ export class StorageManager {
         return marker === GroupfiStorageKeyPrefix;
     }
 
-    async markAsInitialized(): Promise<void> {
+    private async markAsInitialized(): Promise<void> {
+        // log entry
+        console.log('storagemanager markAsInitialized');
         await this.storageAdaptor?.set(this.getGlobalKey(StorageManager.INIT_MARKER_KEY), GroupfiStorageKeyPrefix);
     }
 
@@ -132,12 +134,15 @@ export class StorageManager {
         );
     }
 
-    async cleanStorageEntryOnInit(key: string): Promise<void> {
+    private async cleanStorageEntryOnInit(key: string): Promise<void> {
         if (!this.isValidPrefix(key)) {
             await this.storageAdaptor?.remove(key);
             return;
         }
-
+        // skip global prefix
+        if (key.startsWith(GLOBAL_PREFIX)) {
+            return;
+        }
         const hash = this.extractAddressHash(key);
         if (!hash) return;
 
