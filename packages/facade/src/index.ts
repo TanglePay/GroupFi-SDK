@@ -319,11 +319,6 @@ class GroupFiSDKFacade {
   listenningNewEventItem(
     callback: (message: EventItemFromFacade) => void
   ): () => void {
-    this._ensureWalletConnected();
-    // 为了兼容 node 端不使用 mqtt 的场景，注释掉这里
-    // this._ensureMqttConnected();
-
-    // log listenningNewEventItem
     const listener = async (pushed: PushedValue) => {
       console.log('pushed', pushed);
       let item: EventItemFromFacade | undefined = undefined;
