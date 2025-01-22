@@ -195,6 +195,10 @@ export class StorageManager {
         // log entry
         console.log('storagemanager deleteEntriesWithHash', hash);
         await this.processAllEntries(async (key) => {
+            // skip invalid prefix nor global prefix
+            if (!this.isValidPrefix(key) || key.startsWith(GLOBAL_PREFIX)) {
+                return;
+            }
             const extractedHash = this.extractAddressHash(key);
             if (extractedHash === hash) {
                 await adaptor.remove(key);
