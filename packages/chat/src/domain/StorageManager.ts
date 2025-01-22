@@ -7,7 +7,7 @@ export class StorageManager {
     private storageAdaptor?: StorageAdaptor
     private static readonly INIT_MARKER_KEY = 'groupfi_storage_init_marker';
     private static readonly ADDRESS_HASHES_KEY = 'address_hashes';
-    private static readonly MAX_ADDRESS_HASHES = 100;
+    private static readonly MAX_ADDRESS_HASHES = 10;
     private static readonly HASH_REGEX = /^0x[a-fA-F0-9]{64}$/;
     private addressHashes: Record<string, number> = {};
 
@@ -80,11 +80,19 @@ export class StorageManager {
 
         let index = 0;
         let key: string | null;
+        let processedCount = 0;
         
         while ((key = adaptor.key(index)) !== null) {
-            await callback(key);
+            try {
+                await callback(key);
+                processedCount++;
+            } catch (error) {
+                console.error(`processAllEntries Error processing key ${key}:`, error);
+            }
             index++;
         }
+
+        console.log('processAllEntries processed keys:', processedCount);
     }
 
     private isValidPrefix(key: string): boolean {
@@ -150,12 +158,16 @@ export class StorageManager {
     }
 
     async initCleaning(): Promise<void> {
+        // log entry
+        console.log('storagemanager initCleaning');
         await this.processAllEntries((key) => 
             this.cleanStorageEntryOnInit(key)
         );
     }
 
     async init(): Promise<void> {
+        // log entry
+        console.log('storagemanager init');
         await this.loadAddressHashes();
         
         if (!(await this.isInitialized())) {
