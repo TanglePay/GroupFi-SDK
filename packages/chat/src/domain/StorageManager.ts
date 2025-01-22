@@ -35,7 +35,7 @@ export class StorageManager {
     async loadAddressHashes(): Promise<void> {
         const stored = await this.storageAdaptor?.get(this.getKey(StorageManager.ADDRESS_HASHES_KEY));
         // log method and stored
-        console.log('loadAddressHashes', stored);
+        console.log('loadedAddressHashes', stored);
         if (stored) {
             this.addressHashes = JSON.parse(stored);
         }
@@ -48,7 +48,7 @@ export class StorageManager {
     async addAddressHash(hash: string): Promise<void> {
         // Validate hash format - must be 0x + 64 hex chars
         if (!this.isValidHash(hash)) {
-            throw new Error('Invalid hash format: hash must be 0x followed by a 64-character hex string');
+            throw new Error(`Invalid hash format: hash must be 0x followed by a 64-character hex string, ${hash}`);
         }
 
         const hashExists = this.addressHashes[hash];
@@ -116,6 +116,7 @@ export class StorageManager {
     }
 
     private async persistAddressHashes(): Promise<void> {
+        console.log('persistingAddressHashes', this.addressHashes);
         await this.storageAdaptor?.set(
             this.getKey(StorageManager.ADDRESS_HASHES_KEY),
             JSON.stringify(this.addressHashes)
