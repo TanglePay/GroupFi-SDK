@@ -36,8 +36,8 @@ export class StorageManager {
     }
     async loadAddressHashes(): Promise<void> {
         const stored = await this.storageAdaptor?.get(this.getKey(StorageManager.ADDRESS_HASHES_KEY));
-        // log method and stored
-        console.log('loadedAddressHashes', stored);
+        // Update log format
+        console.log('storagemanager loadAddressHashes', stored);
         if (stored) {
             this.addressHashes = JSON.parse(stored);
         }
@@ -89,19 +89,21 @@ export class StorageManager {
                 await callback(key);
                 processedCount++;
             } catch (error) {
-                console.error(`processAllEntries Error processing key ${key}:`, error);
+                // Update log format
+                console.error(`storagemanager processAllEntries Error processing key ${key}:`, error);
             }
             index++;
         }
 
-        console.log('processAllEntries processed keys:', processedCount);
+        // Update log format
+        console.log('storagemanager processAllEntries processed keys:', processedCount);
     }
 
     private isValidPrefix(key: string): boolean {
-        // log invalid prefix
         const isValid = key.startsWith(GroupfiStorageKeyPrefix) || key.startsWith(GLOBAL_PREFIX);
         if (!isValid) {
-            console.log('invalid prefix', key);
+            // Update log format
+            console.log('storagemanager invalid prefix', key);
         }
         return isValid;
     }
@@ -127,7 +129,8 @@ export class StorageManager {
     }
 
     private async persistAddressHashes(): Promise<void> {
-        console.log('persistingAddressHashes', this.addressHashes);
+        // Update log format
+        console.log('storagemanager persistingAddressHashes', this.addressHashes);
         await this.storageAdaptor?.set(
             this.getKey(StorageManager.ADDRESS_HASHES_KEY),
             JSON.stringify(this.addressHashes)
@@ -189,7 +192,8 @@ export class StorageManager {
         if (!adaptor) {
             throw new Error('Storage adaptor not initialized');
         }
-
+        // log entry
+        console.log('storagemanager deleteEntriesWithHash', hash);
         await this.processAllEntries(async (key) => {
             const extractedHash = this.extractAddressHash(key);
             if (extractedHash === hash) {
