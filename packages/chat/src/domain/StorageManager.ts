@@ -35,7 +35,7 @@ export class StorageManager {
         return `${GLOBAL_PREFIX}${key}`;
     }
     async loadAddressHashes(): Promise<void> {
-        const stored = await this.storageAdaptor?.get(this.getKey(StorageManager.ADDRESS_HASHES_KEY));
+        const stored = await this.storageAdaptor?.get(this.getGlobalKey(StorageManager.ADDRESS_HASHES_KEY));
         // Update log format
         console.log('storagemanager loadAddressHashes', stored);
         if (stored) {
@@ -117,7 +117,10 @@ export class StorageManager {
             startIndex = GLOBAL_PREFIX.length;
         }
         
-        if (startIndex === -1) throw new Error(`failed to extract address hash from key: ${key}`);
+        if (startIndex === -1) {
+            this.storageAdaptor?.remove(key);
+            throw new Error(`failed to extract address hash from key: ${key}`);
+        }
 
         // SHA256 hash is 66 characters long in hex (including 0x prefix)
         const possibleHash = key.slice(startIndex, startIndex + 66);
@@ -125,6 +128,7 @@ export class StorageManager {
         if (this.isValidHash(possibleHash)) {
             return possibleHash;
         }
+        this.storageAdaptor?.remove(key);
         throw new Error(`failed to extract address hash from key: ${key}`);
     }
 
@@ -132,7 +136,7 @@ export class StorageManager {
         // Update log format
         console.log('storagemanager persistingAddressHashes', this.addressHashes);
         await this.storageAdaptor?.set(
-            this.getKey(StorageManager.ADDRESS_HASHES_KEY),
+            this.getGlobalKey(StorageManager.ADDRESS_HASHES_KEY),
             JSON.stringify(this.addressHashes)
         );
     }
@@ -195,6 +199,10 @@ export class StorageManager {
         // log entry
         console.log('storagemanager deleteEntriesWithHash', hash);
         await this.processAllEntries(async (key) => {
+            // skip invalid prefix nor global prefix
+            if (!this.isValidPrefix(key) || key.startsWith(GLOBAL_PREFIX)) {
+                return;
+            }
             const extractedHash = this.extractAddressHash(key);
             if (extractedHash === hash) {
                 await adaptor.remove(key);
