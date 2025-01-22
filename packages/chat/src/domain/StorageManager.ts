@@ -45,7 +45,8 @@ export class StorageManager {
         return StorageManager.HASH_REGEX.test(hash);
     }
 
-    async addAddressHash(hash: string): Promise<void> {
+    async addAddressHash(prefix: string): Promise<void> {
+        const hash = this.extractAddressHash(prefix);
         // Validate hash format - must be 0x + 64 hex chars
         if (!this.isValidHash(hash)) {
             throw new Error(`Invalid hash format: hash must be 0x followed by a 64-character hex string, ${hash}`);
@@ -95,7 +96,7 @@ export class StorageManager {
         return isValid;
     }
 
-    private extractAddressHash(key: string): string | null {
+    private extractAddressHash(key: string): string {
         // Skip prefixes to get to the potential hash part
         let startIndex = -1;
         if (key.startsWith(GroupfiStorageKeyPrefix)) {
@@ -104,7 +105,7 @@ export class StorageManager {
             startIndex = GLOBAL_PREFIX.length;
         }
         
-        if (startIndex === -1) return null;
+        if (startIndex === -1) throw new Error(`failed to extract address hash from key: ${key}`);
 
         // SHA256 hash is 66 characters long in hex (including 0x prefix)
         const possibleHash = key.slice(startIndex, startIndex + 66);
@@ -112,7 +113,7 @@ export class StorageManager {
         if (this.isValidHash(possibleHash)) {
             return possibleHash;
         }
-        return null;
+        throw new Error(`failed to extract address hash from key: ${key}`);
     }
 
     private async persistAddressHashes(): Promise<void> {
