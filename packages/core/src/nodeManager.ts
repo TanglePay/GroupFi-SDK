@@ -26,7 +26,7 @@ export class NodeManager implements INodeProvider {
     async fetchUrlFromBackend(): Promise<void> {
       if (!this.currentUrl) {
         // First try to get from storage immediately
-        const storedUrl = await this.storageFacade.get(NodeManager.STORAGE_KEY);
+        const storedUrl = await this.storageFacade.get(this.storageFacade.prefix + NodeManager.STORAGE_KEY);
         if (storedUrl) {
           this.currentUrl = storedUrl;
           // Trigger API refresh in background

@@ -1678,7 +1678,7 @@ class GroupFiSDKFacade {
 
       // Try to load from storage first
       if (this._storage) {
-        const storedChainList = await this._storage.get(CHAIN_LIST_STORAGE_KEY);
+        const storedChainList = await this._storage.get(this._storage.prefix + CHAIN_LIST_STORAGE_KEY);
         if (storedChainList) {
           try {
             this._chainList = JSON.parse(storedChainList);
@@ -1694,7 +1694,7 @@ class GroupFiSDKFacade {
           .then(apiChainList => {
             this._chainList = apiChainList;
             if (this._storage) {
-              return this._storage.set(CHAIN_LIST_STORAGE_KEY, JSON.stringify(apiChainList));
+              return this._storage.set(this._storage.prefix + CHAIN_LIST_STORAGE_KEY, JSON.stringify(apiChainList));
             }
           })
           .catch(error => {
@@ -1705,7 +1705,7 @@ class GroupFiSDKFacade {
         try {
           this._chainList = await apiPromise;
           if (this._storage) {
-            await this._storage.set(CHAIN_LIST_STORAGE_KEY, JSON.stringify(this._chainList));
+            await this._storage.set(this._storage.prefix + CHAIN_LIST_STORAGE_KEY, JSON.stringify(this._chainList));
           }
         } catch (error) {
           throw error;

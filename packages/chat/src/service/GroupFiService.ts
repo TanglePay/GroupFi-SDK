@@ -31,6 +31,7 @@ import {
   Profile
 } from '../types'
 import { GroupStateSyncStorageExtended } from 'groupfi-sdk-client'
+import { GLOBAL_PREFIX } from '../constants'
 
 @Singleton
 export class GroupFiService {
@@ -46,7 +47,7 @@ export class GroupFiService {
   }
   setupGroupFiSDKFacadeStorage(storage: StorageAdaptor) {
     const storageFacade = {
-      prefix: 'groupfi.sdk',
+      prefix: GLOBAL_PREFIX,
       get: storage.get,
       set: storage.set,
       remove: storage.remove

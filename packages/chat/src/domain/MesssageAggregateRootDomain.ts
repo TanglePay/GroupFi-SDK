@@ -5,7 +5,6 @@ import { MessageHubDomain } from "./MessageHubDomain";
 import { EventSourceDomain } from "./EventSourceDomain";
 import { UserProfileDomain } from "./UserProfileDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
-
 import { ICycle,  StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo, IDomain } from "../types";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
@@ -19,6 +18,7 @@ import { SharedContext } from "./SharedContext";
 import { prefixedGroupIdToGroupId } from "groupfi-sdk-core";
 
 import { stripHexPrefix, tracer } from 'groupfi-sdk-utils'
+import { GroupfiStorageKeyPrefix } from '../constants'
 
 
 // serving as a facade for all message related domain, also in charge of bootstraping
@@ -27,7 +27,6 @@ import { stripHexPrefix, tracer } from 'groupfi-sdk-utils'
 // subscriber should be notified when state is changed, and should be able to retrieve the new state via function call
 
 export type MessageInitStatus = 'uninit' | 'bootstraped' | 'loadedFromStorageWaitApiCallToCatchUp' | 'catchedUpViaApiCallWaitForPushService' | 'startListeningPushService' | 'inited';
-
 export {HeadKey} from './ConversationDomain'
 @Singleton
 export class MessageAggregateRootDomain implements ICycle {
@@ -57,7 +56,7 @@ export class MessageAggregateRootDomain implements ICycle {
 
     @Inject
     private _context: SharedContext
-
+    
     private _cycleableDomains: IDomain[]
     setStorageAdaptor(storageAdaptor: StorageAdaptor) {
         this.localStorageRepository.setStorageAdaptor(storageAdaptor);
@@ -65,7 +64,7 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     async setStorageKeyPrefix(address: string) {
         const addressHash = this.groupFiService.sha256Hash(address);
-        const storageKeyPrefix = `groupfi.2.${addressHash}.`;
+        const storageKeyPrefix = `${GroupfiStorageKeyPrefix}${addressHash}.`;
         this.localStorageRepository.setStorageKeyPrefix(storageKeyPrefix);
     }
     async connectWallet(walletType: WalletType, metaMaskAccountFromDapp: string | undefined): Promise<{
