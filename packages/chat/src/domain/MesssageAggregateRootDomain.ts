@@ -5,20 +5,21 @@ import { MessageHubDomain } from "./MessageHubDomain";
 import { EventSourceDomain } from "./EventSourceDomain";
 import { UserProfileDomain } from "./UserProfileDomain";
 import { ProxyModeDomain } from "./ProxyModeDomain";
-
-import { ICycle,  StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo } from "../types";
+import { ICycle,  StorageAdaptor, WalletType, ShimmerMode, ImpersonationMode, DelegationMode, ModeInfo, IDomain } from "../types";
 import { LocalStorageRepository } from "../repository/LocalStorageRepository";
 import { GroupFiService } from "../service/GroupFiService";
 import { EventGroupMemberChanged, GroupFiSDKObj, IMessage, isGroupIdEqual } from "groupfi-sdk-core";
 import { EventItemFromFacade } from "groupfi-sdk-core";
-import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey, EventGroupIsPublicChangedKey } from "./GroupMemberDomain";
+import { EventGroupMemberChangedLiteKey, GroupMemberDomain, EventGroupMarkChangedLiteKey, EventForMeGroupConfigChangedKey, EventMarkedGroupConfigChangedKey, EventGroupMuteChangedLiteKey, EventGroupLikeChangedLiteKey, EventGroupMemberChangedKey, EventGroupIsPublicChangedKey, EventGroupConfigReadyKey } from "./GroupMemberDomain";
 import { AquiringPublicKeyEventKey, DelegationModeNameNftChangedEventKey, NotEnoughCashTokenEventKey, OutputSendingDomain, PairXChangedEventKey, PublicKeyChangedEventKey, VoteOrUnVoteGroupLiteEventKey } from "./OutputSendingDomain";
 
 import { Mode, IIncludesAndExcludes, Profile } from '../types'
 import { SharedContext } from "./SharedContext";
 import { prefixedGroupIdToGroupId } from "groupfi-sdk-core";
 
-import { stripHexPrefix } from 'groupfi-sdk-utils'
+import { stripHexPrefix, tracer } from 'groupfi-sdk-utils'
+import { GroupfiStorageKeyPrefix } from '../constants'
+
 
 // serving as a facade for all message related domain, also in charge of bootstraping
 // after bootstraping, each domain should subscribe to the event, then push event into array for buffering, and 
@@ -26,7 +27,6 @@ import { stripHexPrefix } from 'groupfi-sdk-utils'
 // subscriber should be notified when state is changed, and should be able to retrieve the new state via function call
 
 export type MessageInitStatus = 'uninit' | 'bootstraped' | 'loadedFromStorageWaitApiCallToCatchUp' | 'catchedUpViaApiCallWaitForPushService' | 'startListeningPushService' | 'inited';
-
 export {HeadKey} from './ConversationDomain'
 @Singleton
 export class MessageAggregateRootDomain implements ICycle {
@@ -56,15 +56,15 @@ export class MessageAggregateRootDomain implements ICycle {
 
     @Inject
     private _context: SharedContext
-
-    private _cycleableDomains: ICycle[]
+    
+    private _cycleableDomains: IDomain[]
     setStorageAdaptor(storageAdaptor: StorageAdaptor) {
         this.localStorageRepository.setStorageAdaptor(storageAdaptor);
         this.groupFiService.setupGroupFiSDKFacadeStorage(storageAdaptor)
     }
     async setStorageKeyPrefix(address: string) {
         const addressHash = this.groupFiService.sha256Hash(address);
-        const storageKeyPrefix = `groupfi.2.${addressHash}.`;
+        const storageKeyPrefix = `${GroupfiStorageKeyPrefix}${addressHash}.`;
         this.localStorageRepository.setStorageKeyPrefix(storageKeyPrefix);
     }
     async connectWallet(walletType: WalletType, metaMaskAccountFromDapp: string | undefined): Promise<{
@@ -80,11 +80,18 @@ export class MessageAggregateRootDomain implements ICycle {
         await this.groupFiService.browseModeSetupClient()
     }
     async bootstrap() {
+        tracer.startStep('MessageAggregateRootDomain', 'bootstrap')
         this._cycleableDomains = [this.eventSourceDomain, this.outputSendingDomain, this.messageHubDomain, this.inboxDomain, this.conversationDomain, this.groupMemberDomain];
         //this._cycleableDomains = [this.eventSourceDomain, this.messageHubDomain, this.inboxDomain]
+        
+        // Parallel bootstrap
+        await Promise.all(this._cycleableDomains.map(domain => domain.bootstrap()));
+        
+        // Sequential post init
         for (const domain of this._cycleableDomains) {
-            await domain.bootstrap();
+            domain.postInit();
         }
+        tracer.endStep('MessageAggregateRootDomain', 'bootstrap')
     }
     _groupMemberChangedCallback: (param:{groupId: string,isNewMember:boolean,address:string}) => void
     async joinGroup(groupId:string) {
@@ -217,9 +224,7 @@ export class MessageAggregateRootDomain implements ICycle {
     }
     async start(): Promise<void> {
         this._cycleableDomains = [this.outputSendingDomain, this.groupMemberDomain, this.inboxDomain, this.conversationDomain, this.messageHubDomain, this.eventSourceDomain]
-        for (const domain of this._cycleableDomains) {
-            await domain.start();
-        }
+        await Promise.all(this._cycleableDomains.map(domain => domain.start()));
     }
     gidEquals(groupId1: string, groupId2: string) {
         return this.groupFiService.addHexPrefixIfAbsent(groupId1) === this.groupFiService.addHexPrefixIfAbsent(groupId2)
@@ -375,6 +380,7 @@ export class MessageAggregateRootDomain implements ICycle {
             tasks.push(this.groupMemberDomain._refreshGroupEvmQualifyAsync(groupId))
         }
         await Promise.all(tasks);
+        this.conversationDomain.setCurrentGroupIdOnUi(groupId)
         this.outputSendingDomain.enterGroup(groupId)
         if (this._context.isWalletConnected) {
             this.groupFiService.enablePreparedRemainderHint()
@@ -388,6 +394,7 @@ export class MessageAggregateRootDomain implements ICycle {
     // navigate away from group
     navigateAwayFromGroup(groupId: string) {
         groupId = prefixedGroupIdToGroupId(groupId)
+        this.conversationDomain.setCurrentGroupIdOnUi(undefined)
         // check is wallet connected
         if (this._context.isWalletConnected) {
             this.groupFiService.disablePreparedRemainderHint()
@@ -405,8 +412,8 @@ export class MessageAggregateRootDomain implements ICycle {
 
     // get for me group Configs
     getForMeGroupConfigs() {
-        // When forMeGroupConfigs is undefined, it must return undefined
-        // This indicates that forMeGroupConfigs has not started loading yet
+        // log enter
+        console.log('getForMeGroupConfigs enter')
         if (this.groupMemberDomain.forMeGroupConfigs === undefined) {
             return undefined
         }
@@ -630,7 +637,11 @@ export class MessageAggregateRootDomain implements ICycle {
     getSelfProfile() {
         return this._context.getProfile()
     }
-
+    // getGroupConfigFromCache
+    getGroupConfigFromCache(groupId: string) {
+        groupId = prefixedGroupIdToGroupId(groupId)
+        return this.groupMemberDomain.getGroupConfigFromCache(groupId)
+    }
     async getGroupMember(groupId: string) {
         groupId = prefixedGroupIdToGroupId(groupId)
         return await this.groupMemberDomain.getGroupMember(groupId)
@@ -670,4 +681,37 @@ export class MessageAggregateRootDomain implements ICycle {
         groupId = prefixedGroupIdToGroupId(groupId)
         return this.groupMemberDomain.setAddressStatusInGroup(groupId, type, newValue);
     }
+
+    async waitForGroupConfigReady(groupId: string, timeoutMs: number = 7000): Promise<boolean> {
+        groupId = prefixedGroupIdToGroupId(groupId);
+        
+        // First check if config is already in cache
+        const config = this.getGroupConfigFromCache(groupId);
+        if (config) {
+            return true;
+        }
+
+        // If not in cache, wait for it to be ready
+        return new Promise((resolve) => {
+            const eventKey = `${EventGroupConfigReadyKey}.${groupId}`;
+            
+            // Set timeout
+            const timeoutHandle = setTimeout(() => {
+                this.groupMemberDomain.off(eventKey, handler);
+                resolve(false);
+            }, timeoutMs);
+
+            // Event handler
+            const handler = ({groupId: eventGroupId}: {groupId: string}) => {
+                if (this.gidEquals(eventGroupId, groupId)) {
+                    clearTimeout(timeoutHandle);
+                    resolve(true);
+                }
+            };
+
+            // Start listening
+            this.groupMemberDomain.once(eventKey, handler);
+        });
+    }
+
 }

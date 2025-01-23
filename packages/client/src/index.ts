@@ -52,7 +52,8 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     GROUPFIMARKTAG, GROUPFIMUTETAG, GROUPFIVOTETAG, GROUPFIPAIRXTAG,
     GROUPFIPROFILETAG,
     GROUPFICASHTAG,MessageGroupMeta,
-    GROUPFILIKETAG,
+    GROUPFILIKETAG,GROUPFIGROUPSTATESYNCTAG,
+    serializeGroupStateSync,
     IMUserLikeGroupMember,
     serializeUserLikeGroupMembers,
     AddressType,
@@ -60,12 +61,18 @@ import { IMMessage, GroupFiSDKObj, GROUPFITAG, GROUPFISHAREDTAG, makeLRUCache,LR
     IMAGE_PRESIGN_SERVICE_URL,
     ADDRESSLIST_PRESIGN_SERVICE_URL,
     MessageTypePrivate,
-    INodeProvider
+    INodeProvider,
+    GroupStateSyncItem,
+    GroupStateSyncStorage,
+    BasicOutputWrapper,
+    NftOutputWrapper,
+    OutputWrapper,
+    StorageFacade
 } from "groupfi-sdk-core";
 import {runBatch, formatUrlParams, getCurrentEpochInSeconds, getAllBasicOutputs, concatBytes, EthEncrypt, generateSMRPair, bytesToHex, tracer, getImageDimensions, sleep } from 'groupfi-sdk-utils';
 import AddressMappingStore from './AddressMappingStore';
 import nameMappingCache from './nameMappingCache';
-import { IRequestAdapter, PairX, IProxyModeRequestAdapter, CashOutputResponse, OutputIdOutputResponse } from './types'
+import { IRequestAdapter, PairX, IProxyModeRequestAdapter, CashOutputResponse, OutputIdOutputResponse, GroupStateSyncStorageExtended } from './types'
 export * from './types'
 export { AddressMappingStore, nameMappingCache}
 type IntermediateResult = {
@@ -127,28 +134,11 @@ setHkdf(async (secret:Uint8Array, length:number, salt:Uint8Array)=>{
 setCryptoJS(CryptoJS)
 const tag = Converter.utf8ToBytes(GROUPFITAG)
 
-export interface StorageFacade {
-    prefix: string;
-    get(key: string): Promise<string | null>;
-    set(key: string, value: string): Promise<void>;
-    remove(key: string): Promise<void>;
-}
 type OutputResponseWrapper = {
     output: IOutputResponse;
     outputId: string;
 }
-type BasicOutputWrapper = {
-    output: IBasicOutput;
-    outputId: string;
-}
-type OutputWrapper = {
-    output: OutputTypes;
-    outputId: string;
-}
-type NftOutputWrapper = {
-    output: INftOutput,
-    outputId: string
-}
+
 type MessageResponseItem = {
     type: typeof ImInboxEventTypeNewMessage
     outputId: string;
@@ -502,92 +492,6 @@ export class GroupfiSdkClient {
         }
     }
     _isCashDataInited:boolean = false
-    private async loadPersistedData(): Promise<void> {
-        try {
-            // Load pending transactions
-            const pendingTxData = await this._storage!.get(this.PENDING_TX_KEY);
-            if (pendingTxData) {
-                // Define the expected structure with outputs
-                const txMap = JSON.parse(pendingTxData) as Record<string, { inputs: string[]; outputs: string[]; timestamp: number }>;
-    
-                // Iterate and set pending transactions
-                Object.entries(txMap).forEach(([txId, tx]) => {
-                    // Optional: Validate the transaction structure
-                    if (tx.inputs && Array.isArray(tx.inputs) && Array.isArray(tx.outputs) && typeof tx.timestamp === 'number') {
-                        this._pendingTransactions.set(txId, tx);
-                    } else {
-                        console.warn(`Invalid transaction structure for txId ${txId}. Skipping.`);
-                    }
-                });
-                console.log('Loaded persisted pending transactions.');
-            } else {
-                console.log('No persisted pending transactions found.');
-            }
-    
-            // Load pending spent outputs
-            const pendingSpentData = await this._storage!.get(this.PENDING_SPENT_KEY);
-            if (pendingSpentData) {
-                const spentOutputIdToTxIdMap = JSON.parse(pendingSpentData) as Record<string, string>;
-    
-                Object.entries(spentOutputIdToTxIdMap).forEach(([outputId, txId]) => {
-                    this._pendingSpentOutputIdToTxId.set(outputId, txId);
-                });
-                console.log('Loaded persisted pending spent outputs.');
-            } else {
-                console.log('No persisted pending spent outputs found.');
-            }
-    
-            // Load pending create outputs
-            const pendingCreateData = await this._storage!.get(this.PENDING_CREATE_KEY);
-            if (pendingCreateData) {
-                const createOutputIdToTxIdMap = JSON.parse(pendingCreateData) as Record<string, string>;
-    
-                Object.entries(createOutputIdToTxIdMap).forEach(([outputId, txId]) => {
-                    this._pendingCreatedOutputToTxId.set(outputId, txId);
-                });
-                console.log('Loaded persisted pending create outputs.');
-            } else {
-                console.log('No persisted pending create outputs found.');
-            }
-        } catch (error) {
-            console.error('Failed to load persisted data:', error);
-        }
-    }
-    
-
-    /**
-     * Persists pending transactions and spent outputs to storage.
-     */
-    private async persistCashData(): Promise<void> {
-        this._cashDataDirty = false;
-        try {
-            // Persist pending transactions
-            const txMap: Record<string, { inputs: string[]; outputs: string[]; timestamp: number }> = {};
-            this._pendingTransactions.forEach((tx, txId) => {
-                txMap[txId] = tx;
-            });
-            await this._storage!.set(this.PENDING_TX_KEY, JSON.stringify(txMap, null, 2));
-            console.log('Persisted pending transactions.');
-    
-            // Persist pending spent outputs
-            const spentOutputIdToTxIdMap: Record<string, string> = {};
-            this._pendingSpentOutputIdToTxId.forEach((txId, outputId) => {
-                spentOutputIdToTxIdMap[outputId] = txId;
-            });
-            await this._storage!.set(this.PENDING_SPENT_KEY, JSON.stringify(spentOutputIdToTxIdMap, null, 2));
-            console.log('Persisted pending spent outputs.');
-    
-            // Persist pending create outputs
-            const createOutputIdToTxIdMap: Record<string, string> = {};
-            this._pendingCreatedOutputToTxId.forEach((txId, outputId) => {
-                createOutputIdToTxIdMap[outputId] = txId;
-            });
-            await this._storage!.set(this.PENDING_CREATE_KEY, JSON.stringify(createOutputIdToTxIdMap, null, 2));
-            console.log('Persisted pending create outputs.');
-        } catch (error) {
-            console.error('Failed to persist data:', error);
-        }
-    }
     
 
     private checkForStaleTransactions() {
@@ -611,6 +515,31 @@ export class GroupfiSdkClient {
         const domain = domains[Math.floor(Math.random() * domains.length)];
         return domain
     }
+    // get group sync state from inx api
+    // /groupstatesyncunderaddress
+    async _getGroupSyncStateFromInxApi(address:string):Promise<GroupStateSyncStorage|undefined>{
+        const params = {address}
+        const paramStr = formatUrlParams(params)
+        const url = `${this.getUrl()}/api/groupfi/v1/groupstatesyncunderaddress${paramStr}`
+        console.log('getGroupSyncStateFromInxApi url', url);
+        const res = await fetch(url,
+        {
+            method:'GET',
+            headers:{
+            'Content-Type':'application/json'
+            }
+        })
+        if (!res.ok) {
+            console.log('getGroupSyncStateFromInxApi res not ok', res.status);
+        }
+        console.log('getGroupSyncStateFromInxApi res', res);
+        const data = await res.json() as GroupStateSyncStorage | undefined
+        if (data) {
+            data.items = data.items ?? []   
+        }
+        return data
+    }
+
     async _getAddressListForGroupFromInxApi(groupId:string):Promise<{publicKey:string,ownerAddress:string}[]>{
         //TODO try inx plugin 
         try {
@@ -2212,12 +2141,20 @@ export class GroupfiSdkClient {
             ],
             features: []
         };
-        return await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(consumedOutputs, [consolidatedBasicOutput])
+        return await this._sendBasicOutput([consolidatedBasicOutput], consumedOutputs)
     }
     async _sendBasicOutput(basicOutputs:(IBasicOutput | INftOutput)[],extraOutputsToBeConsumed:BasicOutputWrapper[] = []){
+        // Use temp outputs if they exist and merge with provided outputs
+        const allCreatedOutputs = [...this._tempCreatedOutputs, ...basicOutputs];
+        const allConsumedOutputs = [...this._tempConsumedOutputs, ...extraOutputsToBeConsumed];
+        
+        // Clear temp storage immediately to avoid reuse
+        this._tempCreatedOutputs = [];
+        this._tempConsumedOutputs = [];
+
         const createdOutputs:(IBasicOutput | INftOutput)[] = []
         let amountToSend = bigInt('0')
-        for (const basicOutput of basicOutputs) {
+        for (const basicOutput of allCreatedOutputs) {
             const amountToSend_ = this._getAmount(basicOutput)
             basicOutput.amount = amountToSend_.toString()
             createdOutputs.push(basicOutput)
@@ -2227,7 +2164,7 @@ export class GroupfiSdkClient {
         // get first output with amount > amountToSend
         let depositFromExtraOutputs = bigInt('0')
 
-        for (const extraOutput of extraOutputsToBeConsumed) {
+        for (const extraOutput of allConsumedOutputs) {
             const amount = bigInt(extraOutput.output.amount)
             depositFromExtraOutputs = depositFromExtraOutputs.add(amount)
         }
@@ -2260,7 +2197,7 @@ export class GroupfiSdkClient {
             if (!consumedOutputWrapper ) {
                 // log get cash from unspent outputs on the fly
                 console.log('get cash from unspent outputs on the fly');
-                const idsForFiltering = new Set(extraOutputsToBeConsumed.map(output=>output.outputId))
+                const idsForFiltering = new Set(allConsumedOutputs.map(output=>output.outputId))
                 const outputs = await this._getUnSpentOutputs({amountLargerThan:threshold,numbersWanted:1,idsForFiltering})
                 // console.log('unspent Outputs', outputs);
                 if (!outputs || outputs.length === 0) throw GroupFiSDKObj.makeErrorForUserDoesNotHasEnoughToken()
@@ -2268,7 +2205,7 @@ export class GroupfiSdkClient {
                 consumedOutputWrapper = outputs.find(output=>bigInt(output.output.amount).greater(threshold))
             }
             if (!consumedOutputWrapper ) throw new Error('No output with enough amount')
-            extraOutputsToBeConsumed.push(consumedOutputWrapper)
+            allConsumedOutputs.push(consumedOutputWrapper)
             const {output:consumedOutput, outputId:consumedOutputId}  = consumedOutputWrapper
             consumedCashOutputId = consumedOutputId
             console.log('ConsumedOutput', consumedOutput);
@@ -2276,7 +2213,7 @@ export class GroupfiSdkClient {
             createdOutputs.push(remainderBasicOutput)
             console.log("Remainder Basic Output: ", remainderBasicOutput);
         }
-        const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(extraOutputsToBeConsumed, createdOutputs)
+        const res = await this._sendTransactionWithConsumedOutputsAndCreatedOutputs(allConsumedOutputs, createdOutputs)
         console.log('===> send transaction res', res)
         const {blockId,outputIds,transactionId } = res
         // Add transaction to pending transactions
@@ -2285,8 +2222,6 @@ export class GroupfiSdkClient {
         const consumedOutputIds = consumedCashOutputId ? [consumedCashOutputId] : []
         this._addPendingTransaction(transactionId, consumedOutputIds, filteredOutputIds);
         
-        
-    
         // Remove the spent UTXO from _remainderHintSet using the index
         if (remainderIndex !== -1) {
             this._remainderHintSet.splice(remainderIndex, 1);
@@ -2368,7 +2303,7 @@ export class GroupfiSdkClient {
             // Optionally implement retry logic or alerting mechanisms
         }
     }
-    private async handleTransactionConfirmation(txId: string): Promise<void> {
+    private handleTransactionConfirmation(txId: string) {
         const pendingTx = this._pendingTransactions.get(txId);
         if (pendingTx) {
             // Remove inputs from pending spent outputs
@@ -2392,7 +2327,7 @@ export class GroupfiSdkClient {
      * Handles failed transactions by removing them from pending sets and re-adding UTXOs to the pool.
      * @param txId The transaction ID to handle.
      */
-    private async handleTransactionFailure(txId: string): Promise<void> {
+    private  handleTransactionFailure(txId: string) {
         const pendingTx = this._pendingTransactions.get(txId);
         if (pendingTx) {
             // Remove inputs from pending spent outputs and re-add to UTXO pool if applicable
@@ -2824,7 +2759,7 @@ export class GroupfiSdkClient {
     }:{list:IMUserMarkedGroupId[],extraOutputs?:IBasicOutput[],outputWrapper?:BasicOutputWrapper}){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMARKTAG)}`
         const data = serializeUserMarkedGroupIds(list)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         console.log('created and consumed', basicOutput, toBeConsumed);
         const createdOutputs = extraOutputs ? [basicOutput, ...extraOutputs] : [basicOutput]
@@ -2839,7 +2774,7 @@ export class GroupfiSdkClient {
     async _persistSelectedProfile(metadataJsonStr: string, outputIdToBeConsumed?: string) {
         const tag = `0x${Converter.utf8ToHex(GROUPFIPROFILETAG)}`
         const metadataHex = Converter.utf8ToHex(metadataJsonStr, true)
-        const basicOutput = await this._dataAndTagToBasicOutput(metadataHex, tag)
+        const basicOutput = this._dataAndTagToBasicOutput(metadataHex, tag)
         let toBeConsumed: BasicOutputWrapper[] = []
         if (outputIdToBeConsumed) {
             const outputResponse = await this._client!.output(outputIdToBeConsumed)
@@ -2876,7 +2811,7 @@ export class GroupfiSdkClient {
         }
     }
 
-    async _dataAndTagToBasicOutput(data:Uint8Array | HexEncodedString,tag:string):Promise<IBasicOutput>{
+    _dataAndTagToBasicOutput(data:Uint8Array | HexEncodedString,tag:string):IBasicOutput{
         const tagFeature: ITagFeature = {
             type: 3,
             tag
@@ -2926,7 +2861,7 @@ export class GroupfiSdkClient {
     async _persistUserMuteGroupMembers(list:IMUserMuteGroupMember[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFIMUTETAG)}`
         const data = serializeUserMuteGroupMembers(list)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
@@ -2947,6 +2882,47 @@ export class GroupfiSdkClient {
         this._ensureWalletInited()
         const {list} = await this._getUserMuteGroupMembers(userAddress)
         return list
+    }
+    // get group state sync
+    async getAllGroupStateSyncs(userAddress: string):Promise<GroupStateSyncStorageExtended|undefined> {
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        const groupStateSync = await this._getGroupSyncStateFromInxApi(userAddress)
+        if (!groupStateSync || !groupStateSync.outputId) return undefined
+        let {outputId, output, ...rest} = groupStateSync
+        // case output is undefined
+        if (!output) {
+            const outputResponse = await this._client!.output(outputId)
+            output = outputResponse.output as IBasicOutput
+            // log this case, which should not happen
+            console.log('getAllGroupStateSyncs output is undefined, outputId', outputId)
+        }
+        const resp = {
+            outputWrapper:{
+                output,
+                outputId
+            },
+            ...rest
+        }
+        return resp
+    }
+
+    
+    // persist group state syncs
+    persistGroupStateSyncs(groupStateSyncs:GroupStateSyncItem[],consumedOutputWrapper?:BasicOutputWrapper){
+        this._ensureClientInited()
+        this._ensureWalletInited()
+        // log method
+        console.log('persistGroupStateSyncs',groupStateSyncs)
+        const data = serializeGroupStateSync(groupStateSyncs)
+        const tag = Converter.utf8ToHex(GROUPFIGROUPSTATESYNCTAG)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
+        const toBeConsumed = consumedOutputWrapper ? [consumedOutputWrapper] : []
+        // Return created and consumed outputs instead of sending transaction
+        return {
+            created: [basicOutput],
+            consumed: toBeConsumed
+        }
     }
     // same sets of function for user like group members
     async likeGroupMember(groupId:string,addrSha256Hash:string, userAddress: string){
@@ -2971,7 +2947,7 @@ export class GroupfiSdkClient {
     async _persistUserLikeGroupMembers(list:IMUserLikeGroupMember[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFILIKETAG)}`
         const data = serializeUserLikeGroupMembers(list)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
@@ -3026,7 +3002,7 @@ export class GroupfiSdkClient {
     async _persistUserVoteGroups(list:IMUserVoteGroup[],outputWrapper?:BasicOutputWrapper){
         const tag = `0x${Converter.utf8ToHex(GROUPFIVOTETAG)}`
         const data = serializeUserVoteGroups(list)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const toBeConsumed = outputWrapper ? [outputWrapper] : []
         return await this._sendBasicOutput([basicOutput],toBeConsumed);
     }
@@ -3059,7 +3035,7 @@ export class GroupfiSdkClient {
         }
 
         const data = await serializeEvmQualify(groupId,addressList,signature,addressType,timestamp, func)
-        const basicOutput = await this._dataAndTagToBasicOutput(data,tag)
+        const basicOutput = this._dataAndTagToBasicOutput(data,tag)
         const twoWeekSecs =  60 * 60 * 24 * 14
         this._addTimeUnlockToBasicOutput(basicOutput, twoWeekSecs)
         this._addMinimalAmountToBasicOutput(basicOutput)
@@ -3206,98 +3182,53 @@ export class GroupfiSdkClient {
         };
         return collectionOutput
     }
-    // async createPairXNftOutput(evmAddress: string, pairX: PairX) {
-    //     if (!this._requestAdapter) {
-    //         throw new Error('request dapter is undefined')
-    //     }
+    // Add these properties near the top of the GroupfiSdkClient class
+    private _tempCreatedOutputs: IBasicOutput[] = [];
+    private _tempConsumedOutputs: BasicOutputWrapper[] = [];
 
-    //     const proxyModeRequestAdapter = this._requestAdapter as IProxyModeRequestAdapter
+    // Add this new method to the class
+    /**
+     * Stores created and consumed outputs temporarily in memory for later usage
+     * @param created Array of created outputs
+     * @param consumed Array of consumed outputs
+     */
+    storeTempOutputs(created: IBasicOutput[], consumed: BasicOutputWrapper[]) {
+        this._tempCreatedOutputs = [...this._tempCreatedOutputs, ...created];
+        this._tempConsumedOutputs = [...this._tempConsumedOutputs, ...consumed];
+        console.log('Stored temp outputs - Created:', this._tempCreatedOutputs.length, 'Consumed:', this._tempConsumedOutputs.length);
+    }
 
-    //     const encryptionPublicKey = await proxyModeRequestAdapter.getEncryptionPublicKey()
+    /**
+     * Sends all temporarily stored outputs in a transaction
+     * @returns Promise resolving to boolean - true if sent successfully, false if no outputs to send
+     */
+    async sendTempOutputs(): Promise<boolean> {
+        // Check if there are any temporary outputs to send
+        if (this._tempCreatedOutputs.length === 0 && this._tempConsumedOutputs.length === 0) {
+            console.log('No temporary outputs to send');
+            return false;
+        }
 
-    //     // The last 32 bytes of the private key Uint8Array are the public key Uint8Array
-    //     // only the first 32 bytes can be encrypted
-    //     const first32BytesOfPrivateKeyHex = Converter.bytesToHex(pairX.privateKey.slice(0, 32))
-    //     console.log('===>hexPrivateKeyFirst32Bytes', first32BytesOfPrivateKeyHex)
+        // Log the number of outputs being sent
+        console.log('Sending temp outputs - Created:', this._tempCreatedOutputs.length, 'Consumed:', this._tempConsumedOutputs.length);
 
-    //     const encryptedPrivateKeyHex = EthEncrypt({
-    //         publicKey: encryptionPublicKey,
-    //         dataTobeEncrypted: first32BytesOfPrivateKeyHex
-    //     })
-
-    //     console.log('====> encryptedPrivateKeyHex', encryptedPrivateKeyHex)
-
-    //     const tagFeature: ITagFeature = {
-    //         type: 3,
-    //         tag: `0x${Converter.utf8ToHex(GROUPFIPAIRXTAG)}`
-    //     };
-
-    //     const metadataObj = {
-    //         encryptedPrivateKey: encryptedPrivateKeyHex,
-    //         pairXPublicKey: Converter.bytesToHex(pairX.publicKey, true),
-    //         evmAddress: evmAddress,
-    //         timestamp: getCurrentEpochInSeconds(),
-    //         // 1: tp  2: mm
-    //         scenery: 1
-    //     }
-            
-    //     console.log('===> metadataObj', metadataObj)
-
-    //     const dataTobeSignedStr = [
-    //         metadataObj.encryptedPrivateKey,
-    //         metadataObj.evmAddress,
-    //         metadataObj.pairXPublicKey,
-    //         metadataObj.scenery,
-    //         metadataObj.timestamp
-    //     ].join('')
-
-    //     console.log('===> dataToBeSignedStr', dataTobeSignedStr)
-
-    //     const dataToBeSignedHex = Converter.utf8ToHex(dataTobeSignedStr, true)
-    //     const signature = await proxyModeRequestAdapter.ethSign({dataToBeSignedHex})
-
-    //     console.log('===> signature', signature)
-
-    //     const metadata = Converter.utf8ToHex(JSON.stringify({
-    //         ...metadataObj,
-    //         signature,
-    //     }), true)
-
-    //     console.log('===> metadata final', metadata)
-
-    //     const collectionOutput: INftOutput = {
-    //         type: NFT_OUTPUT_TYPE,
-    //         amount: '',
-    //         nativeTokens: [],
-    //         nftId:
-    //             '0x0000000000000000000000000000000000000000000000000000000000000000',
-    //         unlockConditions: [
-    //             {
-    //                 type: ADDRESS_UNLOCK_CONDITION_TYPE,
-    //                 address: {
-    //                     type: ED25519_ADDRESS_TYPE,
-    //                     pubKeyHash: this._accountHexAddress!
-    //                 }
-    //             }
-    //         ],
-    //         features: [
-    //             tagFeature
-    //         ],
-    //         immutableFeatures: [
-    //             {
-    //             type: ISSUER_FEATURE_TYPE,
-    //             address: {
-    //                 type: ED25519_ADDRESS_TYPE,
-    //                 pubKeyHash: this._accountHexAddress!
-    //             },
-    //             },
-    //             {
-    //             type: METADATA_FEATURE_TYPE,
-    //             data: metadata
-    //             },
-    //         ],
-    //     };
-    //     return collectionOutput
-    // }
+        try {
+            // Use _sendBasicOutput which will automatically use and clear the temp outputs
+            const result = await this._sendBasicOutput([], []);
+            console.log('Temp outputs sent successfully:', {
+                blockId: result.blockId,
+                transactionId: result.transactionId,
+                outputIds: result.outputIds
+            });
+            return true;
+        } catch (error) {
+            // Clear temp storage on error to prevent reuse of failed transaction outputs
+            this._tempCreatedOutputs = [];
+            this._tempConsumedOutputs = [];
+            console.error('Failed to send temp outputs:', error);
+            throw error;
+        }
+    }
 }
+
 

@@ -18,6 +18,7 @@ export * from './codec_like';
 export * from './codec_mute';
 export * from './codec_vote';
 export * from './codec_evm_qualify';
+export * from './codec_groupstatesync';
 export * from './address_check';
 export * from './nodeManager';
 export * from './groupId';
@@ -80,6 +81,14 @@ class GroupFiSDK {
         const groupIdPrefixed = this._addHexPrefixIfAbsent(groupId)
         return this._groupConfigMap[groupIdPrefixed]
     }
+    storeGroupConfigToCache(groupId: string, meta: MessageGroupMeta): void {
+        const groupIdPrefixed = this._addHexPrefixIfAbsent(groupId)
+        if (!this._groupConfigMap[groupIdPrefixed]) {
+            this._groupConfigMap[groupIdPrefixed] = meta
+            // Log for debugging
+            console.log('Stored group config to cache:', {groupId: groupIdPrefixed, meta})
+        }
+    }
     _groupMetaToGroupId(meta:MessageGroupMeta):string{
         const sortedKeys= Object.keys(meta).sort() as MessageGroupMetaKey[]
         // filter included fields
@@ -126,47 +135,72 @@ class GroupFiSDK {
         if (!this._connectFn) {
             this._connectFn = connect;
         }
-
+        this.recreateMqttClient()
         // Log entry
         console.log('setupMqttConnection enter');
     }
 
+    private _recreatingMqttClient = false;
+    private _mqttClientRecreateQueue: (() => void)[] = [];
+
     recreateMqttClient() {
-        if (!this._connectFn) {
-            console.error('Connect function not set');
-            return;
+        if (this._recreatingMqttClient) {
+            // Queue this recreation request
+            return new Promise<void>((resolve) => {
+                this._mqttClientRecreateQueue.push(resolve);
+            });
         }
 
-        // Close the existing client if it exists
-        if (this._mqttClient) {
-            this._mqttClient.end(true); // Clean up any ongoing connection
-            console.log('Existing mqttClient closed');
+        this._recreatingMqttClient = true;
+
+        try {
+            if (!this._connectFn) {
+                console.error('Connect function not set');
+                return Promise.resolve();
+            }
+
+            // Close the existing client if it exists
+            if (this._mqttClient) {
+                this._mqttClient.end(true); // Clean up any ongoing connection
+                console.log('Existing mqttClient closed');
+            }
+
+            // log recreateMqttClient
+            console.log('recreateMqttClient enter');
+            // Create a new MqttClient instance and set up event listeners
+            const httpsUrl = this.getUrl();
+            const wssUrl = httpsUrl.replace('https://', 'wss://');
+            const client = this._connectFn(`${wssUrl}/api/groupfi/mqtt/v1`);
+            client.on('connect', () => {
+                console.log('mqtt connected');
+            });
+            client.on('close', () => {
+                console.log('mqtt closed');
+            });
+            client.on('reconnect', () => {
+                console.log('Reconnecting');
+            });
+            client.on('disconnect', () => {
+                console.log('mqtt disconnected');
+            });
+            client.on('error', (error) => {
+                console.log('mqtt error', error);
+            });
+            client.on('message', this._handleMqttMessage.bind(this));
+
+            this._mqttClient = client;
+            return Promise.resolve();
+        } finally {
+            this._recreatingMqttClient = false;
+            
+            // Process any queued recreation requests
+            const nextRecreate = this._mqttClientRecreateQueue.shift();
+            if (nextRecreate) {
+                Promise.resolve().then(() => {
+                    this.recreateMqttClient().then(nextRecreate);
+                });
+            }
         }
-
-        // log recreateMqttClient
-        console.log('recreateMqttClient enter');
-        // Create a new MqttClient instance and set up event listeners
-        const httpsUrl = this.getUrl();
-        const wssUrl = httpsUrl.replace('https://', 'wss://');
-        const client = this._connectFn(`${wssUrl}/api/groupfi/mqtt/v1`);
-        client.on('connect', () => {
-            console.log('mqtt connected');
-        });
-        client.on('close', () => {
-            console.log('mqtt closed');
-        });
-        client.on('reconnect', () => {
-            console.log('Reconnecting');
-        });
-        client.on('disconnect', () => {
-            console.log('mqtt disconnected');
-        });
-        client.on('error', (error) => {
-            console.log('mqtt error', error);
-        });
-        client.on('message', this._handleMqttMessage.bind(this));
-
-        this._mqttClient = client;
     }
     _iotaMqttClient?:IotaMqttClient
     setupIotaMqttConnection(mqttClient:new (...args: any[])=>IotaMqttClient){
@@ -240,8 +274,13 @@ class GroupFiSDK {
     _subscribedTopics:Set<string> = new Set()
     // subscribe to a topic
     _subscribeToTopics(topics:string[]){
-        if (!this._mqttClient) return
+        if (!this._mqttClient) {
+            console.log('abort subscribing to topics: mqtt client not setup')
+            return
+        }
         const filteredTopics = topics.filter(topic=>!this._subscribedTopics.has(topic))
+        // log actual subscribe topics
+        console.log('actual subscribe topics',filteredTopics)
         filteredTopics.forEach(topic=>this._mqttClient!.subscribe(topic))
         filteredTopics.forEach(topic=>this._subscribedTopics.add(topic))
     }
@@ -1410,6 +1449,7 @@ export const GROUPFISELFPUBLICKEYTAG = 'GROUPFISELFPUBLICKEY'
 export const GROUPFIPAIRXTAG = 'GROUPFIPAIRXV2'
 export const GROUPFIQUALIFYTAG = 'GROUPFIQUALIFYV1';
 export const GROUPFILIKETAG = 'GROUPFILIKEV1'
+export const GROUPFIGROUPSTATESYNCTAG = 'GROUPFIGROUPSTATESYNCV1'
 export const GROUPFIPROFILETAG = 'GROUPFIPROFILEV1'
 export const GROUPFIReservedTags = [
     GROUPFIMARKTAG,
@@ -1418,7 +1458,8 @@ export const GROUPFIReservedTags = [
     GROUPFILIKETAG,
     GROUPFIQUALIFYTAG,
     GROUPFIPROFILETAG,
-    'PARTICIPANTION',
+    GROUPFIGROUPSTATESYNCTAG,
+    'PARTICIPANTION'
 ]
 export const GroupFiSDKObj = instance
 export const OutdatedTAG = ['IOTACAT','IOTACATSHARED','IOTACATV2','IOTACATSHAREDV2','GROUPFIV1','GROUPFIV2','GROUPFIV3','GROUPFISHAREDV1','GROUPFIMARKV1']

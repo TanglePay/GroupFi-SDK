@@ -33,6 +33,12 @@ export interface ICycle {
     destroy(): Promise<void>; // de allocation
 }
 
+export interface IPostInitializable {
+    postInit(): void; // synchronous post-initialization wiring logic
+}
+
+export interface IDomain extends ICycle, IPostInitializable {}
+
 export interface IRunnable {
     poll(): Promise<boolean>; // return true if should pause
 }
@@ -41,6 +47,7 @@ export interface StorageAdaptor {
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
     remove(key: string): Promise<void>;
+    key(index: number): string | null;
 }
 // { sender, message, timestamp }
 export interface IInboxMessage {
@@ -160,3 +167,20 @@ export interface IEncryptedPairX {
     publicKey: string
     privateKeyEncrypted: string
 }
+
+export enum CommandType {
+    AcquirePublicKey = 1,
+    JoinGroup = 2,
+    SendMessage = 4, 
+    LeaveGroup = 6,
+    EnterGroup = 7,
+    RegisterPairX = 8,
+    MarkGroup = 9,
+    VoteGroup = 10,
+    MuteGroupMember = 11,
+    Login = 12,
+    LikeGroupMember = 13,
+    SelectProfile = 14
+}
+
+export const GROUP_STATE_PERSIST_KEY = 'group-state-persist'    

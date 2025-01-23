@@ -1,4 +1,6 @@
-import { IKeyPair, INftOutput, OutputTypes } from '@iota/iota.js';
+
+import { BasicOutputWrapper, GroupStateSyncItem } from 'groupfi-sdk-core';
+import { OutputTypes } from '@iota/iota.js';
 
 export const ShimmerMode = 1;
 export const ImpersonationMode = 2;
@@ -29,7 +31,11 @@ export interface IRequestAdapterSendTransationParams {
   pairX?: PairX;
   essenceOutputsLength: number
 }
-
+export interface GroupStateSyncStorageExtended {
+  schemaVersion: number,
+  outputWrapper?: BasicOutputWrapper,
+  items: GroupStateSyncItem[]
+}
 export interface IRequestAdapter {
   decrypt: (params: IRequestAdapterDecryptParams) => Promise<string>;
   ed25519SignAndGetPublicKey:(params:{message:string,pairX:PairX}) => Promise<{signature:string, publicKey:string}>;

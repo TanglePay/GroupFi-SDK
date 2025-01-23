@@ -116,5 +116,20 @@ export class LRUCache<T> {
         this.tail = null;
     }
     
+    /**
+     * Returns all values in the cache as an array
+     * Note: The order of values in the array follows the LRU order (most recently used first)
+     */
+    values(): T[] {
+        const result: T[] = [];
+        let current = this.head;
+        
+        while (current) {
+            result.push(current.value);
+            current = current.next;
+        }
+        
+        return result;
+    }
 }
 

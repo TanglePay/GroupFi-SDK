@@ -1,4 +1,4 @@
-import { DidChangedEvent, EventGroupIsPublicChanged, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, ImInboxEventTypeProfileChangedEvent, PairXChangedEvent, ProfileChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
+import { DidChangedEvent, EventGroupIsPublicChanged, EventGroupLikeChanged, EventGroupMarkChanged, EventGroupMemberChanged, EventGroupMuteChanged, EventGroupStateSyncChanged, EvmQualifyChangedEvent, GroupIDLength, IMUserMarkedGroupId, IMUserMarkedGroupIdIntermediate, ImInboxEventTypeDidChangedEvent, ImInboxEventTypeEvmQualifyChanged, ImInboxEventTypeGroupIsPublicChanged, ImInboxEventTypeGroupMemberChanged, ImInboxEventTypeGroupStateSync, ImInboxEventTypeLikeChanged, ImInboxEventTypeMarkChanged, ImInboxEventTypeMuteChanged, ImInboxEventTypeNewMessage, ImInboxEventTypePairXChanged, ImInboxEventTypeProfileChangedEvent, PairXChangedEvent, ProfileChangedEvent, PushedEvent, PushedNewMessage, PushedValue, Sha256Length } from "./types";
 import { WriteStream, ReadStream, Converter } from "@iota/util.js";
 import { readUint16, readUint32 } from 'groupfi-sdk-utils'
 import { deserializeFieldWithLengthPrefixed } from "./codec_util";
@@ -62,6 +62,11 @@ export function deserializePushed(data: Uint8Array): PushedValue {
             type: ImInboxEventTypeProfileChangedEvent,
            ...deserializeProfileChangedEvent(reader)
         }
+    } else if (eventType === ImInboxEventTypeGroupStateSync) {
+        return {
+            type: ImInboxEventTypeGroupStateSync,
+            ...deserializeGroupStateSyncChangedEvent(reader)
+        };
     }
     
     
@@ -281,5 +286,16 @@ export function deserializeLikeChangedEvent(reader : ReadStream): Omit<EventGrou
         groupId,
         timestamp,
         isLiked
+    };
+}
+
+export function deserializeGroupStateSyncChangedEvent(reader: ReadStream): Omit<EventGroupStateSyncChanged,'type'> {
+    console.log("deserializeGroupStateSyncChangedEvent");
+    
+    // Read milestone timestamp
+    const timestamp = readUint32(reader, 'timestamp');
+    
+    return {
+        timestamp
     };
 }
