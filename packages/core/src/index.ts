@@ -731,6 +731,9 @@ class GroupFiSDK {
                 }
             })
             let json = await res.json()
+            // Handle null response by returning empty array
+            if (!json) return []
+            
             json = this._ensureList(json) as GroupConfig[]
             const groupConfigList = json.map(this._processGroupConfigFromInxApi)
             const groupConfig = groupConfigList.reduce((acc: Record<string, GroupConfig>, group: GroupConfig) => {

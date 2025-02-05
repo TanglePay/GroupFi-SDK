@@ -74,7 +74,13 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         return configs;
     }
     // get marked group configs
-    get markedGroupConfigs() {
+    get markedGroupConfigs(): GroupConfig[] | undefined {
+        // Return undefined if not loaded yet (including first time with no data)
+        if (!this._isMarkedGroupIdsLoaded) {
+            console.log('markedGroupConfigs: not yet loaded or first time load');
+            return undefined;
+        }
+        
         return this._markedGroupIds.map(groupId => {
             return this._groupConfigCache.get(this._getGroupConfigKey(groupId));
         }).filter((config): config is GroupConfig => config !== null);
@@ -304,10 +310,12 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         // Check if marked group IDs have changed
         if (JSON.stringify(this._markedGroupIds) !== JSON.stringify(newMarkedGroupIds)) {
             this._markedGroupIds = newMarkedGroupIds;
+            this._isMarkedGroupIdsLoaded = true;
             this._markedGroupIdsDirty = true;
         }
         
         this._lastTimeRefreshMarkedGroupConfigs = Date.now();
+        console.log('about to emit EventMarkedGroupConfigChangedKey', this._markedGroupIds);
         this._events.emit(EventMarkedGroupConfigChangedKey);
     }
 
@@ -541,10 +549,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
                 // update processedPublicGroupIds
                 groupIds.map(groupId => this._processedPublicGroupIds.add(groupId));
                 await Promise.all([
-                    this._refreshMarkedGroupAsync(),
                     ...groupIds.map(groupId => this._refreshGroupPublicAsync(groupId))]);
-                // log _markedGroupIds
-                console.log('_markedGroupIds',this._markedGroupIds);
                 this._forMeGroupIdsLastUpdateTimestamp = {};
                 for (const groupId of groupIds) {
                     this._forMeGroupIdsLastUpdateTimestamp[groupId] = 0;
@@ -843,6 +848,7 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         try {
             const groupIds = await this.groupFiService.fetchAddressMarkedGroups();
             this._markedGroupIds = groupIds;
+            this._isMarkedGroupIdsLoaded = true;
         } catch (e) {
             console.error(e);
         } finally {
@@ -1084,7 +1090,8 @@ export class GroupMemberDomain implements IDomain, IRunnable {
     // Add these near the top with other private fields
     private _shouldLoadGroupState: boolean = false;
 
-    // Add these methods after other similar methods
+    // Add these near other private fields
+    private _isMarkedGroupIdsLoaded: boolean = false;
 
     // Get all group state syncs with their timestamps
     async getAllGroupStateTimestamps(): Promise<Record<string, number>> {
@@ -1274,15 +1281,21 @@ export class GroupMemberDomain implements IDomain, IRunnable {
 
     // Add method to load marked group IDs
     private async loadMarkedGroupIds() {
-        const idsString = await this.localStorageRepository.get(this._getMarkedGroupIdsKey());
-        if (idsString) {
-            this._markedGroupIds = JSON.parse(idsString);
-            // emit event
-            const isAllHit = await this.warmUpMarkedGroupConfigs();
-            if (!isAllHit) return;
-            this._events.emit(EventMarkedGroupConfigChangedKey);
-            // log loaded
-            console.log('GroupMemberDomain loadMarkedGroupIds, loaded', this._markedGroupIds);
+        try {
+            const idsString = await this.localStorageRepository.get(this._getMarkedGroupIdsKey());
+            
+            if (idsString) {
+                this._markedGroupIds = JSON.parse(idsString);
+                // emit event only if we have configs warmed up
+                const isAllHit = await this.warmUpMarkedGroupConfigs();
+                if (!isAllHit) return;
+                // log loaded with data
+                console.log('GroupMemberDomain loadMarkedGroupIds: loaded with data', this._markedGroupIds);
+                this._isMarkedGroupIdsLoaded = true;
+                this._events.emit(EventMarkedGroupConfigChangedKey);
+            }
+        } catch (error) {
+            console.error('Error loading marked group IDs:', error);
         }
     }
 
