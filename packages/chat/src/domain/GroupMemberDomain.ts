@@ -310,10 +310,9 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         // Check if marked group IDs have changed
         if (JSON.stringify(this._markedGroupIds) !== JSON.stringify(newMarkedGroupIds)) {
             this._markedGroupIds = newMarkedGroupIds;
-            this._isMarkedGroupIdsLoaded = true;
             this._markedGroupIdsDirty = true;
         }
-        
+        this._isMarkedGroupIdsLoaded = true;
         this._lastTimeRefreshMarkedGroupConfigs = Date.now();
         console.log('about to emit EventMarkedGroupConfigChangedKey', this._markedGroupIds);
         this._events.emit(EventMarkedGroupConfigChangedKey);
