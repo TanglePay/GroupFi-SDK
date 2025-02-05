@@ -730,10 +730,14 @@ class GroupFiSDK {
                     'Content-Type': 'application/json'
                 }
             })
+            // log method res
+            console.log('fetchAddressMarkedGroupConfigs res',res)
             let json = await res.json()
+            console.log('fetchAddressMarkedGroupConfigs json',json)
             // Handle null response by returning empty array
             if (!json) return []
             
+
             json = this._ensureList(json) as GroupConfig[]
             const groupConfigList = json.map(this._processGroupConfigFromInxApi)
             const groupConfig = groupConfigList.reduce((acc: Record<string, GroupConfig>, group: GroupConfig) => {
