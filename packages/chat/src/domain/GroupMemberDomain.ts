@@ -308,10 +308,11 @@ export class GroupMemberDomain implements IDomain, IRunnable {
         }
         this._isGroupPublicDirty = true;
         // Check if marked group IDs have changed
-        if (JSON.stringify(this._markedGroupIds) !== JSON.stringify(newMarkedGroupIds)) {
+        if (!this._isMarkedGroupIdsLoaded || JSON.stringify(this._markedGroupIds) !== JSON.stringify(newMarkedGroupIds)) {
             this._markedGroupIds = newMarkedGroupIds;
             this._markedGroupIdsDirty = true;
         }
+
         this._isMarkedGroupIdsLoaded = true;
         this._lastTimeRefreshMarkedGroupConfigs = Date.now();
         console.log('about to emit EventMarkedGroupConfigChangedKey', this._markedGroupIds);
